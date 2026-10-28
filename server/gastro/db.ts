@@ -37,9 +37,33 @@ export function buildMysqlConfig(rawUrl: string, env: NodeJS.ProcessEnv = proces
     port: url.port ? Number(url.port) : 3306,
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
-    database: decodeURIComponent(url.pathname.replace(/^\//, "")) || undefined,
+    database: safeDatabaseName(decodeURIComponent(url.pathname.replace(/^\//, "")), env),
     ...(ssl ? { ssl } : {}),
   };
+}
+
+const SYSTEM_SCHEMAS = new Set(["", "sys", "mysql", "information_schema", "performance_schema", "metrics_schema"]);
+/** Nunca usa bancos internos do MySQL/TiDB; nesses casos usa "gastroconecta" (criado na inicialização). */
+export function safeDatabaseName(name: string, env: NodeJS.ProcessEnv = process.env): string {
+  const clean = (name || "").trim();
+  if (SYSTEM_SCHEMAS.has(clean.toLowerCase())) return (env.DATABASE_NAME || "gastroconecta").trim();
+  return clean;
+}
+
+/** Cria o banco de dados se ainda não existir (ignora se o usuário não tiver permissão). */
+export async function ensureDatabaseExists(): Promise<void> {
+  if (!ENV.databaseUrl) return;
+  const { database, ...config } = buildMysqlConfig(ENV.databaseUrl);
+  if (!database || !/^[A-Za-z0-9_$-]{1,64}$/.test(database)) return;
+  let connection: Awaited<ReturnType<typeof mysql.createConnection>> | null = null;
+  try {
+    connection = await mysql.createConnection({ ...config, connectTimeout: 15000 });
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\``);
+  } catch (error) {
+    console.warn("[GastroConecta] Aviso ao criar o banco:", error instanceof Error ? error.message : String(error));
+  } finally {
+    await connection?.end().catch(() => undefined);
+  }
 }
 
 export function getGastroPool(): Pool {

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { drizzle } from "drizzle-orm/mysql2";
 import { migrate } from "drizzle-orm/mysql2/migrator";
 import { defaultPromotions } from "@shared/promotions";
-import { dbConfigured, execute, getGastroPool, query, withTransaction } from "./db";
+import { buildMysqlConfig, dbConfigured, ensureDatabaseExists, execute, getGastroPool, query, withTransaction } from "./db";
 import { getInternalFlag, setInternalFlag } from "./content";
 import { hashPassword, normalizeEmail, passwordIsStrong } from "./auth";
 
@@ -95,6 +95,9 @@ export async function bootstrapDatabase() {
     return;
   }
   try {
+    const cfg = buildMysqlConfig(process.env.DATABASE_URL ?? "");
+    console.log(`[GastroConecta] Conectando ao banco "${cfg.database}" em ${cfg.host}:${cfg.port} (SSL ${cfg.ssl ? "ligado" : "desligado"}).`);
+    await ensureDatabaseExists();
     const folder = findMigrationsFolder();
     if (!folder) throw new Error("pasta drizzle/ com as migrações não encontrada");
     await migrate(drizzle(getGastroPool()), { migrationsFolder: folder });
@@ -106,7 +109,10 @@ export async function bootstrapDatabase() {
     dbState.error = "";
   } catch (error) {
     dbState.ready = false;
-    dbState.error = error instanceof Error ? error.message : "falha desconhecida";
-    console.error("[GastroConecta] Falha ao preparar o banco de dados:", dbState.error);
+    const message = error instanceof Error ? error.message.split("\n")[0] : "falha desconhecida";
+    // O drizzle esconde o motivo real em error.cause (ex.: senha errada, sem permissão, SSL).
+    const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
+    dbState.error = cause || message;
+    console.error("[GastroConecta] Falha ao preparar o banco de dados:", message, cause ? `| Motivo: ${cause}` : "");
   }
 }
