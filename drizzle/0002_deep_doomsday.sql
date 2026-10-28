@@ -1,0 +1,3 @@
+ALTER TABLE `gastro_applications` ADD CONSTRAINT `gastro_applications_job_user_unique` UNIQUE(`jobId`,`userId`);--> statement-breakpoint
+ALTER TABLE `gastro_proposals` ADD CONSTRAINT `gastro_proposals_event_provider_unique` UNIQUE(`eventId`,`providerId`);--> statement-breakpoint
+ALTER TABLE `gastro_reviews` ADD CONSTRAINT `gastro_reviews_event_reviewer_target_unique` UNIQUE(`eventId`,`reviewerId`,`targetId`);

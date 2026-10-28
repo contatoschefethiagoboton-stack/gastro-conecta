@@ -1,0 +1,30 @@
+# Contrato de API — GastroConecta
+
+Base `/api/gastro`, JSON, sessão cookie `gc_session` opaca (hash no banco). Erros `{error:string}` e status HTTP adequados. Frontend usa `credentials: include`. Sem usuários simulados.
+
+- GET `/me` → `{user: null | {id:number,name,email,accountType:'client'|'provider'|'freelancer',role:'user'|'admin',status,city?,bio?,vip?:boolean,discountPercent?:number,featured?:boolean}}`.
+- POST `/register` body `{name,email,password,accountType,city}` → `{user}`; POST `/login` `{email,password}` → `{user}`; POST `/logout` → `{ok:true}`. PATCH `/profile` `{name?,city?,bio?,specialty?}` → `{user}`. Manus OAuth proprietário continua válido e resolução REST aceita também sessão Manus autenticada.
+- GET `/professionals` → `{professionals: Professional[]}`. Catálogo demonstrativo no shared/catalog.ts criado pelo agente principal; perfis têm `id:string,name,type:'Chef particular'|'Buffet'|'Freelancer',category,city,description,image,price:number,tags:string[],featured:boolean,demo:boolean`. Valores price em reais só para exibição.
+- GET `/events` → `{events: Event[]}` filtrado pela conta; fornecedor vê leads abertos quando ativo. POST `/events` `{title,type,date?:string,city,location?,guests:number,budgetCents:number,description?,stage:'ready'|'comparing'|'research',professionalId?:string}` → `{event}`. Event inclui id:number,clientId,providerId?:number,title,type,date,city,location,guests,budgetCents,description,score:number,status:'open'|'booked'|'completed'|'cancelled',createdAt.
+- GET `/proposals` → `{proposals: Proposal[]}` por usuário, com eventTitle opcional. POST `/proposals` `{eventId,amountCents,message}` → `{proposal}`; POST `/proposals/:id/accept` → `{ok:true}`. Aceitação reserva evento mas NÃO marca pagamento. Proposal id,eventId,providerId,amountCents,message,status,providerName?.
+- GET `/jobs` → `{jobs: Job[]}` públicas reais; POST `/jobs` `{title,role:'Cozinheiro'|'Ajudante'|'Garçom'|'Barman',date,city,hours:number,dailyCents:number,description}` → `{job}`; POST `/jobs/:id/apply` → `{ok:true}`; GET `/applications` → `{applications: Application[]}` por posse. Job id,title,role,date,city,hours,dailyCents,description,status,providerId. Application id,jobId,userId,status,jobTitle?,dailyCents?.
+- GET `/wallet` → `{transactions: Transaction[],availableCents:number,pendingCents:number}`; sem recebimentos fictícios. Transaction id,type,description,grossCents,feeCents,netCents,status,createdAt.
+- GET `/subscriptions` → `{plans:[{id,name,days,priceCents}],subscription:null|{...}}`; POST `/subscriptions` `{planId}` registra solicitação `pending_payment`, sem confirmar pagamento ou aprovação automática.
+- GET `/reviews` → `{pending: [{eventId,title,targets:[{id,name}]}],reviews: Review[]}`; POST `/reviews` `{eventId,targetId,rating:number,feedback}`; verificações de participante e conclusão, rating 1–5. Guard 24h bloqueia ações transacionais se autor tiver avaliações devidas.
+- GET `/contracts` → `{contracts:[{id,kind:'A'|'B'|'C',title,status,createdAt}]}`; GET `/contracts/:id/pdf` entrega PDF autorizado. POST `/contracts` `{kind,eventId?,jobId?}` → `{contract}` baseado em vínculo autorizado. GET `/report/pdf` admin relatório auditável em PDF.
+- GET `/messages` → `{messages:[{id,role:'user'|'assistant',content,createdAt}]}` por usuário; POST `/copilot` `{message}` → `{reply}` e salva conversa. IA real servidor (MANUS_API_URL/KEY ou BUILT_IN_FORGE aliases), modelo gpt-5-mini verificado. Opcional OPENAI_API_KEY próprio somente se secret declarado.
+- GET `/integrations` → `{integrations:[{id,name,status:'pending'|'configured',description}],paymentsLive:false}`. Nenhuma credencial/split/escrow/biometria/NF real presumida; POST `/checkout` → 503 com erro explicativo enquanto indisponível.
+- GET `/admin/users` → `{users: User[]}`; PATCH `/admin/users/:id` `{name?,status?:'active'|'pending'|'suspended'|'blocked'|'deleted',vip?,discountPercent?,featured?}` → `{ok:true}`. Exclusão lógica, ações auditadas, admin só proprietário e não pode se excluir/bloquear.
+- GET `/admin/overview` → `{users:number,events:number,pending:number,revenueCents:number}`; GET `/admin/audit` → `{logs:[{id,action,details,createdAt,actorId}]}`; GET `/admin/coupons` → `{coupons:[{id,code,discountPercent,cashbackPercent,active}]}`; POST `/admin/coupons` `{code,discountPercent,cashbackPercent}` → `{ok:true}`.
+
+Dados monetários privados em centavos inteiros. Diária taxa 10% adicionada ao contratante. Eventos 8–12%, padrão 10%. Admin status pending não implica pagamento confirmado. UI marca catálogo demonstrativo sem ratings, selos antifraude ou depoimentos inventados. Segurança e homologação pendentes documentadas honestamente.
+
+## Complementos implementados
+
+`PATCH /events/:id/complete` conclui evento reservado de participante autorizado, desde que a data já tenha ocorrido; não registra pagamento. `POST /applications/:id/accept` permite ao dono da vaga escolher uma candidatura e reservar a diária. `PATCH /jobs/:id/complete` conclui vaga reservada pelo dono/participante autorizado. Jobs aceitam `eventId` opcional para integrar os freelancers às avaliações 360 do evento; applications incluem `freelancerName`.
+
+`POST /events` valida um `professionalId` real no padrão `user-N` e persiste `preferredProviderId`; o fornecedor preferido pode acessar/enviar proposta, enquanto os exemplos demo geram pedido aberto. O catálogo retorna exemplos identificados e profissionais reais ativos, sem e-mail privado. Pedidos de clientes sem preferência continuam acessíveis aos fornecedores elegíveis.
+
+Contrato A recebe `{kind:'A'}` do próprio fornecedor, sem evento. B exige evento reservado/concluído e participantes autorizados. C exige vaga com candidatura aceita. PDFs são minutas legíveis, com dados das partes, valores e condições — não assinatura digital ou processamento fiscal.
+
+As mutações usam validação central de origem. Provider nasce pendente e precisa liberação administrativa para propor/publicar. A configuração do proprietário precisa de uma identidade Manus verificada, não é atribuída por cadastro local.
