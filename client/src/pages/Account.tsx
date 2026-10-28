@@ -1,4 +1,3 @@
-import { startLogin } from "@/const";
 import { api } from "@/lib/api";
 import { ArrowRight, Check, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
@@ -94,23 +93,13 @@ export default function Account() {
       toast.success(mode === "login" ? "Bem-vindo de volta." : "Conta criada com sucesso.");
       await queryClient.invalidateQueries();
       const returnTo = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("returnTo") : null;
-      setLocation(returnTo === "orcamento" ? "/orcamento" : "/painel");
+      setLocation(response.user.role === "admin" ? "/admin/painel" : returnTo === "orcamento" ? "/orcamento" : "/painel");
     } catch (error: unknown) {
       const message = getErrorMessage(error, "Não foi possível concluir. Confira os dados e tente novamente.");
       setErrorMessage(message);
       toast.error(message);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const loginAsOwner = () => {
-    try {
-      startLogin();
-    } catch (error: unknown) {
-      const message = getErrorMessage(error, "O login de proprietário ainda não está configurado neste ambiente.");
-      setErrorMessage(message);
-      toast.error(message);
     }
   };
 
@@ -196,18 +185,26 @@ export default function Account() {
                     required
                     value={city}
                     onChange={(event) => setCity(event.target.value)}
-                    placeholder="São Paulo"
+                    placeholder="Campinas"
                   />
                 </label>
                 <label className="account-field">
                   <span>Quero participar como</span>
                   <select value={accountType} onChange={(event) => setAccountType(event.target.value as AccountType)}>
-                    <option value="client">Cliente</option>
-                    <option value="provider">Fornecedor</option>
-                    <option value="freelancer">Freelancer</option>
+                    <option value="client">Cliente (quero contratar)</option>
+                    <option value="provider">Profissional parceiro (chef, buffet)</option>
+                    <option value="freelancer">Freelancer (cozinheiro, garçom…)</option>
                   </select>
                 </label>
               </div>
+            )}
+
+            {mode === "register" && accountType !== "client" && (
+              <p className="account-next-step">
+                {accountType === "provider"
+                  ? "Depois de criar o acesso, você completa o cadastro: foto de perfil, pelo menos 5 fotos dos serviços, CNPJ, razão social, telefone, endereço e redes sociais."
+                  : "Depois de criar o acesso, você completa o cadastro: currículo, dados pessoais, CPF, endereço, conta bancária e chave Pix para receber direto do contratante."}
+              </p>
             )}
 
             <label className="account-field">
@@ -251,10 +248,6 @@ export default function Account() {
             </button>
           </form>
 
-          <div className="account-owner-entry">
-            <span>Você é o proprietário da operação?</span>
-            <button type="button" onClick={loginAsOwner}>Entrar como proprietário</button>
-          </div>
         </div>
       </section>
     </main>

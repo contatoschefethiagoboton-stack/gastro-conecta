@@ -113,7 +113,7 @@ export async function createLocalUser(input: { name: string; email: string; pass
     const openId = `gc_${randomBytes(24).toString("hex")}`;
     const [result] = await connection.execute<any>("INSERT INTO users (openId, name, email, loginMethod, role) VALUES (?, ?, ?, 'email', 'user')", [openId, input.name.trim(), email]);
     const id = Number(result.insertId);
-    const status = input.accountType === "provider" ? "pending" : "active";
+    const status = input.accountType === "client" ? "active" : "pending";
     await connection.execute("INSERT INTO account_profiles (userId, accountType, status, city, passwordHash) VALUES (?, ?, ?, ?, ?)", [id, input.accountType, status, input.city.trim(), passwordHash]);
     const [users] = await connection.execute<any[]>("SELECT * FROM users WHERE id = ? LIMIT 1", [id]);
     const [profiles] = await connection.execute<any[]>("SELECT userId, accountType, status, city, bio, specialty, vip, discountPercent, featured, passwordHash FROM account_profiles WHERE userId = ?", [id]);
@@ -173,6 +173,8 @@ export async function resolveAuth(req: Request): Promise<AuthContext | null> {
   // A present but invalid/expired GastroConecta cookie is an explicit local
   // logout/expiry state; do not turn it into an unexpected Manus session.
   if (localToken) return null;
+  // Login Manus só existe na hospedagem Manus; fora dela (Render), ignora.
+  if (!process.env.MANUS_OAUTH_API_URL) return null;
   try {
     const manusUser = await sdk.authenticateRequest(req);
     const profile = await ensureProfile(manusUser);
@@ -194,7 +196,7 @@ export async function requireAuth(req: Request): Promise<AuthContext> {
 }
 
 export function publicUser(auth: AuthContext) {
-  const owner = Boolean(ENV.ownerOpenId && auth.user.openId === ENV.ownerOpenId);
+  const owner = auth.user.role === "admin";
   return {
     id: auth.user.id,
     name: auth.user.name ?? "",
@@ -210,8 +212,9 @@ export function publicUser(auth: AuthContext) {
   } as const;
 }
 
+/** Administrador da plataforma: papel "admin" gravado no banco (criado pelo setup de /admin). */
 export async function isOwner(auth: AuthContext): Promise<boolean> {
-  return Boolean(ENV.ownerOpenId && auth.user.openId === ENV.ownerOpenId);
+  return auth.user.role === "admin";
 }
 
 export { GC_COOKIE, SESSION_TTL_MS, normalizeEmail, tokenHash };

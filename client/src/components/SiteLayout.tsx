@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ArrowUpRight, Menu, X, CookingPot, ArrowRight, MapPin, MessageCircle, Mail, Globe } from 'lucide-react';
-import { business, whatsappLink } from '@shared/business';
+import { ArrowUpRight, Menu, X, CookingPot, ArrowRight, MapPin, MessageCircle, Mail, Instagram, Facebook, Lock } from 'lucide-react';
+import { useSite, Lines } from '@/lib/site';
 import { useQuery } from '@tanstack/react-query';
 import { api, type CurrentUser } from '@/lib/api';
 
@@ -17,5 +17,9 @@ export function Header() {
 }
 
 export function Footer() {
-  return <footer className="site-footer"><div className="wrap footer-main"><div><Brand/><p>Boas conexões.<br/>Experiências à altura da sua mesa.</p><span className="footer-caption">Criado por quem vive a gastronomia.</span><div className="footer-contact"><a href={whatsappLink(`Olá! Vim pelo site ${business.name}.`)} target="_blank" rel="noopener noreferrer"><MessageCircle size={14}/> WhatsApp {business.whatsappDisplay}</a><a href={`mailto:${business.email}`}><Mail size={14}/> {business.email}</a><a href={business.showcaseUrl} target="_blank" rel="noopener"><Globe size={14}/> {business.showcaseLabel}</a></div></div><div><h4>Explore</h4><Link href="/profissionais">Chefs e buffets</Link><Link href="/vagas">Vagas freelance</Link><Link href="/como-funciona">Como funciona</Link></div><div><h4>Faça parte</h4><Link href="/conta?cadastro=1">Criar uma conta</Link><Link href="/para-profissionais">Sou profissional</Link><Link href="/sobre">Nossa história</Link></div><div><h4>Uma relação transparente</h4><Link href="/seguranca">Segurança e privacidade</Link><Link href="/termos">Termos da plataforma</Link><Link href="/painel">Central da conta</Link><span className="footer-location"><MapPin size={14}/> Atendimento em {business.region}</span></div></div><div className="wrap footer-bottom"><span>© {new Date().getFullYear()} GastroConecta · {business.company}. Todos os direitos reservados.</span><span>Gastronomia conecta pessoas.</span></div></footer>;
+  const site = useSite();
+  const instagram = site.c('contact.instagram');
+  const facebook = site.c('contact.facebook');
+  const email = site.c('contact.email');
+  return <footer className="site-footer"><div className="wrap footer-main"><div><Brand/><p><Lines text={site.c('footer.tagline')}/></p><span className="footer-caption">{site.c('footer.caption')}</span><div className="footer-contact"><a href={site.wa('Olá! Vim pelo site GastroConecta.')} target="_blank" rel="noopener noreferrer"><MessageCircle size={14}/> WhatsApp {site.whatsappDisplay}</a>{email && <a href={`mailto:${email}`}><Mail size={14}/> {email}</a>}{instagram && <a href={instagram} target="_blank" rel="noopener noreferrer"><Instagram size={14}/> Instagram</a>}{facebook && <a href={facebook} target="_blank" rel="noopener noreferrer"><Facebook size={14}/> Facebook</a>}</div></div><div><h4>Explore</h4><Link href="/profissionais">Chefs e buffets</Link><Link href="/vagas">Vagas freelance</Link><Link href="/como-funciona">Como funciona</Link></div><div><h4>Faça parte</h4><Link href="/conta?cadastro=1">Criar uma conta</Link><Link href="/para-profissionais">Sou profissional</Link><Link href="/sobre">Nossa história</Link></div><div><h4>Uma relação transparente</h4><Link href="/seguranca">Segurança e privacidade</Link><Link href="/termos">Termos da plataforma</Link><Link href="/painel">Central da conta</Link><span className="footer-location"><MapPin size={14}/> Atendimento em {site.c('contact.region')}</span></div></div><div className="wrap footer-bottom"><span>© {new Date().getFullYear()} {site.c('brand.company') || 'GastroConecta'}. Todos os direitos reservados.</span><span className="footer-bottom-right">Gastronomia conecta pessoas.<Link href="/admin" className="footer-admin-link" aria-label="Acesso da administração"><Lock size={11}/> Administração</Link></span></div></footer>;
 }

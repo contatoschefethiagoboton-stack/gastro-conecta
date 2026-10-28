@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-label="Ilustração de prato de massa">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3e3d3"/><stop offset="1" stop-color="#e9b48f"/></linearGradient></defs>
+<rect width="800" height="560" fill="url(#g)"/>
+<circle cx="640" cy="90" r="170" fill="#fff" opacity=".06"/><circle cx="120" cy="520" r="200" fill="#000" opacity=".08"/>
+<ellipse cx="400" cy="330" rx="230" ry="70" fill="#000" opacity=".12"/><ellipse cx="400" cy="300" rx="220" ry="70" fill="#fffaf3"/><ellipse cx="400" cy="296" rx="160" ry="48" fill="#f5ead9"/><g fill="none" stroke="#e7b850" stroke-width="12" stroke-linecap="round"><path d="M300 290 q50-40 100 0 t100 0"/><path d="M320 305 q40-30 80 0 t80 0"/><path d="M340 280 q30-25 60 0 t60 0"/></g><circle cx="370" cy="285" r="14" fill="#c0392b"/><circle cx="430" cy="300" r="12" fill="#c0392b"/><ellipse cx="400" cy="270" rx="18" ry="8" fill="#5f8f44"/><path d="M620 180 v170 M600 180 v60 M640 180 v60 M600 240 q20 20 40 0" stroke="#7b5b45" stroke-width="10" fill="none" stroke-linecap="round"/>
+</svg>

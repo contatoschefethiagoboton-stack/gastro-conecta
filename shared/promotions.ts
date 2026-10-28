@@ -1,10 +1,10 @@
-// Promoções sazonais. Cada campanha aparece sozinha no site entre "start" e
-// "end" (mês-dia, todo ano). Campanhas que viram o ano (ex.: 01/11 a 06/01)
-// funcionam normalmente. Para criar, editar ou desligar uma campanha, altere
-// esta lista (active: false desliga sem apagar).
-// Não coloque descontos ou preços aqui sem que estejam realmente valendo.
+// Promoções sazonais. As campanhas ficam no banco de dados e são gerenciadas
+// pelo painel de administração (Promoções). Cada campanha aparece sozinha no
+// site entre "start" e "end" (mês-dia, todo ano); janelas que viram o ano
+// (ex.: 01/11 a 06/01) funcionam normalmente. A lista abaixo só é usada para
+// preencher o banco na primeira inicialização.
 export type Promotion = {
-  id: string;
+  id: string | number;
   active: boolean;
   start: string; // "MM-DD"
   end: string;   // "MM-DD"
@@ -14,9 +14,14 @@ export type Promotion = {
   cta: string;
   whatsappMessage: string;
   eventType?: string; // pré-seleciona a ocasião no orçamento
+  imageUrl?: string;
+  sortOrder?: number;
 };
 
-export const promotions: Promotion[] = [
+export const EVENT_TYPES = ['Jantar em casa', 'Aniversário', 'Casamento', 'Evento corporativo', 'Confraternização', 'Outra ocasião'] as const;
+export const isMonthDay = (value: string) => /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value);
+
+export const defaultPromotions: Promotion[] = [
   {
     id: 'confraternizacao-corporativa', active: true, start: '10-01', end: '12-20',
     badge: 'Fim de ano', title: 'Confraternização da empresa',
@@ -86,6 +91,6 @@ export function isPromotionActive(p: Promotion, today: Date = new Date()): boole
   return start <= end ? now >= start && now <= end : now >= start || now <= end;
 }
 
-export function activePromotions(today: Date = new Date(), list: Promotion[] = promotions): Promotion[] {
+export function activePromotions(today: Date = new Date(), list: Promotion[] = defaultPromotions): Promotion[] {
   return list.filter(p => isPromotionActive(p, today));
 }

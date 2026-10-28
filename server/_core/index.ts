@@ -8,19 +8,26 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerGastroRoutes } from "../gastro/routes";
+import { registerExtraRoutes } from "../gastro/extra";
+import { bootstrapDatabase, dbState } from "../gastro/bootstrap";
 
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Render/proxies: usa o IP real do visitante e o protocolo https original.
+  app.set("trust proxy", 1);
+  app.disable("x-powered-by");
+  await bootstrapDatabase();
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/health", (_req, res) => res.json({ status: "ok", database: process.env.DATABASE_URL ? (dbState.ready ? "ok" : "error") : "missing" }));
   app.get("/api/platform/config.js", (_req, res) => {
     res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
   });
-  registerOAuthRoutes(app);
+  if (process.env.MANUS_OAUTH_API_URL) registerOAuthRoutes(app);
   // REST contract must be mounted before Vite's catch-all/static handling.
+  registerExtraRoutes(app);
   registerGastroRoutes(app);
   // tRPC API
   app.use(

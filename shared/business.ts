@@ -1,21 +1,20 @@
-// Dados de contato do negócio. Edite aqui para atualizar o site inteiro.
-export const business = {
+// Valores padrão de contato. O administrador altera tudo isso pelo painel
+// (Conteúdo do site → Contato); estes valores só valem até a primeira edição.
+export const businessDefaults = {
   name: 'GastroConecta',
-  company: 'Boton Eventos e Alimentação LTDA',
-  chef: 'Thiago Boton',
+  company: 'GastroConecta',
   region: 'Campinas e região',
   whatsappNumber: '5519993984529', // DDI + DDD + número, só dígitos
   whatsappDisplay: '(19) 99398-4529',
   email: 'thiagoboton22@gmail.com',
-  showcaseUrl: 'https://www.chefcampinas.vip',
-  showcaseLabel: 'chefcampinas.vip',
 } as const;
 
 const MAX_MESSAGE = 1500;
 
 /** Link wa.me com mensagem pré-preenchida. */
-export function whatsappLink(message?: string): string {
-  const base = `https://wa.me/${business.whatsappNumber}`;
+export function whatsappLink(message?: string, number: string = businessDefaults.whatsappNumber): string {
+  const digits = String(number || businessDefaults.whatsappNumber).replace(/\D/g, '') || businessDefaults.whatsappNumber;
+  const base = `https://wa.me/${digits}`;
   const text = (message ?? '').trim().slice(0, MAX_MESSAGE);
   return text ? `${base}?text=${encodeURIComponent(text)}` : base;
 }
@@ -45,9 +44,9 @@ function formatBudget(value?: string | number): string {
 }
 
 /** Mensagem de WhatsApp com o resumo do pedido de orçamento. */
-export function quoteWhatsappMessage(q: QuoteSummaryInput): string {
+export function quoteWhatsappMessage(q: QuoteSummaryInput, siteName: string = businessDefaults.name): string {
   const lines = [
-    `Olá! Vim pelo site ${business.name} e quero um orçamento.`,
+    `Olá! Vim pelo site ${siteName} e quero um orçamento.`,
     q.requestId ? `Pedido nº ${q.requestId}` : '',
     `Ocasião: ${q.title?.trim() || q.type}`,
     `Data: ${formatDate(q.date)}`,

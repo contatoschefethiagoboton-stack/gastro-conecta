@@ -1,6 +1,11 @@
 # GastroConecta — entregas
 
-- [x] Fase 1 — atendimento e vitrine: botão flutuante de WhatsApp nas páginas públicas; orçamento com envio do resumo pelo WhatsApp (antes e depois de salvar o pedido); contato (WhatsApp, e-mail, chefcampinas.vip) no rodapé; promoções sazonais automáticas na home configuradas em `shared/promotions.ts`; ocasião pré-selecionada via `/orcamento?ocasiao=`; busca padrão em Campinas; dados estruturados FoodEstablishment na home. Dados de contato centralizados em `shared/business.ts`. Testes em `server/phase1.test.ts`.
+- [x] Versão independente (Render): MySQL externo por `DATABASE_URL` com SSL automático; migrações e dados iniciais na inicialização; arquivos (fotos, currículos, imagens do site) guardados no banco; login Manus removido do fluxo; admin criado por código nos logs ou `ADMIN_EMAIL`/`ADMIN_PASSWORD`; link discreto "Administração" no rodapé.
+- [x] Cadastro obrigatório: parceiro (foto, 5+ fotos, CNPJ, razão social, responsável, telefone, endereço, redes sociais, site opcional) e freelancer (currículo, dados pessoais, CPF, endereço, conta e Pix); aprovação manual; Pix visível ao contratante após aceite.
+- [x] Painel de administração: usuários/aprovações com cadastro completo, textos e imagens do site, biblioteca de imagens, promoções (CRUD no banco), bônus e benefícios, cupons, auditoria e troca de senha.
+- [x] Responsividade revisada em 390, 820 e 1366 px (site, cadastro e painéis).
+
+- [x] Fase 1 — atendimento: botão de WhatsApp, resumo do orçamento pelo WhatsApp e promoções sazonais.
 
 - [x] Site e PWA: React/Node com banco relacional gerenciado; layout responsivo; PWA instalável aprovado pelo usuário; catálogo de chefs privados/buffets/freelancers; filtros, portfólios ilustrativos identificados e perfis reais ativos; Quem Somos por chef profissional sem métricas inventadas. Evidência: manifesto e PNGs servidos HTTP 200, service worker sem cache privado, conteúdo inicial HTML por rota.
 - [ ] Autenticação e permissões: cadastro cliente/fornecedor/freelancer, senha com maiúsculas/minúsculas/números/caracteres especiais, prevenção de sessões simultâneas por conta/dispositivo, dados privados protegidos por posse e papel; admin exclusivo do proprietário, nunca registro público. Implementado: scrypt, token opaco, sessão única por conta, rate limit e guards; vinculação do Super Admin e revisão de antifraude/IP/dispositivo permanecem pendentes.

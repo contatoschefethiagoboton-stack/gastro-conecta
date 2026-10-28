@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Prato servido com cloche e ingredientes frescos">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a2a22"/><stop offset="1" stop-color="#1f1a17"/></linearGradient>
+<radialGradient id="glow" cx=".55" cy=".45" r=".6"><stop offset="0" stop-color="#df572f" stop-opacity=".45"/><stop offset="1" stop-color="#df572f" stop-opacity="0"/></radialGradient>
+<linearGradient id="cloche" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4efe6"/><stop offset=".55" stop-color="#cfc7ba"/><stop offset="1" stop-color="#8f877c"/></linearGradient>
+<linearGradient id="table" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4a35"/><stop offset="1" stop-color="#3d2b20"/></linearGradient>
+</defs>
+<rect width="1200" height="900" fill="url(#bg)"/>
+<rect width="1200" height="900" fill="url(#glow)"/>
+<rect y="610" width="1200" height="290" fill="url(#table)"/>
+<ellipse cx="620" cy="640" rx="360" ry="70" fill="#000" opacity=".35"/>
+<ellipse cx="620" cy="615" rx="330" ry="62" fill="#f7f3ec"/>
+<ellipse cx="620" cy="612" rx="270" ry="46" fill="#ece5d9"/>
+<path d="M360 600 C360 380 880 380 880 600 Z" fill="url(#cloche)"/>
+<path d="M410 560 C430 440 560 410 620 410" stroke="#fff" stroke-width="14" stroke-linecap="round" fill="none" opacity=".55"/>
+<rect x="335" y="592" width="570" height="22" rx="11" fill="#b9b1a4"/>
+<circle cx="620" cy="398" r="24" fill="#d8d0c3"/>
+<g fill="none" stroke="#f4efe6" stroke-width="8" stroke-linecap="round" opacity=".5">
+<path d="M560 330 c-20-30 20-50 0-80"/><path d="M620 320 c-20-30 20-50 0-80"/><path d="M680 330 c-20-30 20-50 0-80"/>
+</g>
+<g transform="translate(150 650)"><ellipse cx="0" cy="40" rx="70" ry="14" fill="#000" opacity=".3"/><path d="M-45 40 L-30 -40 L30 -40 L45 40 Z" fill="#df572f"/><rect x="-36" y="-52" width="72" height="16" rx="6" fill="#b8431f"/></g>
+<g transform="translate(1030 660)"><ellipse cx="0" cy="40" rx="80" ry="14" fill="#000" opacity=".3"/><circle cx="-25" cy="15" r="28" fill="#c0392b"/><circle cx="20" cy="22" r="24" fill="#e0533f"/><path d="M-25 -13 l6 -16 M20 -2 l-4 -14" stroke="#4e7d3a" stroke-width="6" stroke-linecap="round"/></g>
+<g fill="#6f9a4f"><ellipse cx="300" cy="700" rx="26" ry="10" transform="rotate(-30 300 700)"/><ellipse cx="330" cy="715" rx="22" ry="9" transform="rotate(20 330 715)"/><ellipse cx="900" cy="720" rx="24" ry="9" transform="rotate(25 900 720)"/></g>
+</svg>

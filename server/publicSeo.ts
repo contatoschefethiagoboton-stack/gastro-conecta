@@ -1,6 +1,7 @@
 import { professionals } from '../shared/catalog';
 import { loadProfessionals } from './gastro/catalog';
-import { business, whatsappLink } from '../shared/business';
+import { businessDefaults, whatsappLink } from '../shared/business';
+import { getSiteContent } from './gastro/content';
 const escape = (s:string) => s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const descriptions: Record<string,{title:string;description:string;heading:string;body:string}> = {
  '/':{title:'GastroConecta | Chefs, buffets e boas conexões',description:'Encontre chefs particulares, buffets e equipes freelance. Planeje seu evento e conecte-se a quem vive a gastronomia, com clareza em cada etapa.',heading:'O ingrediente certo para seus melhores momentos.',body:'Encontre chefs, buffets e profissionais que transformam encontros em experiências inesquecíveis. Feito por quem vive a gastronomia. Pensado para quem ama receber.'},
@@ -14,8 +15,10 @@ const descriptions: Record<string,{title:string;description:string;heading:strin
 };
 export async function applyPublicSeo(template:string, originalUrl:string) {
  const path = new URL(originalUrl,'http://internal.invalid').pathname;
- const privatePaths = ['/conta','/painel','/orcamento'];
+ const privatePaths = ['/conta','/painel','/orcamento','/admin','/admin/painel'];
+ const site = await getSiteContent();
  let page = descriptions[path];
+ if(path==='/'&&page)page={...page,title:site['seo.homeTitle']||page.title,description:site['seo.homeDescription']||page.description};
  let status=200;
  let detail='';
  const professionalId = path.match(/^\/profissionais\/([^/]+)$/)?.[1];
@@ -32,9 +35,12 @@ export async function applyPublicSeo(template:string, originalUrl:string) {
  if(noindex)head+='<meta name="robots" content="noindex,nofollow"/>';
  const origin=process.env.GASTRO_PUBLIC_ORIGIN;
  if(origin&&/^https:\/\//.test(origin)){const canonical=new URL(path,origin).href;head+=`<link rel="canonical" href="${escape(canonical)}"/><meta property="og:url" content="${escape(canonical)}"/><meta property="og:image" content="${escape(new URL('/icon-512.png',origin).href)}"/><meta name="twitter:image" content="${escape(new URL('/icon-512.png',origin).href)}"/>`;}
- if(path==='/'){const ld:Record<string,unknown>={'@context':'https://schema.org','@type':'FoodEstablishment',name:business.name,legalName:business.company,telephone:'+'+business.whatsappNumber,email:business.email,areaServed:business.region,servesCuisine:'Brasileira',sameAs:[business.showcaseUrl]};if(origin&&/^https:\/\//.test(origin))ld.url=new URL('/',origin).href;head+=`<script type="application/ld+json">${JSON.stringify(ld).replace(/</g,'\\u003c')}</script>`;}
- const contact=path==='/'?`<p>Atendimento em ${escape(business.region)}. WhatsApp <a href="${escape(whatsappLink())}">${escape(business.whatsappDisplay)}</a>.</p>`:'';
- const cards=(path==='/'||path==='/profissionais')?professionals.map(p=>`<article><h2><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h2><p>${escape(p.type)} · ${escape(p.city)}</p><p>${escape(p.description)}</p><p>Portfólio ilustrativo. Preço de referência R$ ${p.price} por pessoa.</p></article>`).join(''):'';
+ const region=site['contact.region']||businessDefaults.region;
+ const waNumber=site['contact.whatsapp']||businessDefaults.whatsappNumber;
+ const waDisplay=site['contact.whatsappDisplay']||businessDefaults.whatsappDisplay;
+ if(path==='/'){const sameAs=[site['contact.instagram'],site['contact.facebook']].filter(v=>v&&/^https:\/\//.test(v));const ld:Record<string,unknown>={'@context':'https://schema.org','@type':'FoodEstablishment',name:businessDefaults.name,telephone:'+'+waNumber,email:site['contact.email']||businessDefaults.email,areaServed:region,servesCuisine:'Brasileira',...(sameAs.length?{sameAs}:{})};if(origin&&/^https:\/\//.test(origin))ld.url=new URL('/',origin).href;head+=`<script type="application/ld+json">${JSON.stringify(ld).replace(/</g,'\\u003c')}</script>`;}
+ const contact=path==='/'?`<p>Atendimento em ${escape(region)}. WhatsApp <a href="${escape(whatsappLink(undefined,waNumber))}">${escape(waDisplay)}</a>.</p>`:'';
+ const cards=(path==='/'||path==='/profissionais')&&site['catalog.showDemo']!=='false'?professionals.map(p=>`<article><h2><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h2><p>${escape(p.type)} · ${escape(p.city)}</p><p>${escape(p.description)}</p><p>Portfólio ilustrativo. Preço de referência R$ ${p.price} por pessoa.</p></article>`).join(''):'';
  const body=`<main><h1>${escape(page.heading)}</h1><p>${escape(page.body)}</p>${detail}<nav><a href="/profissionais">Encontre um profissional</a> <a href="/orcamento">Planeje seu evento</a> <a href="/como-funciona">Como funciona</a> <a href="/sobre">Quem somos</a> <a href="/para-profissionais">Sou profissional</a></nav>${contact}<h2>Gastronomia que conecta pessoas</h2>${cards}</main>`;
  return {html:template.replace(/<title>[\s\S]*?<\/title>/,'').replace(/<meta (?:name="(?:description|twitter:title|twitter:description)"|property="(?:og:title|og:description)")[^>]*>/g,'').replace('</head>',head+'</head>').replace(/<div id="root">[\s\S]*?<\/div>/,`<div id="root">${body}</div>`),status};
 }

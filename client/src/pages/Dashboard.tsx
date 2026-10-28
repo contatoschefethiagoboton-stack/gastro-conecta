@@ -38,6 +38,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import "../dashboard.css";
+import Onboarding from "@/components/Onboarding";
+import MyBenefits from "@/components/MyBenefits";
 
 type AccountType = "client" | "provider" | "freelancer";
 type UserRole = "user" | "admin";
@@ -70,6 +72,7 @@ type DashboardUser = {
   vip?: boolean;
   discountPercent?: number;
   featured?: boolean;
+  profileComplete?: boolean;
 };
 
 type Event = {
@@ -119,6 +122,8 @@ type Application = {
   jobTitle?: string;
   dailyCents?: number;
   freelancerName?: string;
+  freelancer?: { roles: string[]; experience: string; city: string; resumeUrl?: string; avatarUrl?: string };
+  payout?: { holderName: string; bankName: string; agency: string; account: string; accountType: string; pixKeyType: string; pixKey: string; phone: string };
 };
 type Transaction = {
   id: number;
@@ -272,7 +277,6 @@ function navItemsFor(user: DashboardUser): Array<{ id: DashboardTab; label: stri
     { id: "profile", label: "Perfil", icon: UserCircle2 },
     { id: "integrations", label: "Integrações", icon: Settings2 },
   );
-  if (user.role === "admin") items.push({ id: "admin", label: "Administração", icon: ShieldCheck });
   return items;
 }
 
@@ -347,6 +351,7 @@ export default function Dashboard() {
     void api<MeResponse>("/me")
       .then((response) => {
         if (!active) return;
+        if (response.user?.role === "admin") { window.location.replace("/admin/painel"); return; }
         setUser(response.user);
         if (response.user) setProfileForm({ name: response.user.name, city: response.user.city ?? "", bio: response.user.bio ?? "", specialty: response.user.specialty ?? "" });
       })
@@ -618,6 +623,15 @@ export default function Dashboard() {
     );
   }
 
+  if (user.accountType !== "client" && !user.profileComplete) {
+    return (
+      <main className="dash-page ob-page">
+        <div className="ob-page-top"><button type="button" className="ob-link" onClick={() => { void api("/logout", { method: "POST" }).finally(() => window.location.assign("/")); }}><LogOut size={15}/> Sair</button></div>
+        <Onboarding mode="required" onDone={() => setUser({ ...user, profileComplete: true })} />
+      </main>
+    );
+  }
+
   const setTab = (tab: DashboardTab) => {
     setActiveTab(tab);
     setMobileNavOpen(false);
@@ -665,7 +679,8 @@ export default function Dashboard() {
             </div>
             {pageError && <div className="dash-alert dash-alert-error" role="alert"><CircleAlert size={17} /> {pageError}<button type="button" onClick={() => setPageError("")} aria-label="Fechar erro"><X size={15} /></button></div>}
             {notice && <div className="dash-alert dash-alert-success" role="status"><Check size={17} /> {notice}</div>}
-            {user.accountType === "provider" && user.status === "pending" && <div className="dash-alert dash-alert-warning" role="status"><Clock3 size={17} /> Seu cadastro de fornecedor está pendente de validação administrativa. A liberação é necessária antes de enviar propostas, publicar vagas ou iniciar transações.</div>}
+            {user.accountType !== "client" && user.status === "pending" && <div className="dash-alert dash-alert-warning" role="status"><Clock3 size={17} /> Cadastro recebido e em análise pela administração. Assim que for aprovado, você poderá {user.accountType === "provider" ? "enviar propostas e publicar vagas" : "se candidatar a diárias"}.</div>}
+            {activeTab === "overview" && <MyBenefits />}
             {activeTab === "overview" && <OverviewPanel user={user} events={events} proposals={proposals} jobs={jobs} onTab={setTab} />}
             {activeTab === "events" && <EventsPanel user={user} events={events} loading={loadingKey === "events"} form={eventForm} setForm={setEventForm} onSubmit={submitEvent} onComplete={completeEvent} onTab={setTab} loadingKey={loadingKey} />}
             {activeTab === "radar" && <RadarPanel events={events} loading={loadingKey === "events"} onTab={setTab} />}
@@ -676,7 +691,8 @@ export default function Dashboard() {
             {activeTab === "contracts" && <ContractsPanel user={user} contracts={contracts} events={events} jobs={jobs} applications={applications} form={contractForm} setForm={setContractForm} onSubmit={createContract} loading={loadingKey === "contract"} />}
             {activeTab === "reviews" && <ReviewsPanel reviews={reviews} reviewForms={reviewForms} setReviewForms={setReviewForms} onSubmit={submitReview} loadingKey={loadingKey} />}
             {activeTab === "plans" && <PlansPanel data={subscriptions} loading={loadingKey === "plans"} onRequest={requestPlan} loadingKey={loadingKey} />}
-            {activeTab === "profile" && <ProfilePanel user={user} form={profileForm} setForm={setProfileForm} onSubmit={saveProfile} loading={loadingKey === "profile"} />}
+            {activeTab === "profile" && user.accountType !== "client" && <Onboarding mode="edit" />}
+            {activeTab === "profile" && user.accountType === "client" && <ProfilePanel user={user} form={profileForm} setForm={setProfileForm} onSubmit={saveProfile} loading={loadingKey === "profile"} />}
             {activeTab === "integrations" && <IntegrationsPanel data={integrations} loading={loadingKey === "integrations"} onCheckout={tryCheckout} checkoutLoading={loadingKey === "checkout"} />}
             {activeTab === "admin" && <AdminPanel overview={adminOverview} users={adminUsers} coupons={coupons} logs={auditLogs} section={adminSection} setSection={setAdminSection} search={adminSearch} setSearch={setAdminSearch} onUpdateUser={updateAdminUser} onCreateCoupon={createCoupon} couponForm={couponForm} setCouponForm={setCouponForm} loadingKey={loadingKey} />}
           </div>
@@ -737,7 +753,29 @@ function JobsPanel({ user, jobs, events, loading, form, setForm, onSubmit, onApp
 
 function ApplicationsPanel({ user, applications, loading, onAccept, loadingKey }: { user: DashboardUser; applications: Application[] | null; loading: boolean; onAccept: (id: number) => void; loadingKey: string }) {
   const isProvider = user.accountType === "provider";
-  return <div className="dash-stack"><div className="dash-section-intro"><div><span className="dash-eyebrow">{isProvider ? "Equipe" : "Seu histórico"}</span><h2>{isProvider ? "Escolha quem vai com você." : "Candidaturas enviadas."}</h2><p>{isProvider ? "Veja os freelancers por vaga e aceite uma candidatura pending quando estiver pronto. Aceitar não confirma pagamento." : "Acompanhe o status das oportunidades às quais você se candidatou."}</p></div></div><section className="dash-card">{loading ? <LoadingState /> : !applications?.length ? <EmptyState title={isProvider ? "Nenhuma candidatura recebida" : "Nenhuma candidatura ainda"} detail={isProvider ? "As candidaturas para suas vagas aparecerão aqui com o nome do freelancer." : "As candidaturas que você enviar aparecerão aqui com status atualizado pelo servidor."} /> : <div className="dash-record-list">{applications.map((application) => <article className="dash-record" key={application.id}><div className="dash-record-main"><span className="dash-list-icon"><ClipboardCheck size={17} /></span><div><h4>{application.jobTitle || `Vaga #${application.jobId}`}</h4><span>{isProvider ? application.freelancerName || `Freelancer #${application.userId}` : `Candidatura #${application.id}`}</span></div></div><div className="dash-record-actions">{application.dailyCents !== undefined && <strong>{formatMoney(application.dailyCents)}<small>/dia</small></strong>}<span className={`dash-status dash-status-${application.status}`}>{application.status}</span>{isProvider && application.status === "pending" && <button className="dash-small-button" type="button" onClick={() => onAccept(application.id)} disabled={loadingKey === `accept-application-${application.id}`}>{loadingKey === `accept-application-${application.id}` ? <Loader2 className="dash-spinner" size={14} /> : <Check size={14} />} Aceitar</button>}</div></article>)}</div>}</section></div>;
+  return <div className="dash-stack"><div className="dash-section-intro"><div><span className="dash-eyebrow">{isProvider ? "Equipe" : "Seu histórico"}</span><h2>{isProvider ? "Escolha quem vai com você." : "Candidaturas enviadas."}</h2><p>{isProvider ? "Veja os freelancers por vaga e aceite uma candidatura pending quando estiver pronto. Aceitar não confirma pagamento." : "Acompanhe o status das oportunidades às quais você se candidatou."}</p></div></div><section className="dash-card">{loading ? <LoadingState /> : !applications?.length ? <EmptyState title={isProvider ? "Nenhuma candidatura recebida" : "Nenhuma candidatura ainda"} detail={isProvider ? "As candidaturas para suas vagas aparecerão aqui com o nome do freelancer." : "As candidaturas que você enviar aparecerão aqui com status atualizado pelo servidor."} /> : <div className="dash-record-list">{applications.map((application) => <article className="dash-record" key={application.id}><div className="dash-record-main"><span className="dash-list-icon"><ClipboardCheck size={17} /></span><div><h4>{application.jobTitle || `Vaga #${application.jobId}`}</h4><span>{isProvider ? application.freelancerName || `Freelancer #${application.userId}` : `Candidatura #${application.id}`}</span>{isProvider && <ApplicantInfo application={application} />}</div></div><div className="dash-record-actions">{application.dailyCents !== undefined && <strong>{formatMoney(application.dailyCents)}<small>/dia</small></strong>}<span className={`dash-status dash-status-${application.status}`}>{application.status}</span>{isProvider && application.status === "pending" && <button className="dash-small-button" type="button" onClick={() => onAccept(application.id)} disabled={loadingKey === `accept-application-${application.id}`}>{loadingKey === `accept-application-${application.id}` ? <Loader2 className="dash-spinner" size={14} /> : <Check size={14} />} Aceitar</button>}</div></article>)}</div>}</section></div>;
+}
+
+function ApplicantInfo({ application }: { application: Application }) {
+  const f = application.freelancer;
+  const p = application.payout;
+  if (!f && !p) return null;
+  const copy = (value: string) => { void navigator.clipboard?.writeText(value).then(() => toast.success("Chave Pix copiada.")).catch(() => undefined); };
+  return (
+    <div className="applicant-info">
+      {f && <p className="applicant-meta">{f.roles.join(" · ")}{f.city ? ` · ${f.city}` : ""}</p>}
+      {f?.experience && <p className="applicant-exp">{f.experience}</p>}
+      {f?.resumeUrl && <a className="applicant-link" href={f.resumeUrl} target="_blank" rel="noopener noreferrer"><FileText size={14} /> Ver currículo</a>}
+      {p && (
+        <div className="applicant-payout">
+          <strong>Pagamento direto ao freelancer (Pix)</strong>
+          <span>Chave ({p.pixKeyType}): <b>{p.pixKey}</b> <button type="button" onClick={() => copy(p.pixKey)}>Copiar</button></span>
+          <span>Titular: {p.holderName} · {p.bankName} · Ag. {p.agency} · Conta {p.account} ({p.accountType})</span>
+          {p.phone && <span>Contato: {p.phone}</span>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function WalletPanel({ wallet, loading }: { wallet: WalletResponse | null; loading: boolean }) {

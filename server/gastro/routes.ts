@@ -109,7 +109,7 @@ async function auth(req: Request): Promise<AuthContext> {
 
 async function admin(req: Request): Promise<AuthContext> {
   const context = await auth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado ao proprietário");
+  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
   return context;
 }
 
@@ -123,13 +123,15 @@ function mapUser(row: any) {
     name: row.name ?? "",
     email: row.email ?? "",
     accountType: row.accountType,
-    role: row.openId && ENV.ownerOpenId && row.openId === ENV.ownerOpenId ? "admin" : "user",
+    role: row.role === "admin" ? "admin" : "user",
     status: row.status,
     city: row.city ?? undefined,
     bio: row.bio ?? undefined,
     vip: Boolean(row.vip),
     discountPercent: Number(row.discountPercent ?? 0),
     featured: Boolean(row.featured),
+    ...(row.profileCompletedAt !== undefined ? { profileComplete: Boolean(row.profileCompletedAt) } : {}),
+    ...(row.createdAt ? { createdAt: new Date(row.createdAt).toISOString() } : {}),
   };
 }
 
@@ -277,7 +279,13 @@ router.use((req, _res, next) => {
 
 router.get("/me", wrap(async (req, res) => {
   const context = await resolveAuth(req);
-  res.json({ user: context ? publicUser(context) : null });
+  if (!context) { res.json({ user: null }); return; }
+  let profileComplete = context.profile.accountType === "client" || context.user.role === "admin";
+  if (!profileComplete) {
+    const rows = await query<any[]>("SELECT completedAt FROM gc_profile_details WHERE userId = ? LIMIT 1", [context.user.id]);
+    profileComplete = Boolean(rows[0]?.completedAt);
+  }
+  res.json({ user: { ...publicUser(context), specialty: context.profile.specialty ?? undefined, profileComplete } });
 }));
 
 router.post("/register", wrap(async (req, res) => {
@@ -454,6 +462,7 @@ router.post("/jobs/:id/apply", wrap(async (req, res) => {
   const context = await auth(req);
   await assertNoReviewGuard(context.user.id);
   if (context.profile.accountType !== "freelancer") throw new HttpError(403, "Somente freelancers se candidatam");
+  if (context.profile.status !== "active") throw new HttpError(403, "Seu cadastro de freelancer ainda está em análise. Complete o cadastro e aguarde a aprovação.");
   const jobId = parse(idSchema, req.params.id);
   const job = await query<any[]>("SELECT id FROM gastro_jobs WHERE id = ? AND status = 'open' LIMIT 1", [jobId]);
   if (!job[0]) throw new HttpError(404, "Vaga não disponível");
@@ -498,8 +507,22 @@ router.patch("/jobs/:id/complete", wrap(async (req, res) => {
 
 router.get("/applications", wrap(async (req, res) => {
   const context = await auth(req);
-  const rows = await query<any[]>("SELECT a.*, j.title jobTitle, j.dailyCents, j.providerId, u.name freelancerName FROM gastro_applications a JOIN gastro_jobs j ON j.id = a.jobId JOIN users u ON u.id = a.userId WHERE a.userId = ? OR j.providerId = ? ORDER BY a.createdAt DESC", [context.user.id, context.user.id]);
-  res.json({ applications: rows.map(row => ({ id: Number(row.id), jobId: Number(row.jobId), userId: Number(row.userId), freelancerName: row.freelancerName ?? "", status: row.status, ...(row.jobTitle ? { jobTitle: row.jobTitle } : {}), ...(row.dailyCents != null ? { dailyCents: Number(row.dailyCents) } : {}) })) });
+  const rows = await query<any[]>("SELECT a.*, j.title jobTitle, j.dailyCents, j.providerId, u.name freelancerName, d.details freelancerDetails FROM gastro_applications a JOIN gastro_jobs j ON j.id = a.jobId JOIN users u ON u.id = a.userId LEFT JOIN gc_profile_details d ON d.userId = a.userId WHERE a.userId = ? OR j.providerId = ? ORDER BY a.createdAt DESC", [context.user.id, context.user.id]);
+  res.json({ applications: rows.map(row => {
+    const isHiring = Number(row.providerId) === context.user.id;
+    let extra: Record<string, unknown> = {};
+    if (isHiring && row.freelancerDetails) {
+      try {
+        const d = JSON.parse(row.freelancerDetails);
+        extra = {
+          freelancer: { roles: Array.isArray(d.roles) ? d.roles : [], experience: typeof d.experience === "string" ? d.experience.slice(0, 600) : "", city: d.city ?? "", ...(d.resumeMediaId ? { resumeUrl: `/api/gastro/media/${Number(d.resumeMediaId)}` } : {}), ...(d.avatarMediaId ? { avatarUrl: `/api/gastro/media/${Number(d.avatarMediaId)}` } : {}) },
+          // Dados de pagamento só para o contratante, depois de aceitar a candidatura.
+          ...(row.status === "accepted" ? { payout: { holderName: d.bank?.holderName ?? "", bankName: d.bank?.bankName ?? "", agency: d.bank?.agency ?? "", account: d.bank?.account ?? "", accountType: d.bank?.accountType ?? "", pixKeyType: d.bank?.pixKeyType ?? "", pixKey: d.bank?.pixKey ?? "", phone: d.phone ?? "" } } : {}),
+        };
+      } catch { /* cadastro inválido não derruba a lista */ }
+    }
+    return { id: Number(row.id), jobId: Number(row.jobId), userId: Number(row.userId), freelancerName: row.freelancerName ?? "", status: row.status, ...(row.jobTitle ? { jobTitle: row.jobTitle } : {}), ...(row.dailyCents != null ? { dailyCents: Number(row.dailyCents) } : {}), ...extra };
+  }) });
 }));
 
 router.get("/wallet", wrap(async (req, res) => {
@@ -664,9 +687,18 @@ function resolveCopilotEndpoint(base: string) {
   return `${normalized}/v1/chat/completions`;
 }
 
+/** Provedor de IA do Copilot: infraestrutura Manus ou chave OpenAI própria (OPENAI_API_KEY). */
+export function copilotProvider() {
+  const manusBase = ENV.forgeApiUrl || process.env.BUILT_IN_FORGE_API_URL;
+  const manusKey = ENV.forgeApiKey || process.env.BUILT_IN_FORGE_API_KEY;
+  if (manusBase && manusKey) return { base: manusBase, key: manusKey, model: process.env.COPILOT_MODEL || "gpt-5-mini" };
+  const key = process.env.OPENAI_API_KEY || "";
+  const base = process.env.OPENAI_API_BASE || process.env.OPENAI_BASE_URL || (key ? "https://api.openai.com" : "");
+  return { base, key, model: process.env.COPILOT_MODEL || "gpt-4o-mini" };
+}
+
 async function callCopilot(history: Array<{ role: "user" | "assistant"; content: string }>, accountType: AccountType, catalog: Awaited<ReturnType<typeof loadProfessionals>>) {
-  const base = ENV.forgeApiUrl || process.env.BUILT_IN_FORGE_API_URL || process.env.OPENAI_API_BASE || process.env.OPENAI_BASE_URL;
-  const key = ENV.forgeApiKey || process.env.BUILT_IN_FORGE_API_KEY || process.env.OPENAI_API_KEY;
+  const { base, key, model } = copilotProvider();
   if (!base || !key) throw new HttpError(503, "Copilot indisponível: credencial de IA não configurada");
   const endpoint = resolveCopilotEndpoint(base);
   const catalogContext = catalog.slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, description: item.description, price: item.price, tags: item.tags, featured: item.featured, demo: item.demo }));
@@ -674,7 +706,7 @@ async function callCopilot(history: Array<{ role: "user" | "assistant"; content:
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal: controller.signal, body: JSON.stringify({ model: "gpt-5-mini", messages: [{ role: "system", content: system }, ...history], temperature: 0.2 }) });
+    const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal: controller.signal, body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...history], ...(model.startsWith("gpt-5") ? {} : { temperature: 0.2 }) }) });
     if (!response.ok) throw new HttpError(503, "Copilot indisponível no provedor de IA");
     const data = await response.json() as any;
     const reply = data?.choices?.[0]?.message?.content;
@@ -708,14 +740,15 @@ router.post("/copilot", wrap(async (req, res) => {
 }));
 
 router.get("/integrations", wrap(async (_req, res) => {
-  const aiConfigured = Boolean((ENV.forgeApiUrl || process.env.BUILT_IN_FORGE_API_URL || process.env.OPENAI_API_BASE || process.env.OPENAI_BASE_URL) && (ENV.forgeApiKey || process.env.BUILT_IN_FORGE_API_KEY || process.env.OPENAI_API_KEY));
+  const provider = copilotProvider();
+  const aiConfigured = Boolean(provider.base && provider.key);
   res.json({ integrations: [
     { id: "payments", name: "Pagamentos", status: "pending", description: "Gateway, split, escrow e homologação ainda não configurados." },
     { id: "identity", name: "Biometria", status: "pending", description: "Nenhuma biometria é coletada sem fornecedor e consentimento." },
     { id: "meta", name: "Meta", status: "pending", description: "Integração Meta ainda não configurada; nenhuma conta ou evento é presumido." },
     { id: "google", name: "Google", status: "pending", description: "Integração Google ainda não configurada; nenhuma conta ou agenda é presumida." },
     { id: "nf", name: "Nota fiscal", status: "pending", description: "Emissão fiscal não está integrada e não é inventada pelo GastroConecta." },
-    { id: "copilot", name: "Copilot IA", status: aiConfigured ? "configured" : "pending", description: aiConfigured ? "Endpoint configurado; modelo solicitado: gpt-5-mini." : "MANUS_API_URL/KEY (ou alias BUILT_IN_FORGE) ausentes." },
+    { id: "copilot", name: "Copilot IA", status: aiConfigured ? "configured" : "pending", description: aiConfigured ? `Endpoint configurado; modelo: ${provider.model}.` : "Defina OPENAI_API_KEY no Render para ativar o Copilot." },
   ], paymentsLive: false });
 }));
 
@@ -723,7 +756,7 @@ router.post("/checkout", wrap(async (_req, _res) => { throw new HttpError(503, "
 
 router.get("/admin/users", wrap(async (req, res) => {
   await admin(req);
-  const rows = await query<any[]>("SELECT u.*, p.accountType, p.status, p.city, p.bio, p.vip, p.discountPercent, p.featured FROM users u JOIN account_profiles p ON p.userId = u.id ORDER BY u.createdAt DESC");
+  const rows = await query<any[]>("SELECT u.*, p.accountType, p.status, p.city, p.bio, p.vip, p.discountPercent, p.featured, d.completedAt profileCompletedAt FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_profile_details d ON d.userId = u.id ORDER BY u.createdAt DESC");
   res.json({ users: rows.map(mapUser) });
 }));
 
@@ -733,8 +766,10 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
   const targetId = parse(idSchema, req.params.id);
   const input = body(req, adminUserSchema);
   if (targetId === context.user.id && input.status !== undefined && input.status !== "active") throw new HttpError(400, "O proprietário não pode deixar a própria conta inativa");
-  const target = await query<any[]>("SELECT u.id, u.openId FROM users u WHERE u.id = ? LIMIT 1", [targetId]);
+  const target = await query<any[]>("SELECT u.id, u.openId, p.accountType, d.completedAt FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_profile_details d ON d.userId = u.id WHERE u.id = ? LIMIT 1", [targetId]);
   if (!target[0]) throw new HttpError(404, "Usuário não encontrado");
+  // Parceiros e freelancers só podem ser aprovados com o cadastro completo (documentos, fotos e dados).
+  if (input.status === "active" && target[0].accountType !== "client" && !target[0].completedAt) throw new HttpError(400, "Este cadastro ainda está incompleto. A aprovação fica liberada quando o usuário enviar todos os dados obrigatórios.");
   await withTransaction(async connection => {
     if (input.name !== undefined) await connection.execute("UPDATE users SET name = ? WHERE id = ?", [input.name, targetId]);
     const profileKeys = ["status", "vip", "discountPercent", "featured"] as const;

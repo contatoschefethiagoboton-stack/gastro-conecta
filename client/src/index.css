@@ -311,3 +311,63 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .quote-whatsapp-link:hover { background:#e6f6ec; }
 .quote-whatsapp { margin-top:12px; gap:10px; }
 @media(max-width:680px) { .whatsapp-fab { left:14px; bottom:14px; padding:12px; } .whatsapp-fab span { display:none; } .promo-card { padding:20px 18px; } .promo-card h3 { font-size:18px; } }
+
+/* Versão independente: cadastro, catálogo, rodapé, benefícios e responsividade extra */
+.footer-bottom-right { display:inline-flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.footer-admin-link { display:inline-flex; align-items:center; gap:4px; color:#b3b1a5 !important; font-size:10px; opacity:.75; }
+.footer-admin-link:hover { opacity:1; color:var(--paprika) !important; }
+.account-next-step { margin:4px 0 0; padding:10px 12px; border-radius:8px; background:#fdf4ed; color:#8a3d1f; font-size:12.5px; line-height:1.5; }
+.promo-card.has-image { padding:0; overflow:hidden; }
+.promo-card.has-image .promo-body { padding:20px 22px 22px; display:flex; flex-direction:column; gap:12px; flex:1; }
+.promo-body { display:flex; flex-direction:column; gap:12px; flex:1; }
+.promo-image { width:100%; aspect-ratio:16/9; object-fit:cover; }
+.detail-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin:14px 0 6px; }
+.detail-gallery button { padding:0; border:0; border-radius:10px; overflow:hidden; cursor:zoom-in; background:#f1ede5; aspect-ratio:1; }
+.detail-gallery img { width:100%; height:100%; object-fit:cover; transition:transform .25s; }
+.detail-gallery button:hover img { transform:scale(1.04); }
+.detail-links { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.detail-links a { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border:1px solid #e3ddd2; border-radius:99px; font-size:12px; font-weight:600; }
+.detail-links a:hover { border-color:var(--paprika); color:var(--paprika); }
+.lightbox { position:fixed; inset:0; z-index:200; background:rgba(15,13,12,.88); display:grid; place-items:center; padding:20px; cursor:zoom-out; }
+.lightbox img { max-width:100%; max-height:88vh; border-radius:10px; object-fit:contain; }
+.lightbox button { position:absolute; top:16px; right:16px; width:44px; height:44px; border-radius:50%; border:0; background:rgba(255,255,255,.15); color:#fff; display:grid; place-items:center; cursor:pointer; }
+.pro-requirements { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:34px 0 0; }
+.pro-requirements > div { border:1px solid #e8e4dd; border-radius:12px; padding:22px; background:#faf9f5; }
+.pro-requirements h3 { font-size:15px; font-weight:600; margin-bottom:10px; }
+.pro-requirements ul { margin:0; padding-left:18px; color:#6f7067; font-size:13px; line-height:1.8; }
+.applicant-info { display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12.5px; }
+.applicant-meta { color:#787a70; }
+.applicant-exp { color:#4a4c44; line-height:1.5; max-width:560px; }
+.applicant-link { display:inline-flex; align-items:center; gap:5px; color:var(--paprika); font-weight:600; }
+.applicant-payout { display:flex; flex-direction:column; gap:4px; padding:10px 12px; border-radius:9px; background:#f1faf4; border:1px solid #cfe9d9; color:#155e35; }
+.applicant-payout button { margin-left:6px; padding:2px 8px; border-radius:6px; border:1px solid #9fd2b3; background:#fff; font-size:11px; cursor:pointer; }
+.applicant-payout span { word-break:break-word; }
+.my-benefits { margin-bottom:16px; padding:16px 18px; border:1px solid #f0d6c6; border-radius:14px; background:linear-gradient(160deg,#fdf4ed,#fff); }
+.my-benefits header { display:flex; align-items:center; gap:8px; color:var(--paprika); margin-bottom:10px; }
+.my-benefits-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+.my-benefits-list article { background:#fff; border:1px solid #efe5da; border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:4px; font-size:13px; }
+.my-benefits-list h4 { font-size:14px; font-weight:600; }
+.my-benefit-kind { align-self:flex-start; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.6px; color:var(--paprika); }
+.my-benefit-value { font-weight:600; color:#262823; }
+.my-benefits small { color:#8a8b80; }
+img { max-width:100%; }
+/* Tablet (681–1024px): duas colunas em cards e textos maiores para toque */
+@media (min-width:681px) and (max-width:1024px) {
+  .professional-grid { grid-template-columns:repeat(2,1fr); }
+  .category-card h3 { font-size:12px; }
+  .category-card p { font-size:9px; }
+  .search-confidence { font-size:9px; }
+  .jobs-grid { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width:680px) {
+  .pro-requirements { grid-template-columns:1fr; }
+  .footer-bottom-right { gap:10px; }
+  .detail-gallery { grid-template-columns:repeat(2,1fr); }
+  .category-card p { font-size:9px; }
+  .search-confidence { font-size:9px; }
+  .demo-note { font-size:10px; }
+  .pro-tags>span { font-size:10px; }
+  .footer-main>div>a:not(.brand) { font-size:12px; padding:3px 0; }
+  .footer-contact a { font-size:12px; padding:3px 0; }
+  .promo-card h3 { font-size:18px; }
+}

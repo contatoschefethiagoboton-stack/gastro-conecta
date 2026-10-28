@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-label="Ilustração de mesa de buffet">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8efe2"/><stop offset="1" stop-color="#a9c49a"/></linearGradient></defs>
+<rect width="800" height="560" fill="url(#g)"/>
+<circle cx="640" cy="90" r="170" fill="#fff" opacity=".06"/><circle cx="120" cy="520" r="200" fill="#000" opacity=".08"/>
+<rect x="80" y="380" width="640" height="24" rx="8" fill="#6b4a35"/><g><ellipse cx="220" cy="370" rx="100" ry="22" fill="#fffaf3"/><path d="M130 365 c0-80 180-80 180 0z" fill="#d9d2c6"/><circle cx="220" cy="300" r="10" fill="#bdb5a8"/></g><g><ellipse cx="420" cy="372" rx="90" ry="20" fill="#fffaf3"/><circle cx="390" cy="355" r="18" fill="#df572f"/><circle cx="425" cy="350" r="16" fill="#e7b850"/><circle cx="455" cy="358" r="15" fill="#6f9a4f"/></g><g><rect x="560" y="250" width="40" height="120" rx="10" fill="#fff" opacity=".8"/><rect x="610" y="270" width="40" height="100" rx="10" fill="#fff" opacity=".6"/><path d="M570 300 h20 M620 310 h20" stroke="#df572f" stroke-width="8"/></g>
+</svg>
