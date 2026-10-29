@@ -1,12 +1,5 @@
-export const EVENT_COMMISSION_PCT = Math.min(12, Math.max(8, Number(process.env.GC_EVENT_COMMISSION_PCT ?? 10)));
-export const DAILY_CLIENT_FEE_PCT = 10;
-
-export const DAILY_MINIMUMS_CENTS = {
-  Cozinheiro: Number(process.env.GC_MIN_DAILY_COZINHEIRO_CENTS ?? 15000),
-  Ajudante: Number(process.env.GC_MIN_DAILY_AJUDANTE_CENTS ?? 12000),
-  Garçom: Number(process.env.GC_MIN_DAILY_GARCOM_CENTS ?? 12000),
-  Barman: Number(process.env.GC_MIN_DAILY_BARMAN_CENTS ?? 15000),
-} as const;
+// Sem comissões: o profissional recebe 100% do valor negociado e paga apenas a assinatura mensal.
+export const SUBSCRIPTION_PRICE_CENTS = Math.max(100, Number(process.env.GC_SUBSCRIPTION_PRICE_CENTS ?? 4990));
 
 export type EventIntentInput = {
   stage: "ready" | "comparing" | "research";
@@ -25,20 +18,13 @@ export function calculateIntentScore(input: EventIntentInput): number {
   return Math.min(49, complete * 9);
 }
 
-export function feeForDaily(dailyCents: number): number {
-  return Math.round(dailyCents * DAILY_CLIENT_FEE_PCT / 100);
-}
-
-export function eventFeeForGross(grossCents: number, percentage = EVENT_COMMISSION_PCT): number {
-  return Math.round(grossCents * percentage / 100);
-}
-
-export function netAfterFee(grossCents: number, feeCents: number): number {
-  return grossCents - feeCents;
+/** "Top Rated": média mínima de 4,5 com pelo menos 3 avaliações. */
+export function isTopRated(average: number, count: number): boolean {
+  return count >= 3 && average >= 4.5;
 }
 
 export function isoDate(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
   return null;
 }

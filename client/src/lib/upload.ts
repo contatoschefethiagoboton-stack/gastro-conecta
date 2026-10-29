@@ -1,9 +1,9 @@
 import { api } from '@/lib/api';
 
-export type MediaKind = 'avatar' | 'service' | 'resume' | 'site' | 'promo';
+export type MediaKind = 'avatar' | 'service' | 'face' | 'invoice' | 'site' | 'promo';
 export type UploadedMedia = { id: number; url: string; mime: string; size: number; kind: MediaKind };
 
-const MAX_SIDE: Record<MediaKind, number> = { avatar: 900, service: 1600, resume: 2000, site: 2200, promo: 1600 };
+const MAX_SIDE: Record<MediaKind, number> = { avatar: 900, service: 1600, face: 1000, invoice: 2000, site: 2200, promo: 1600 };
 
 function readAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -46,7 +46,7 @@ async function compressImage(file: File, maxSide: number): Promise<Blob> {
 export async function uploadFile(file: File, kind: MediaKind): Promise<UploadedMedia> {
   const isImage = file.type.startsWith('image/');
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  if (kind === 'resume' ? !(isImage || isPdf) : !isImage) throw new Error(kind === 'resume' ? 'Envie o currículo em PDF ou imagem.' : 'Envie uma imagem (JPG, PNG ou WEBP).');
+  if (kind === 'invoice' ? !(isImage || isPdf) : !isImage) throw new Error(kind === 'invoice' ? 'Envie a nota em PDF ou imagem.' : 'Envie uma imagem (JPG, PNG ou WEBP).');
   if (!isImage && file.size > 4.5 * 1024 * 1024) throw new Error('Arquivo grande demais (máximo 4,5 MB).');
   const blob = isImage ? await compressImage(file, MAX_SIDE[kind]) : file;
   if (blob.size > 4.5 * 1024 * 1024) throw new Error('Arquivo grande demais mesmo após reduzir. Tente outra foto.');

@@ -7,14 +7,14 @@ export const contentFields: ContentField[] = [
  {
   "key": "contact.whatsapp",
   "group": "Contato e marca",
-  "label": "WhatsApp de atendimento (só números, com 55 e DDD)",
+  "label": "WhatsApp da administração — Fale Conosco (só números, com 55 e DDD)",
   "type": "text",
   "default": "5519993984529"
  },
  {
   "key": "contact.whatsappDisplay",
   "group": "Contato e marca",
-  "label": "WhatsApp como aparece no site",
+  "label": "WhatsApp da administração como aparece no site",
   "type": "text",
   "default": "(19) 99398-4529"
  },
@@ -56,9 +56,16 @@ export const contentFields: ContentField[] = [
  {
   "key": "whatsapp.enabled",
   "group": "Contato e marca",
-  "label": "Mostrar botão flutuante do WhatsApp",
+  "label": "Mostrar botão flutuante “Fale Conosco”",
   "type": "boolean",
   "default": "true"
+ },
+ {
+  "key": "growth.googleReviewUrl",
+  "group": "Contato e marca",
+  "label": "Link para avaliar a GastroConecta no Google (exibido após cada avaliação)",
+  "type": "url",
+  "default": ""
  },
  {
   "key": "home.eyebrow",
@@ -86,7 +93,7 @@ export const contentFields: ContentField[] = [
   "group": "Página inicial",
   "label": "Texto abaixo do título",
   "type": "textarea",
-  "default": "Encontre chefs, buffets e profissionais que transformam encontros em experiências inesquecíveis."
+  "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Para clientes, é 100% grátis."
  },
  {
   "key": "home.ctaPrimary",
@@ -191,7 +198,7 @@ export const contentFields: ContentField[] = [
   "group": "Página inicial",
   "label": "Faixa para profissionais — texto",
   "type": "textarea",
-  "default": "Encontre oportunidades para seu negócio ou sua próxima diária. Uma comunidade que valoriza quem faz acontecer."
+  "default": "Receba pedidos da sua região, use o Copilot para calcular ingredientes, equipe e custos e fique com 100% do valor negociado. Sem comissão: só uma assinatura mensal fixa."
  },
  {
   "key": "about.eyebrow",
@@ -226,7 +233,7 @@ export const contentFields: ContentField[] = [
   "group": "Quem somos",
   "label": "Demais parágrafos (linha em branco separa parágrafos)",
   "type": "textarea",
-  "default": "Criada por um Chef de Cozinha Profissional, a plataforma foi pensada a partir da realidade do setor. Da organização de um jantar especial à montagem de uma equipe de evento, cada conexão precisa de clareza, respeito e valorização.\n\nAqui, clientes encontram chefs e buffets, fornecedores descobrem oportunidades e freelancers operacionais têm espaço para mostrar seu talento. A tecnologia aproxima. As pessoas fazem acontecer."
+  "default": "Criada por um Chef de Cozinha Profissional, a plataforma foi pensada a partir da realidade do setor. Do jantar especial às marmitas da semana, da equipe de salão à limpeza pós-evento, cada conexão precisa de clareza, respeito e valorização.\n\nAqui, clientes encontram profissionais de confiança sem pagar nada, e profissionais recebem 100% do valor do seu trabalho. A tecnologia aproxima. As pessoas fazem acontecer."
  },
  {
   "key": "about.image",
@@ -268,7 +275,7 @@ export const contentFields: ContentField[] = [
   "group": "Para profissionais",
   "label": "Texto de abertura",
   "type": "textarea",
-  "default": "Para chefs, buffets e os profissionais que fazem cada evento acontecer."
+  "default": "Para chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, equipes de limpeza e jardineiros."
  },
  {
   "key": "pros.joinTitle",
@@ -282,28 +289,7 @@ export const contentFields: ContentField[] = [
   "group": "Para profissionais",
   "label": "Chamada para cadastro — texto",
   "type": "textarea",
-  "default": "Cadastre seu negócio como profissional parceiro ou seu talento como freelancer. Todos os cadastros passam por validação da administração antes de receber oportunidades."
- },
- {
-  "key": "jobs.title",
-  "group": "Vagas",
-  "label": "Título (Enter quebra linha)",
-  "type": "textarea",
-  "default": "Sua próxima diária.\nSua próxima conexão."
- },
- {
-  "key": "jobs.lead",
-  "group": "Vagas",
-  "label": "Texto de abertura",
-  "type": "textarea",
-  "default": "Oportunidades para cozinheiros, ajudantes, garçons e barmans."
- },
- {
-  "key": "jobs.notice",
-  "group": "Vagas",
-  "label": "Aviso sobre pagamento",
-  "type": "textarea",
-  "default": "A regra é clara: 100% da diária para o freelancer, pago direto pelo contratante via Pix. A comissão de 10% é do contratante, não descontada do seu trabalho."
+  "default": "Cadastre-se como profissional com CPF ou CNPJ (MEI ou Limitada). Todo cadastro passa pela validação da administração; depois, ative a assinatura mensal via Pix para aparecer no catálogo e enviar propostas."
  },
  {
   "key": "footer.tagline",
@@ -331,28 +317,28 @@ export const contentFields: ContentField[] = [
   "group": "Textos legais",
   "label": "Termos da plataforma (## no início da linha = subtítulo)",
   "type": "textarea",
-  "default": "## Intermediação e contratação\n\nO GastroConecta conecta clientes, fornecedores e freelancers. O serviço gastronômico é prestado pelo profissional contratado, e as condições devem ser estabelecidas em proposta e contrato. A natureza da relação e suas obrigações precisam ser avaliadas juridicamente; o uso da plataforma não elimina possíveis responsabilidades legais ou trabalhistas.\n\n## Comissões e emissão fiscal\n\nPara eventos, a comissão prevista é de 8% a 12% do valor bruto. Para diárias, a taxa de 10% é acrescida ao custo do contratante e o freelancer recebe o valor integral de referência. A plataforma deve emitir nota apenas de sua intermediação, enquanto o fornecedor é responsável pelo documento fiscal do serviço integral, sujeito à validação contábil e tributária aplicável.\n\n## Propostas, contratos e pagamentos\n\nA aceitação da proposta não confirma cobrança ou depósito. Contratos PDF gerados são minutas que exigem revisão e assinatura das partes. O gateway, o escrow, a biometria, a emissão fiscal e as integrações sociais não estão homologados nesta versão.\n\n## Avaliações e uso responsável\n\nParticipantes devem avaliar trabalhos concluídos com nota de 1 a 5 e feedback respeitoso. Após 24 horas da conclusão, ações transacionais podem ficar restritas até avaliações pendentes, preservando acesso à conta e suporte. Não publique dados pessoais de terceiros ou conteúdos ofensivos.\n\n## Catálogo demonstrativo\n\nPortfólios identificados como ilustrativos, seus nomes, imagens e preços não representam fornecedores contratáveis. Não são avaliações, selos antifraude ou resultados comprovados. Fornecedores reais dependerão de cadastro e liberação."
+  "default": "## Intermediação e contratação\n\nO GastroConecta conecta clientes e profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem). O serviço é prestado pelo profissional contratado, nas condições da proposta aceita e do contrato gerado pela plataforma. A GastroConecta não é parte do contrato entre cliente e profissional.\n\n## Planos e cobrança\n\nClientes não pagam nada. Profissionais pagam uma assinatura mensal fixa, cobrada via Pix pelo Mercado Pago, e recebem 100% do valor negociado com o cliente, sem comissão. A renovação automática é tentada 5 dias antes do vencimento; se falhar, o Pix manual fica disponível no painel. Sem pagamento até o vencimento, o perfil fica oculto do catálogo e o envio de propostas é bloqueado até a renovação.\n\n## Propostas, contratos e pagamentos\n\nAo aceitar uma proposta, o cliente recebe o WhatsApp do profissional e o contrato em PDF é gerado com os dados das duas partes, o escopo (só mão de obra ou serviço completo), data, horário, local, valor e condições de pagamento. O pagamento do serviço é feito diretamente ao profissional.\n\n## Avaliações e uso responsável\n\nDepois de cada serviço concluído, cliente e profissional avaliam um ao outro (nota de 1 a 5 e comentário). Se a avaliação ficar pendente por mais de 24 horas, novos pedidos, propostas e aceites ficam bloqueados até que ela seja feita. Não publique dados pessoais de terceiros ou conteúdos ofensivos.\n\n## Catálogo demonstrativo\n\nPortfólios identificados como ilustrativos, seus nomes, imagens e preços não representam profissionais contratáveis."
  },
  {
   "key": "legal.privacy",
   "group": "Textos legais",
   "label": "Segurança e privacidade (## no início da linha = subtítulo)",
   "type": "textarea",
-  "default": "## Dados da sua conta\n\nSão utilizados nome, e-mail, cidade e informações fornecidas em perfis, pedidos, propostas, vagas e avaliações. A senha é armazenada em formato derivado criptograficamente, não em texto aberto. Dados privados exigem autenticação e autorização no servidor.\n\n## Cadastro de profissionais e freelancers\n\nProfissionais parceiros informam CNPJ, razão social, nome do responsável, telefone, endereço, redes sociais e fotos do trabalho. Freelancers informam dados pessoais, CPF, endereço, currículo e dados bancários e Pix. Esses dados servem para validar o cadastro e permitir o pagamento direto entre contratante e freelancer. Documentos e dados bancários ficam visíveis apenas para o titular, para a administração e, no caso do Pix e do currículo, para o contratante da vaga à qual o freelancer se candidatou.\n\n## Biometria e identidade\n\nO reconhecimento facial e a detecção de prova de vida não estão ativos. Não coletamos imagens biométricas nesta versão. A futura integração deverá informar finalidade, consentimento, fornecedor, retenção e condições de exclusão antes de qualquer coleta.\n\n## Pagamentos e privacidade financeira\n\nCartões e dados de pagamento não são coletados nesta versão. Split, Pix, parcelamento e retenção em garantia dependem da homologação de um prestador de pagamentos. Não há garantia financeira ativa.\n\n## Direitos e responsabilidades\n\nAntes da operação pública comercial, o responsável pela plataforma precisa disponibilizar sua identificação, canal para solicitações de acesso/correção/exclusão, bases legais, períodos de retenção e gestão de incidentes. A exclusão administrativa atual é lógica, mantendo auditoria e não constituindo eliminação integral LGPD.\n\n## Proteção de acesso\n\nUtilize uma senha única, com pelo menos dez caracteres, letras maiúsculas e minúsculas, números e caracteres especiais. Sessões próprias são limitadas a uma por conta. Suspensão ou bloqueio administrativo restringem ações privadas."
+  "default": "## Dados da sua conta\n\nSão utilizados nome, e-mail, cidade e informações fornecidas em perfis, pedidos, propostas e avaliações. A senha é armazenada em formato derivado criptograficamente, não em texto aberto. Você pode trocar a senha a qualquer momento no painel ou pedir um link em “Esqueci minha senha”.\n\n## Cadastro de profissionais\n\nProfissionais informam CPF ou CNPJ, nome ou razão social, telefone, endereço, logo, fotos de trabalhos, foto do rosto e dados bancários/Pix. O catálogo mostra apenas nome comercial, cidade, serviços, fotos de trabalhos e avaliações. Documento, endereço, rosto e banco/Pix são vistos apenas pelo titular, pela administração e, no contrato, pelo cliente que aceitou a proposta.\n\n## Dados do cliente para o contrato\n\nPara aceitar uma proposta, o cliente informa nome completo, CPF, endereço, telefone e foto do rosto. Esses dados entram no contrato em PDF e ficam visíveis ao profissional contratado e à administração.\n\n## Foto do rosto (antifraude)\n\nA foto do rosto serve para a administração conferir a identidade de quem usa a plataforma. É um arquivo privado, não aparece no site e não é usada para reconhecimento facial automático.\n\n## Pagamentos\n\nAs assinaturas dos profissionais são processadas pelo Mercado Pago; a GastroConecta não armazena dados de cartão. Os pagamentos dos serviços são feitos diretamente entre cliente e profissional.\n\n## Direitos e responsabilidades\n\nSolicitações de acesso, correção ou exclusão de dados podem ser feitas pelo Fale Conosco. A exclusão administrativa é lógica, mantendo registros de auditoria e contratos exigidos por lei."
  },
  {
   "key": "seo.homeTitle",
   "group": "SEO (Google)",
   "label": "Título da página inicial no Google",
   "type": "text",
-  "default": "GastroConecta | Chefs, buffets e boas conexões"
+  "default": "GastroConecta | Chefs e profissionais para o seu evento"
  },
  {
   "key": "seo.homeDescription",
   "group": "SEO (Google)",
   "label": "Descrição da página inicial no Google",
   "type": "textarea",
-  "default": "Encontre chefs particulares, buffets e equipes freelance. Planeje seu evento e conecte-se a quem vive a gastronomia, com clareza em cada etapa."
+  "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Cadastro gratuito para clientes e propostas personalizadas."
  }
 ];
 

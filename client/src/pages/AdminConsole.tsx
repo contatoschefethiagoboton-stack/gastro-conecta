@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, Check, ChevronRight, Copy, ExternalLink, FileText, Gift, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, X } from 'lucide-react';
+import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
 import type { ContentField } from '@shared/content';
 import { EVENT_TYPES } from '@shared/promotions';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validators';
+import { serviceLabel } from '@shared/services';
 import '../admin.css';
 
-type Section = 'overview' | 'users' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
-type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider' | 'freelancer'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string };
+type Section = 'overview' | 'users' | 'subscriptions' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
+type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; runningNow?: boolean };
 type Benefit = { id: number; userId: number; userName?: string; userEmail?: string; kind: string; title: string; description: string; amountCents: number; percent: number; expiresAt: string | null; active: boolean; createdAt: string };
 type Media = { id: number; kind: string; filename: string; size: number; url: string; createdAt: string };
@@ -18,6 +19,8 @@ type Media = { id: number; kind: string; filename: string; size: number; url: st
 const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'users', label: 'Usuários e aprovações', icon: Users },
+  { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard },
+  { id: 'contracts', label: 'Contratos (auditoria)', icon: FileSignature },
   { id: 'content', label: 'Textos do site', icon: PenLine },
   { id: 'media', label: 'Imagens', icon: ImageIcon },
   { id: 'promotions', label: 'Promoções', icon: Megaphone },
@@ -26,7 +29,7 @@ const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: 'audit', label: 'Auditoria', icon: ScrollText },
   { id: 'account', label: 'Minha senha', icon: KeyRound },
 ];
-const typeLabel = { client: 'Cliente', provider: 'Parceiro', freelancer: 'Freelancer' } as const;
+const typeLabel = { client: 'Cliente', provider: 'Profissional' } as const;
 const statusLabel: Record<string, string> = { active: 'Ativo', pending: 'Em análise', suspended: 'Suspenso', blocked: 'Bloqueado', deleted: 'Excluído' };
 const kindLabel: Record<string, string> = { bonus: 'Bônus', credit: 'Crédito', discount: 'Desconto', vip: 'VIP', featured: 'Destaque', custom: 'Outro' };
 const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
@@ -61,6 +64,8 @@ export default function AdminConsole() {
         <div className="adm-content">
           {section === 'overview' && <Overview go={go}/>}
           {section === 'users' && <UsersSection/>}
+          {section === 'subscriptions' && <SubscriptionsSection/>}
+          {section === 'contracts' && <ContractsSection/>}
           {section === 'content' && <ContentSection/>}
           {section === 'media' && <MediaSection/>}
           {section === 'promotions' && <PromotionsSection/>}
@@ -75,13 +80,16 @@ export default function AdminConsole() {
 }
 
 function Overview({ go }: { go: (s: Section) => void }) {
-  const [data, setData] = useState<{ users: number; events: number; pending: number } | null>(null);
-  useEffect(() => { api<{ users: number; events: number; pending: number }>('/admin/overview').then(setData).catch(e => toast.error(errText(e))); }, []);
+  const [data, setData] = useState<{ users: number; events: number; pending: number; activeSubscriptions: number; contracts: number; subscriptionRevenue30dCents: number } | null>(null);
+  useEffect(() => { api<NonNullable<typeof data>>('/admin/overview').then(setData).catch(e => toast.error(errText(e))); }, []);
   return <div className="adm-stack">
     <div className="adm-stats">
       <button type="button" onClick={() => go('users')}><span>Usuários</span><strong>{data?.users ?? '—'}</strong></button>
       <button type="button" onClick={() => go('users')} className={data?.pending ? 'is-alert' : ''}><span>Cadastros em análise</span><strong>{data?.pending ?? '—'}</strong></button>
-      <div><span>Pedidos de evento</span><strong>{data?.events ?? '—'}</strong></div>
+      <div><span>Pedidos</span><strong>{data?.events ?? '—'}</strong></div>
+      <button type="button" onClick={() => go('subscriptions')}><span>Assinaturas vigentes</span><strong>{data?.activeSubscriptions ?? '—'}</strong></button>
+      <div><span>Receita de assinaturas (30 dias)</span><strong>{data ? money(data.subscriptionRevenue30dCents) : '—'}</strong></div>
+      <button type="button" onClick={() => go('contracts')}><span>Contratos gerados</span><strong>{data?.contracts ?? '—'}</strong></button>
     </div>
     <Card title="Atalhos">
       <div className="adm-shortcuts">
@@ -106,14 +114,14 @@ function UsersSection() {
   return <div className="adm-stack">
     <div className="adm-filters">
       <label className="adm-search"><Search size={16}/><input placeholder="Nome, e-mail ou cidade" value={search} onChange={e => setSearch(e.target.value)}/></label>
-      <select value={type} onChange={e => setType(e.target.value)} aria-label="Tipo"><option value="">Todos os tipos</option><option value="client">Clientes</option><option value="provider">Parceiros</option><option value="freelancer">Freelancers</option></select>
+      <select value={type} onChange={e => setType(e.target.value)} aria-label="Tipo"><option value="">Todos os tipos</option><option value="client">Clientes</option><option value="provider">Profissionais</option></select>
       <select value={status} onChange={e => setStatus(e.target.value)} aria-label="Situação"><option value="">Todas as situações</option>{Object.entries(statusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
     </div>
     <Card>
       {!users ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum usuário encontrado."/> :
         <div className="adm-list">{list.map(u => <button type="button" key={u.id} className="adm-row" onClick={() => setOpenId(u.id)}>
           <div className="adm-row-main"><strong>{u.name || '(sem nome)'}</strong><span>{u.email}</span></div>
-          <div className="adm-row-tags"><span className="adm-tag">{typeLabel[u.accountType]}</span><span className={`adm-tag adm-st-${u.status}`}>{statusLabel[u.status] ?? u.status}</span>{u.accountType !== 'client' && <span className={`adm-tag ${u.profileComplete ? 'adm-ok' : 'adm-warn'}`}>{u.profileComplete ? 'Cadastro completo' : 'Cadastro incompleto'}</span>}{u.vip && <span className="adm-tag adm-vip">VIP</span>}{u.featured && <span className="adm-tag adm-vip">Destaque</span>}{u.role === 'admin' && <span className="adm-tag">Admin</span>}</div>
+          <div className="adm-row-tags"><span className="adm-tag">{typeLabel[u.accountType]}</span><span className={`adm-tag adm-st-${u.status}`}>{statusLabel[u.status] ?? u.status}</span>{u.accountType === 'provider' && <span className={`adm-tag ${u.profileComplete ? 'adm-ok' : 'adm-warn'}`}>{u.profileComplete ? 'Cadastro completo' : 'Cadastro incompleto'}</span>}{u.vip && <span className="adm-tag adm-vip">VIP</span>}{u.featured && <span className="adm-tag adm-vip">Destaque</span>}{u.role === 'admin' && <span className="adm-tag">Admin</span>}</div>
           <ChevronRight size={16}/>
         </button>)}</div>}
     </Card>
@@ -150,12 +158,19 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           {u.role !== 'admin' && u.status !== 'blocked' && <button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void patch({ status: 'blocked' }, 'block')}>Bloquear</button>}
           {u.role !== 'admin' && u.status !== 'deleted' && <button type="button" className="ob-btn ob-btn-danger" disabled={!!busy} onClick={() => { if (confirm('Excluir esta conta? Ela deixa de acessar a plataforma.')) void patch({ status: 'deleted' }, 'delete'); }}>Excluir</button>}
         </div>
-        {u.accountType !== 'client' && !data.completedAt && <p className="adm-alert">Este usuário ainda não completou o cadastro obrigatório. Evite aprovar antes disso.</p>}
+        {u.accountType === 'provider' && !data.profileComplete && <p className="adm-alert">Este profissional ainda não completou o cadastro obrigatório (logo, foto do rosto, fotos de trabalhos, documento e Pix). A aprovação fica bloqueada até lá.</p>}
+        <ResetLink userId={u.id} disabled={u.role === 'admin'}/>
         <div className="adm-section-title">Conta</div>
         <Field label="E-mail" value={u.email}/><Field label="Cidade" value={u.city}/><Field label="Criado em" value={new Date(u.createdAt).toLocaleString('pt-BR')}/>
         {d && <>
           <div className="adm-section-title">Cadastro</div>
-          {d.avatarUrl && <img className="adm-avatar" src={d.avatarUrl} alt="Foto de perfil"/>}
+          <div className="adm-face-row">
+            {d.avatarUrl && <figure><img className="adm-avatar" src={d.avatarUrl} alt="Logo"/><figcaption>Logo</figcaption></figure>}
+            {d.faceUrl && <figure><a href={d.faceUrl} target="_blank" rel="noopener noreferrer"><img className="adm-avatar" src={d.faceUrl} alt="Foto do rosto"/></a><figcaption>Rosto (privado)</figcaption></figure>}
+            {d.faceUrl && <label className="adm-verify"><input type="checkbox" checked={Boolean(d.faceVerified)} onChange={e => void patch({ faceVerified: e.target.checked }, 'face')}/> <ScanFace size={15}/> Rosto conferido</label>}
+          </div>
+          <Field label="Documento" value={d.documentType === 'cnpj' ? `CNPJ${d.companyType ? ` (${d.companyType})` : ''}` : d.documentType === 'cpf' ? 'CPF (pessoa física)' : ''}/>
+          <Field label="Serviços" value={Array.isArray(d.services) ? d.services.map(serviceLabel).join(', ') : ''}/>
           <Field label="Nome completo" value={d.fullName}/><Field label="CNPJ" value={d.cnpj ? formatCNPJ(d.cnpj) : ""}/><Field label="Razão social" value={d.companyName}/><Field label="Nome fantasia" value={d.tradeName}/><Field label="CPF" value={d.cpf ? formatCPF(d.cpf) : ""}/><Field label="Nascimento" value={d.birthDate ? d.birthDate.split("-").reverse().join("/") : ""}/><Field label="Telefone" value={d.phone ? formatPhone(d.phone) : ""}/>
           <Field label="Endereço" value={[d.street, d.number, d.complement, d.district, d.city && `${d.city}/${d.state}`, d.cep && formatCEP(d.cep)].filter(Boolean).join(', ')}/>
           <Field label="Categoria" value={d.category}/><Field label="Especialidade" value={d.specialty}/><Field label="Funções" value={Array.isArray(d.roles) ? d.roles.join(', ') : ''}/>
@@ -165,6 +180,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           {Array.isArray(d.serviceUrls) && d.serviceUrls.length > 0 && <div className="adm-thumbs">{d.serviceUrls.map((m: { id: number; url: string }) => <a key={m.id} href={m.url} target="_blank" rel="noopener noreferrer"><img src={m.url} alt=""/></a>)}</div>}
           {d.bank && <><div className="adm-section-title">Dados para pagamento</div><Field label="Titular" value={`${d.bank.holderName} (${d.bank.holderDocument?.length === 14 ? formatCNPJ(d.bank.holderDocument) : formatCPF(d.bank.holderDocument ?? '')})`}/><Field label="Banco" value={`${d.bank.bankName} · Ag. ${d.bank.agency} · Conta ${d.bank.account} (${d.bank.accountType})`}/><Field label="Pix" value={`${d.bank.pixKeyType}: ${d.bank.pixKey}`}/></>}
         </>}
+        {data.subscription && <SubscriptionBox userId={u.id} summary={data.subscription} onChanged={() => void load()}/>}
         <div className="adm-section-title">Vantagens</div>
         <div className="adm-toggles">
           <label><input type="checkbox" checked={u.vip} onChange={e => void patch({ vip: e.target.checked }, 'vip')}/> VIP</label>
@@ -354,6 +370,73 @@ function BenefitsSection() {
           <div className="adm-row-actions"><button type="button" onClick={() => void toggle(b)}>{b.active ? 'Desativar' : 'Ativar'}</button><button type="button" className="danger" onClick={() => void remove(b)} aria-label="Apagar"><Trash2 size={15}/></button></div>
         </div>)}</div>}
     </Card>
+  </div>;
+}
+
+function ResetLink({ userId, disabled }: { userId: number; disabled?: boolean }) {
+  const [link, setLink] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (disabled) return null;
+  const create = async () => {
+    setBusy(true);
+    try { const r = await api<{ link: string }>(`/admin/users/${userId}/reset-link`, { method: 'POST' }); setLink(r.link); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
+  return <div className="adm-reset">
+    <button type="button" className="ob-btn ob-btn-outline" disabled={busy} onClick={() => void create()}>{busy ? <Loader2 className="ob-spin" size={16}/> : <KeyRound size={16}/>} Gerar link de nova senha</button>
+    {link && <div className="adm-reset-link"><code>{link}</code><button type="button" onClick={() => { void navigator.clipboard?.writeText(link).then(() => toast.success('Link copiado. Envie ao usuário pelo WhatsApp (válido por 1 hora).')); }}><Copy size={14}/> Copiar</button></div>}
+  </div>;
+}
+
+type SubSummary = { label: string; phase: string; periodEnd: string | null; autoRenew: { authorized: boolean }; history: Array<{ id: number; method: string; status: string; amountCents: number; createdAt: string }> };
+function SubscriptionBox({ userId, summary, onChanged }: { userId: number; summary: SubSummary; onChanged: () => void }) {
+  const [months, setMonths] = useState('1');
+  const [busy, setBusy] = useState(false);
+  const grant = async () => {
+    setBusy(true);
+    try { await api(`/admin/subscriptions/${userId}/grant`, { method: 'POST', body: JSON.stringify({ months: Math.min(24, Math.max(1, Number(months) || 1)), note: 'Liberação manual pelo painel' }) }); toast.success('Assinatura liberada.'); onChanged(); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
+  return <>
+    <div className="adm-section-title">Assinatura</div>
+    <Field label="Situação" value={summary.label}/>
+    <Field label="Vencimento" value={summary.periodEnd ? new Date(summary.periodEnd).toLocaleDateString('pt-BR') : '—'}/>
+    <Field label="Pix automático" value={summary.autoRenew.authorized ? 'Autorizado' : 'Não autorizado'}/>
+    <label className="adm-inline">Liberar meses <input type="number" min={1} max={24} value={months} onChange={e => setMonths(e.target.value)}/><button type="button" className="ob-btn ob-btn-outline" disabled={busy} onClick={() => void grant()}>{busy ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Liberar</button></label>
+  </>;
+}
+
+type SubRow = { userId: number; name: string; email: string; accountStatus: string; phase: string; label: string; periodEnd: string | null; autoRenew: string | null; lastPaidAt: string | null };
+function SubscriptionsSection() {
+  const [data, setData] = useState<{ priceCents: number; paymentsConfigured: boolean; subscriptions: SubRow[] } | null>(null);
+  const [phase, setPhase] = useState('');
+  useEffect(() => { api<NonNullable<typeof data>>('/admin/subscriptions').then(setData).catch(e => toast.error(errText(e))); }, []);
+  const list = (data?.subscriptions ?? []).filter(s => !phase || s.phase === phase);
+  return <div className="adm-stack">
+    {data && !data.paymentsConfigured && <p className="adm-alert">Mercado Pago não configurado: defina MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET no Render. Até lá, libere assinaturas manualmente no cadastro de cada profissional.</p>}
+    <div className="adm-filters"><select value={phase} onChange={e => setPhase(e.target.value)} aria-label="Situação"><option value="">Todas as situações</option><option value="active">Em dia</option><option value="renewal">Em renovação</option><option value="manual">Aguardando Pix manual</option><option value="blocked">Vencidas (ocultos)</option><option value="inactive">Nunca ativadas</option></select>{data && <span className="adm-muted">Mensalidade: {money(data.priceCents)}</span>}</div>
+    <Card>{!data ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum profissional nesta situação."/> : <div className="adm-list">{list.map(s => <div className="adm-row" key={s.userId}><div className="adm-row-main"><strong>{s.name || s.email}</strong><span>{s.email} · vence {s.periodEnd ? new Date(s.periodEnd).toLocaleDateString('pt-BR') : '—'}{s.lastPaidAt ? ` · último pagamento ${new Date(s.lastPaidAt).toLocaleDateString('pt-BR')}` : ''}</span></div><div className="adm-row-tags"><span className={`adm-tag ${s.phase === 'active' || s.phase === 'renewal' ? 'adm-ok' : 'adm-warn'}`}>{s.label}</span>{s.autoRenew === 'authorized' && <span className="adm-tag">Pix automático</span>}<span className={`adm-tag adm-st-${s.accountStatus}`}>{statusLabel[s.accountStatus] ?? s.accountStatus}</span></div></div>)}</div>}</Card>
+  </div>;
+}
+
+type ContractRow = { id: number; title: string; createdAt: string; clientName?: string; providerName?: string; amountCents?: number };
+function ContractsSection() {
+  const [items, setItems] = useState<ContractRow[] | null>(null);
+  const [search, setSearch] = useState('');
+  useEffect(() => { api<{ contracts: ContractRow[] }>('/admin/contracts').then(r => setItems(r.contracts)).catch(e => toast.error(errText(e))); }, []);
+  const download = async (id: number) => {
+    try {
+      const response = await fetch(`/api/gastro/contracts/${id}/pdf`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Não foi possível baixar o contrato.');
+      const url = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a'); a.href = url; a.download = `contrato-gastroconecta-${id}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { toast.error(errText(e)); }
+  };
+  const list = (items ?? []).filter(c => !search || `${c.title} ${c.clientName ?? ''} ${c.providerName ?? ''} ${c.id}`.toLowerCase().includes(search.toLowerCase()));
+  return <div className="adm-stack">
+    <div className="adm-filters"><label className="adm-search"><Search size={16}/><input placeholder="Cliente, profissional, pedido ou nº" value={search} onChange={e => setSearch(e.target.value)}/></label></div>
+    <Card title="Contratos gerados automaticamente">{!items ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum contrato ainda."/> : <div className="adm-list">{list.map(c => <div className="adm-row" key={c.id}><div className="adm-row-main"><strong>GC-{String(c.id).padStart(6, '0')} · {c.title}</strong><span>{c.clientName} × {c.providerName}{c.amountCents ? ` · ${money(c.amountCents)}` : ''} · {new Date(c.createdAt).toLocaleString('pt-BR')}</span></div><button type="button" className="ob-btn ob-btn-outline" onClick={() => void download(c.id)}><Download size={15}/> PDF</button></div>)}</div>}</Card>
   </div>;
 }
 

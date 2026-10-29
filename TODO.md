@@ -19,3 +19,16 @@
 - [x] Copilot: chat IA no servidor para recomendações públicas reais (exemplos não contratáveis), vendas/contratos e orientações operacionais por perfil; histórico por usuário; timeout/rate limit/erros claros, sem expor credenciais. Chamada real ao modelo disponível respondeu; nenhuma promessa jurídica ou financeira presumida.
 - [ ] Integrações externas: Mercado Pago ou Asaas, biometria/liveness, Meta Instagram/Facebook, Google Ads/Search e emissão fiscal; status de configuração explícito. Não declarar verificação facial, escrow, pagamentos, assinaturas ou NF operacionais sem credenciais/homologação. Não coletar biometria sem consentimento e fornecedor. IA usa modelo da infraestrutura, não GPT-4o configurado pelo usuário.
 - [ ] Entrega: documentação de deploy/integrações, migrações versionadas, código completo, validação read-only por agente, typecheck/build, checkpoint e URL de preview ou publicação confirmada. Código/checks/documentação concluídos; registro do checkpoint/publicação em andamento.
+
+## Novo modelo de negócio (assinatura, sem comissão)
+
+- [x] Freelancer eliminado: categoria única "Profissional" (chefs, personal chef, cozinheiros, auxiliares, barmans, garçons, limpeza, jardinagem), CPF ou CNPJ (MEI/Limitada), logo, foto do rosto, 3+ fotos e banco/Pix obrigatórios.
+- [x] Sem comissões; assinatura mensal via Mercado Pago (Pix automático 5 dias antes, Pix manual se falhar, perfil oculto e propostas bloqueadas ao vencer).
+- [x] Cliente grátis: painel simples, pedidos por categoria, aceitar/recusar propostas, WhatsApp liberado no aceite, "fechou com" para os demais. "Central da conta" removida do rodapé.
+- [x] Fale Conosco (WhatsApp da administração) no site e nos painéis.
+- [x] Contrato PDF automático no aceite, disponível para cliente, profissional e auditoria do admin.
+- [x] Copilot: ingredientes, brigada, marmitas, limpeza/jardinagem, aviso de prejuízo; financeiro com despesas/notas, conversão e gráficos.
+- [x] Avaliação 360° obrigatória com bloqueio após 24h, selo Top Rated, convite Google/Instagram, cliente novo × antigo.
+- [x] Esqueci minha senha, troca de senha no painel e link de redefinição gerado pelo admin; foto do rosto conferida pela administração.
+- [ ] Configurar no Render: MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, GASTRO_PUBLIC_ORIGIN, RESEND_API_KEY/MAIL_FROM e preço (GC_SUBSCRIPTION_PRICE_CENTS); cadastrar o webhook no Mercado Pago e confirmar que a conta tem Pix automático habilitado.
+- [ ] Revisão jurídica do modelo de contrato e da política de privacidade (foto do rosto/LGPD).

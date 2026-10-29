@@ -10,6 +10,8 @@ import { serveStatic, setupVite } from "./vite";
 import { registerGastroRoutes } from "../gastro/routes";
 import { registerExtraRoutes } from "../gastro/extra";
 import { bootstrapDatabase, dbState } from "../gastro/bootstrap";
+import { registerSubscriptionRoutes, startBillingScheduler } from "../gastro/subscriptions";
+import { registerPasswordRoutes } from "../gastro/password";
 
 async function startServer() {
   const app = express();
@@ -27,6 +29,9 @@ async function startServer() {
   });
   if (process.env.MANUS_OAUTH_API_URL) registerOAuthRoutes(app);
   // REST contract must be mounted before Vite's catch-all/static handling.
+  // Webhook do Mercado Pago (sem cabeçalho Origin) precisa vir antes das rotas com proteção CSRF.
+  registerSubscriptionRoutes(app);
+  registerPasswordRoutes(app);
   registerExtraRoutes(app);
   registerGastroRoutes(app);
   // tRPC API
@@ -48,6 +53,7 @@ async function startServer() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
   server.on("error", error => { console.error("Server failed:", error.message); process.exit(1); });
   server.listen(port, "0.0.0.0", () => console.log(`Server listening on port ${port}`));
+  startBillingScheduler();
 }
 
 startServer().catch(error => { console.error(error); process.exit(1); });
