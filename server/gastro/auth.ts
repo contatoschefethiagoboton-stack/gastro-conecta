@@ -16,7 +16,7 @@ const GC_COOKIE = "gc_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const LOCAL_HOST_RE = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i;
 
-export type AccountType = "client" | "provider" | "freelancer";
+export type AccountType = "client" | "provider";
 export type AccountStatus = "active" | "pending" | "suspended" | "blocked" | "deleted";
 export type ProfileRow = {
   userId: number;

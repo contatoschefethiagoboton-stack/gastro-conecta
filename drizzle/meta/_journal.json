@@ -43,6 +43,13 @@
       "when": 1792252560668,
       "tag": "0005_render_independence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1792252560669,
+      "tag": "0006_subscription_model",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,11 @@
 // Rotas da versão independente (Render): conteúdo editável, arquivos no banco,
-// cadastro completo de parceiros/freelancers, promoções, benefícios e admin.
+// cadastro completo de profissionais e dados de contrato do cliente, promoções, benefícios e admin.
 import { Router, type Express, type Request } from "express";
 import { z } from "zod";
 import { HttpError } from "@shared/_core/errors";
 import { contentFields, contentKeys, MAX_CONTENT_LENGTH } from "@shared/content";
 import { EVENT_TYPES, isMonthDay, isPromotionActive, defaultPromotions, type Promotion } from "@shared/promotions";
-import { isAdult, isValidCEP, isValidCNPJ, isValidCPF, isValidHttpUrl, isValidPhoneBR, isValidPixKey, isValidUF, normalizeSocial, onlyDigits, type PixKeyType } from "@shared/validators";
+import { isValidCEP, isValidCNPJ, isValidCPF, isValidHttpUrl, isValidPhoneBR, isValidPixKey, isValidUF, normalizeSocial, onlyDigits, type PixKeyType } from "@shared/validators";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query, withTransaction } from "./db";
 import { getSiteContent, invalidateSiteContent } from "./content";
@@ -13,6 +13,9 @@ import { assertOwnedMedia, MEDIA_KINDS, MEDIA_RULES, mediaUrl, pruneProfileMedia
 import { adminExists, consumeSetupCode, createOrPromoteAdmin, dbState, verifySetupCode } from "./bootstrap";
 import { createGcSession, gcCookieOptions, getUserByEmail, hashPassword, isOwner, normalizeEmail, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AuthContext } from "./auth";
 import { copilotProvider } from "./routes";
+import { clientContractDataComplete, loadDetails, PROVIDER_SCHEMA_VERSION, providerDetailsComplete } from "./profiles";
+import { SERVICE_IDS, SERVICE_TYPES } from "@shared/services";
+import { subscriptionSummary } from "./subscriptions";
 
 const router = Router();
 const idSchema = z.coerce.number().int().positive();
@@ -69,12 +72,8 @@ router.get("/media/:id", wrap(async (req, res) => {
     const context = await resolveAuth(req);
     if (!context) throw new HttpError(401, "Autenticação necessária");
     const ownerId = Number(media.ownerId);
-    let allowed = context.user.id === ownerId || (await isOwner(context));
-    if (!allowed && context.profile.accountType === "provider") {
-      // Contratante vê o currículo de quem se candidatou às suas vagas.
-      const link = await query<any[]>("SELECT a.id FROM gastro_applications a JOIN gastro_jobs j ON j.id = a.jobId WHERE a.userId = ? AND j.providerId = ? LIMIT 1", [ownerId, context.user.id]);
-      allowed = Boolean(link[0]);
-    }
+    // Arquivos privados (rosto, notas fiscais, currículos antigos): só o dono e a administração.
+    const allowed = context.user.id === ownerId || (await isOwner(context));
     if (!allowed) throw new HttpError(403, "Arquivo restrito");
   }
   const data: Buffer = Buffer.isBuffer(media.data) ? media.data : Buffer.from(media.data);
@@ -83,7 +82,7 @@ router.get("/media/:id", wrap(async (req, res) => {
     "Content-Length": String(data.length),
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": media.isPublic ? "public, max-age=31536000, immutable" : "private, no-store",
-    ...(media.mime === "application/pdf" ? { "Content-Disposition": `inline; filename="${String(media.filename || `curriculo-${id}.pdf`).replace(/"/g, "")}"`, "Content-Security-Policy": "sandbox" } : {}),
+    ...(media.mime === "application/pdf" ? { "Content-Disposition": `inline; filename="${String(media.filename || `arquivo-${id}.pdf`).replace(/"/g, "")}"`, "Content-Security-Policy": "sandbox" } : {}),
   });
   res.end(data);
 }));
@@ -98,8 +97,8 @@ router.post("/media", wrap(async (req, res) => {
   limit(`upload:${context.user.id}`, 80, 60 * 60_000, "Muitos envios em pouco tempo; tente mais tarde");
   const input = body(req, uploadSchema);
   const admin = await isOwner(context);
-  if (!admin && input.kind === "resume" && context.profile.accountType !== "freelancer") throw new HttpError(403, "Currículo é enviado apenas por freelancers");
-  if (!admin && input.kind === "service" && context.profile.accountType !== "provider") throw new HttpError(403, "Fotos de serviço são enviadas por parceiros");
+  if (input.kind === "resume") throw new HttpError(400, "Envio de currículo não é mais utilizado");
+  if (!admin && ["service", "invoice", "avatar"].includes(input.kind) && context.profile.accountType !== "provider") throw new HttpError(403, "Este envio é exclusivo de profissionais");
   const saved = await saveMedia({ ownerId: context.user.id, kind: input.kind, filename: input.filename, data: input.data, isAdmin: admin });
   if (admin && MEDIA_RULES[input.kind].adminOnly) await audit(context.user.id, "admin.media_upload", { id: saved.id, kind: input.kind, filename: input.filename ?? "" });
   res.status(201).json({ media: saved });
@@ -131,28 +130,17 @@ const addressShape = {
 const phoneField = z.string().refine(isValidPhoneBR, "Telefone com DDD inválido").transform(onlyDigits);
 const mediaId = z.number().int().positive();
 
-const freelancerSchema = z.object({
-  fullName: text(5, 160, "Nome completo"),
-  cpf: z.string().refine(isValidCPF, "CPF inválido").transform(onlyDigits),
-  birthDate: z.string().refine(value => isAdult(value), "Data de nascimento inválida (é preciso ter 18 anos ou mais)"),
-  phone: phoneField,
-  ...addressShape,
-  roles: z.array(z.enum(["Cozinheiro", "Ajudante", "Garçom", "Barman"])).min(1, "Escolha pelo menos uma função").max(4),
-  experience: text(20, 3000, "Experiência"),
-  resumeMediaId: mediaId,
-  avatarMediaId: mediaId.nullable().optional(),
-  bank: z.object({
-    holderName: text(3, 160, "Titular da conta"),
-    holderDocument: z.string().refine(value => isValidCPF(value) || isValidCNPJ(value), "CPF/CNPJ do titular inválido").transform(onlyDigits),
-    bankName: text(2, 100, "Banco"),
-    bankCode: z.string().trim().max(5).default(""),
-    agency: z.string().trim().regex(/^\d{3,5}(-?[\dXx])?$/, "Agência inválida"),
-    account: z.string().trim().regex(/^\d{3,15}(-?[\dXx])?$/, "Conta inválida"),
-    accountType: z.enum(["corrente", "poupanca", "pagamento"]),
-    pixKeyType: z.enum(["cpf", "cnpj", "email", "telefone", "aleatoria"]),
-    pixKey: z.string().trim().min(3).max(120),
-  }).refine(bank => isValidPixKey(bank.pixKeyType as PixKeyType, bank.pixKey), { message: "Chave Pix inválida para o tipo escolhido", path: ["pixKey"] }),
-});
+const bankSchema = z.object({
+  holderName: text(3, 160, "Titular da conta"),
+  holderDocument: z.string().refine(value => isValidCPF(value) || isValidCNPJ(value), "CPF/CNPJ do titular inválido").transform(onlyDigits),
+  bankName: text(2, 100, "Banco"),
+  bankCode: z.string().trim().max(5).default(""),
+  agency: z.string().trim().regex(/^\d{3,5}(-?[\dXx])?$/, "Agência inválida"),
+  account: z.string().trim().regex(/^\d{3,15}(-?[\dXx])?$/, "Conta inválida"),
+  accountType: z.enum(["corrente", "poupanca", "pagamento"]),
+  pixKeyType: z.enum(["cpf", "cnpj", "email", "telefone", "aleatoria"]),
+  pixKey: z.string().trim().min(3).max(120),
+}).refine(bank => isValidPixKey(bank.pixKeyType as PixKeyType, bank.pixKey), { message: "Chave Pix inválida para o tipo escolhido", path: ["pixKey"] });
 
 const socialShape = z.object({
   instagram: z.string().trim().max(200).default(""),
@@ -162,23 +150,41 @@ const socialShape = z.object({
   linkedin: z.string().trim().max(200).default(""),
 });
 
+export const MIN_SERVICE_PHOTOS = 3;
+
+/** Cadastro único do Profissional: CPF ou CNPJ (MEI/Limitada), logo, rosto, fotos e Pix obrigatórios. */
 const providerSchema = z.object({
-  fullName: text(5, 160, "Nome completo do responsável"),
-  cnpj: z.string().refine(isValidCNPJ, "CNPJ inválido").transform(onlyDigits),
-  companyName: text(3, 200, "Razão social"),
+  documentType: z.enum(["cpf", "cnpj"]),
+  cpf: z.string().default(""),
+  cnpj: z.string().default(""),
+  companyType: z.enum(["MEI", "Limitada", "SLU", "Outro"]).optional(),
+  companyName: z.string().trim().max(200).default(""),
   tradeName: z.string().trim().max(160).default(""),
+  fullName: text(5, 160, "Nome completo"),
   phone: phoneField,
   ...addressShape,
-  category: z.enum(["Chef particular", "Buffet"]),
+  services: z.array(z.enum(SERVICE_IDS)).min(1, "Escolha pelo menos um serviço").max(SERVICE_IDS.length),
   specialty: text(2, 160, "Especialidade"),
   bio: text(30, 3000, "Apresentação"),
   priceFrom: z.number().int().min(0).max(100000).default(0),
   avatarMediaId: mediaId,
-  serviceMediaIds: z.array(mediaId).min(5, "Envie pelo menos 5 fotos dos seus serviços").max(20, "Máximo de 20 fotos"),
-  socials: socialShape,
+  faceMediaId: mediaId,
+  serviceMediaIds: z.array(mediaId).min(MIN_SERVICE_PHOTOS, `Envie pelo menos ${MIN_SERVICE_PHOTOS} fotos de trabalhos anteriores`).max(20, "Máximo de 20 fotos"),
+  bank: bankSchema,
+  socials: socialShape.default({ instagram: "", facebook: "", tiktok: "", youtube: "", linkedin: "" }),
   website: z.string().trim().max(300).default("").refine(value => !value || isValidHttpUrl(value), "Site inválido (use https://...)"),
+}).superRefine((value, ctx) => {
+  if (value.documentType === "cpf" && !isValidCPF(value.cpf)) ctx.addIssue({ code: "custom", path: ["cpf"], message: "CPF inválido" });
+  if (value.documentType === "cnpj") {
+    if (!isValidCNPJ(value.cnpj)) ctx.addIssue({ code: "custom", path: ["cnpj"], message: "CNPJ inválido" });
+    if (!value.companyType) ctx.addIssue({ code: "custom", path: ["companyType"], message: "Informe se é MEI ou Limitada" });
+    if (value.companyName.trim().length < 3) ctx.addIssue({ code: "custom", path: ["companyName"], message: "Informe a razão social" });
+  }
 }).transform(value => ({
   ...value,
+  cpf: value.documentType === "cpf" ? onlyDigits(value.cpf) : "",
+  cnpj: value.documentType === "cnpj" ? onlyDigits(value.cnpj) : "",
+  companyType: value.documentType === "cnpj" ? value.companyType : undefined,
   socials: {
     instagram: normalizeSocial(value.socials.instagram, "instagram"),
     facebook: normalizeSocial(value.socials.facebook, "facebook"),
@@ -186,58 +192,66 @@ const providerSchema = z.object({
     youtube: normalizeSocial(value.socials.youtube, "youtube"),
     linkedin: normalizeSocial(value.socials.linkedin, "linkedin"),
   },
-})).refine(value => Object.values(value.socials).some(Boolean), { message: "Informe pelo menos uma rede social válida (link ou @usuario)", path: ["socials"] });
+}));
+
+/** Dados do cliente para o contrato (a conta do cliente continua simples e gratuita). */
+const clientSchema = z.object({
+  fullName: text(5, 160, "Nome completo"),
+  cpf: z.string().refine(isValidCPF, "CPF inválido").transform(onlyDigits),
+  phone: phoneField,
+  ...addressShape,
+  faceMediaId: mediaId,
+});
 
 function withMediaUrls(details: any) {
   if (!details || typeof details !== "object") return details;
   return {
     ...details,
     ...(details.avatarMediaId ? { avatarUrl: mediaUrl(details.avatarMediaId) } : {}),
+    ...(details.faceMediaId ? { faceUrl: mediaUrl(details.faceMediaId) } : {}),
     ...(details.resumeMediaId ? { resumeUrl: mediaUrl(details.resumeMediaId) } : {}),
     ...(Array.isArray(details.serviceMediaIds) ? { serviceUrls: details.serviceMediaIds.map((id: number) => ({ id, url: mediaUrl(id) })) } : {}),
   };
-}
-
-async function loadDetails(userId: number) {
-  const rows = await query<any[]>("SELECT details, completedAt, updatedAt FROM gc_profile_details WHERE userId = ? LIMIT 1", [userId]);
-  if (!rows[0]) return { details: null, completedAt: null as string | null };
-  let details: any = null;
-  try { details = JSON.parse(rows[0].details); } catch { details = null; }
-  return { details, completedAt: rows[0].completedAt ? new Date(rows[0].completedAt).toISOString() : null };
 }
 
 router.get("/onboarding", wrap(async (req, res) => {
   requireDb();
   const context = await requireAuth(req);
   const { details, completedAt } = await loadDetails(context.user.id);
-  res.json({ accountType: context.profile.accountType, status: context.profile.status, email: context.user.email ?? "", name: context.user.name ?? "", details: withMediaUrls(details), completedAt });
+  const complete = context.profile.accountType === "provider" ? providerDetailsComplete(details, completedAt) : clientContractDataComplete(details);
+  res.json({ accountType: context.profile.accountType, status: context.profile.status, email: context.user.email ?? "", name: context.user.name ?? "", details: withMediaUrls(details), completedAt: complete ? completedAt : null, minServicePhotos: MIN_SERVICE_PHOTOS });
 }));
 
 router.put("/onboarding", wrap(async (req, res) => {
   requireDb();
   const context = await requireAuth(req);
   const type = context.profile.accountType;
-  if (type !== "provider" && type !== "freelancer") throw new HttpError(400, "Este cadastro é para parceiros e freelancers");
+  const previous = (await loadDetails(context.user.id)).details;
   let details: Record<string, any>;
   let keepMedia: number[];
-  if (type === "freelancer") {
-    const input = parse(freelancerSchema, req.body);
-    await assertOwnedMedia(context.user.id, [input.resumeMediaId], "resume");
-    if (input.avatarMediaId) await assertOwnedMedia(context.user.id, [input.avatarMediaId], "avatar");
-    details = input;
-    keepMedia = [input.resumeMediaId, ...(input.avatarMediaId ? [input.avatarMediaId] : [])];
+  if (type === "client") {
+    const input = parse(clientSchema, req.body);
+    await assertOwnedMedia(context.user.id, [input.faceMediaId], "face");
+    details = { ...input, kind: "client", faceVerified: previous?.faceMediaId === input.faceMediaId ? Boolean(previous?.faceVerified) : false };
+    keepMedia = [input.faceMediaId];
   } else {
     const input = parse(providerSchema, req.body);
     await assertOwnedMedia(context.user.id, [input.avatarMediaId], "avatar");
+    await assertOwnedMedia(context.user.id, [input.faceMediaId], "face");
     await assertOwnedMedia(context.user.id, input.serviceMediaIds, "service");
-    details = input;
-    keepMedia = [input.avatarMediaId, ...input.serviceMediaIds];
+    details = { ...input, kind: "provider", schemaVersion: PROVIDER_SCHEMA_VERSION, faceVerified: previous?.faceMediaId === input.faceMediaId ? Boolean(previous?.faceVerified) : false };
+    keepMedia = [input.avatarMediaId, input.faceMediaId, ...input.serviceMediaIds];
   }
-  const bio = type === "provider" ? String(details.bio) : String(details.experience).slice(0, 3000);
-  const specialty = type === "provider" ? String(details.specialty) : (details.roles as string[]).join(", ");
   await withTransaction(async connection => {
+    // Cadastros da versão anterior tiveram completedAt zerado na migração 0006 e voltam a valer neste envio.
     await connection.execute("INSERT INTO gc_profile_details (userId, details, completedAt) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE details = VALUES(details), completedAt = COALESCE(completedAt, CURRENT_TIMESTAMP)", [context.user.id, JSON.stringify(details)]);
-    await connection.execute("UPDATE account_profiles SET city = ?, bio = ?, specialty = ? WHERE userId = ?", [`${details.city} - ${details.state}`.slice(0, 160), bio, specialty.slice(0, 160), context.user.id]);
+    const place = `${details.city} - ${details.state}`.slice(0, 160);
+    if (type === "provider") {
+      const labels = (details.services as string[]).map(id => SERVICE_TYPES.find(s => s.id === id)?.label ?? id).join(", ");
+      await connection.execute("UPDATE account_profiles SET city = ?, bio = ?, specialty = ? WHERE userId = ?", [place, String(details.bio), (String(details.specialty) || labels).slice(0, 160), context.user.id]);
+    } else {
+      await connection.execute("UPDATE account_profiles SET city = ? WHERE userId = ?", [place, context.user.id]);
+    }
   });
   await pruneProfileMedia(context.user.id, keepMedia);
   await audit(context.user.id, "profile.onboarding_saved", { accountType: type }, context.user.id);
@@ -316,6 +330,8 @@ router.get("/admin/users/:id/details", wrap(async (req, res) => {
   res.json({
     user: { id: Number(row.id), name: row.name ?? "", email: row.email ?? "", role: row.role, accountType: row.accountType, status: row.status, city: row.city ?? "", bio: row.bio ?? "", specialty: row.specialty ?? "", vip: Boolean(row.vip), discountPercent: Number(row.discountPercent ?? 0), featured: Boolean(row.featured), createdAt: new Date(row.createdAt).toISOString() },
     details: withMediaUrls(details), completedAt, benefits,
+    profileComplete: row.accountType === "provider" ? providerDetailsComplete(details, completedAt) : clientContractDataComplete(details),
+    ...(row.accountType === "provider" ? { subscription: await subscriptionSummary(id) } : {}),
   });
 }));
 

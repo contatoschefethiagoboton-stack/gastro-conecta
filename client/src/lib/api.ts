@@ -23,4 +23,4 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return body as T;
 }
 export const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
-export type CurrentUser = { id: number; name: string; email: string; accountType: 'client'|'provider'|'freelancer'; role: 'user'|'admin'; status: string; city?: string; bio?: string; };
+export type CurrentUser = { id: number; name: string; email: string; accountType: 'client'|'provider'; role: 'user'|'admin'; status: string; city?: string; bio?: string; };

@@ -6,8 +6,8 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import "../dashboard.css";
 
-type AccountMode = "login" | "register";
-type AccountType = "client" | "provider" | "freelancer";
+type AccountMode = "login" | "register" | "forgot";
+type AccountType = "client" | "provider";
 
 type AccountUser = {
   id: number;
@@ -51,6 +51,7 @@ export default function Account() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [forgotSent, setForgotSent] = useState("");
 
   const passwordChecks = useMemo(
     () => passwordRequirements.map((rule) => ({ ...rule, valid: rule.test(password) })),
@@ -61,6 +62,21 @@ export default function Account() {
   const selectMode = (nextMode: AccountMode) => {
     setMode(nextMode);
     setErrorMessage("");
+    setForgotSent("");
+  };
+
+  const requestReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setIsSubmitting(true);
+    try {
+      const response = await api<{ message: string }>("/password/forgot", { method: "POST", body: JSON.stringify({ email: email.trim() }) });
+      setForgotSent(response.message);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error, "Não foi possível enviar agora. Tente novamente."));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -140,13 +156,35 @@ export default function Account() {
             </button>
           </div>
 
+          {mode === "forgot" ? (
+            <>
+              <div className="account-heading">
+                <span className="account-eyebrow">Recuperar acesso</span>
+                <h2>Esqueci minha senha</h2>
+                <p>Informe o e-mail da sua conta (cliente ou profissional) para receber o link de redefinição.</p>
+              </div>
+              <form className="account-form" onSubmit={requestReset}>
+                <label className="account-field">
+                  <span>E-mail</span>
+                  <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@exemplo.com" />
+                </label>
+                {forgotSent && <p className="account-next-step" role="status">{forgotSent}</p>}
+                {errorMessage && <p className="account-form-error" role="alert">{errorMessage}</p>}
+                <button className="account-submit" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="account-spinner" size={18} /> : <ArrowRight size={18} />}
+                  {isSubmitting ? "Aguarde…" : "Enviar link"}
+                </button>
+                <button className="account-link-button" type="button" onClick={() => selectMode("login")}>Voltar para o login</button>
+              </form>
+            </>
+          ) : (<>
           <div className="account-heading">
             <span className="account-eyebrow">{mode === "login" ? "Que bom ter você aqui" : "Comece sua jornada"}</span>
             <h2>{mode === "login" ? "Entre na sua conta" : "Crie seu acesso GastroConecta"}</h2>
             <p>
               {mode === "login"
-                ? "Acesse seus eventos, propostas e conexões."
-                : "Escolha como você quer participar da rede gastronômica."}
+                ? "Clientes e profissionais entram por aqui."
+                : "Clientes usam de graça. Profissionais pagam só uma assinatura mensal, sem comissão."}
             </p>
           </div>
 
@@ -191,19 +229,16 @@ export default function Account() {
                 <label className="account-field">
                   <span>Quero participar como</span>
                   <select value={accountType} onChange={(event) => setAccountType(event.target.value as AccountType)}>
-                    <option value="client">Cliente (quero contratar)</option>
-                    <option value="provider">Profissional parceiro (chef, buffet)</option>
-                    <option value="freelancer">Freelancer (cozinheiro, garçom…)</option>
+                    <option value="client">Cliente (quero contratar — grátis)</option>
+                    <option value="provider">Profissional (chef, garçom, barman, limpeza, jardinagem…)</option>
                   </select>
                 </label>
               </div>
             )}
 
-            {mode === "register" && accountType !== "client" && (
+            {mode === "register" && accountType === "provider" && (
               <p className="account-next-step">
-                {accountType === "provider"
-                  ? "Depois de criar o acesso, você completa o cadastro: foto de perfil, pelo menos 5 fotos dos serviços, CNPJ, razão social, telefone, endereço e redes sociais."
-                  : "Depois de criar o acesso, você completa o cadastro: currículo, dados pessoais, CPF, endereço, conta bancária e chave Pix para receber direto do contratante."}
+                Depois de criar o acesso, você completa o cadastro: CPF ou CNPJ (MEI ou Limitada), logo, foto do rosto, pelo menos 3 fotos de trabalhos anteriores e dados bancários/Pix. Após a aprovação, ative a assinatura mensal via Pix para aparecer no catálogo.
               </p>
             )}
 
@@ -240,6 +275,8 @@ export default function Account() {
               </ul>
             )}
 
+            {mode === "login" && <button className="account-link-button account-forgot" type="button" onClick={() => selectMode("forgot")}>Esqueci minha senha</button>}
+
             {errorMessage && <p className="account-form-error" role="alert">{errorMessage}</p>}
 
             <button className="account-submit" type="submit" disabled={isSubmitting}>
@@ -247,6 +284,7 @@ export default function Account() {
               {isSubmitting ? "Aguarde…" : mode === "login" ? "Entrar na conta" : "Criar minha conta"}
             </button>
           </form>
+          </>)}
 
         </div>
       </section>

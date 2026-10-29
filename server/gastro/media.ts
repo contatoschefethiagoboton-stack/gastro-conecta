@@ -1,7 +1,7 @@
 import { HttpError } from "@shared/_core/errors";
 import { execute, query } from "./db";
 
-export type MediaKind = "avatar" | "service" | "resume" | "site" | "promo";
+export type MediaKind = "avatar" | "service" | "resume" | "face" | "invoice" | "site" | "promo";
 
 type Rule = { mimes: string[]; maxBytes: number; isPublic: boolean; adminOnly: boolean };
 const IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -10,11 +10,15 @@ export const MEDIA_RULES: Record<MediaKind, Rule> = {
   avatar: { mimes: IMAGE_MIMES, maxBytes: 3 * 1024 * 1024, isPublic: true, adminOnly: false },
   service: { mimes: IMAGE_MIMES, maxBytes: 4 * 1024 * 1024, isPublic: true, adminOnly: false },
   resume: { mimes: ["application/pdf", ...IMAGE_MIMES], maxBytes: 4.5 * 1024 * 1024, isPublic: false, adminOnly: false },
+  // Foto do rosto (antifraude): privada, só o dono e a administração veem.
+  face: { mimes: IMAGE_MIMES.filter(m => m !== "image/gif"), maxBytes: 3 * 1024 * 1024, isPublic: false, adminOnly: false },
+  // Notas fiscais e comprovantes do controle financeiro do profissional.
+  invoice: { mimes: ["application/pdf", ...IMAGE_MIMES], maxBytes: 4.5 * 1024 * 1024, isPublic: false, adminOnly: false },
   site: { mimes: IMAGE_MIMES, maxBytes: 4.5 * 1024 * 1024, isPublic: true, adminOnly: true },
   promo: { mimes: IMAGE_MIMES, maxBytes: 4.5 * 1024 * 1024, isPublic: true, adminOnly: true },
 };
 export const MEDIA_KINDS = Object.keys(MEDIA_RULES) as MediaKind[];
-const MAX_FILES_PER_USER = 60;
+const MAX_FILES_PER_USER = 200;
 
 /** Descobre o tipo real pelo conteúdo (não confia na extensão). */
 export function sniffMime(buffer: Buffer): string | null {
@@ -66,5 +70,5 @@ export async function assertOwnedMedia(ownerId: number, ids: number[], kind: Med
 export async function pruneProfileMedia(ownerId: number, keepIds: number[]) {
   const keep = [...new Set(keepIds.filter(id => Number.isInteger(id) && id > 0))];
   const clause = keep.length ? ` AND id NOT IN (${keep.map(() => "?").join(",")})` : "";
-  await execute(`DELETE FROM gc_media WHERE ownerId = ? AND kind IN ('avatar','service','resume') AND createdAt < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE)${clause}`, [ownerId, ...keep]);
+  await execute(`DELETE FROM gc_media WHERE ownerId = ? AND kind IN ('avatar','service','resume','face') AND createdAt < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE)${clause}`, [ownerId, ...keep]);
 }
