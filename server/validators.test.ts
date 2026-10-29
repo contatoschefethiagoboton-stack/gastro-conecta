@@ -40,4 +40,8 @@ describe('DATABASE_URL', () => {
     expect(cfg.ssl?.rejectUnauthorized).toBe(true);
     expect(buildMysqlConfig('mysql://root:x@localhost/gastro', {}).ssl).toBeUndefined();
   });
+  it('troca bancos internos por "gastroconecta"', () => {
+    expect(buildMysqlConfig('mysql://user:x@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/sys', {}).database).toBe('gastroconecta');
+    expect(buildMysqlConfig('mysql://user:x@gateway01.us-east-1.prod.aws.tidbcloud.com:4000/test', {}).database).toBe('test');
+  });
 });
