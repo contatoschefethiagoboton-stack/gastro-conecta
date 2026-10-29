@@ -391,3 +391,5 @@ img { max-width:100%; }
 .form-check { display:flex; flex-direction:row !important; align-items:center; gap:8px; }
 .form-check input { width:auto !important; min-height:0 !important; }
 @media(max-width:680px) { .support-root { right:14px; bottom:76px; } .support-menu { width:calc(100vw - 28px); } }
+.category-card.has-cover { display:grid; grid-template-columns:auto 1fr auto; align-items:center; padding:0 12px 14px !important; gap:10px !important; overflow:hidden; }
+.category-cover { grid-column:1 / -1; width:calc(100% + 24px); max-width:none; margin:0 -12px 2px; aspect-ratio:16/9; object-fit:cover; }

@@ -17,7 +17,8 @@ const NETWORK_LABELS: Record<string, string> = { instagram: "Instagram", faceboo
  */
 export async function loadProfessionals(): Promise<Professional[]> {
   const content = await getSiteContent();
-  const demos = content["catalog.showDemo"] === "false" ? [] : catalogProfessionals;
+  // Capa dos portfólios demonstrativos pode ser trocada no painel (Fotos de capa).
+  const demos = content["catalog.showDemo"] === "false" ? [] : catalogProfessionals.map(p => (content[`cover.demo.${p.id}`] ? { ...p, image: content[`cover.demo.${p.id}`] } : p));
   if (!dbConfigured()) return demos;
   let rows: any[] = [];
   try {
