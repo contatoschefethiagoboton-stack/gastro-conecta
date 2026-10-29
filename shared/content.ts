@@ -339,6 +339,62 @@ export const contentFields: ContentField[] = [
   "label": "Descrição da página inicial no Google",
   "type": "textarea",
   "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Cadastro gratuito para clientes e propostas personalizadas."
+ },
+ {
+  "key": "cover.cat.Gastronomia",
+  "group": "Fotos de capa",
+  "label": "Capa do card “Chefs e cozinha”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.cat.personal",
+  "group": "Fotos de capa",
+  "label": "Capa do card “Personal chef”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.cat.Bar & salão",
+  "group": "Fotos de capa",
+  "label": "Capa do card “Bar & salão”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.cat.Limpeza",
+  "group": "Fotos de capa",
+  "label": "Capa do card “Limpeza”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.cat.Jardinagem",
+  "group": "Fotos de capa",
+  "label": "Capa do card “Jardinagem”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.demo.demo-chef",
+  "group": "Fotos de capa",
+  "label": "Capa do portfólio demonstrativo “Ateliê da Mesa”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.demo.demo-buffet",
+  "group": "Fotos de capa",
+  "label": "Capa do portfólio demonstrativo “Essência Buffet”",
+  "type": "image",
+  "default": ""
+ },
+ {
+  "key": "cover.demo.demo-brasa",
+  "group": "Fotos de capa",
+  "label": "Capa do portfólio demonstrativo “Casa & Brasa”",
+  "type": "image",
+  "default": ""
  }
 ];
 

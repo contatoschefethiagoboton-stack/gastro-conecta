@@ -334,6 +334,8 @@ function PromotionsSection() {
     {editing && <div className="adm-drawer" role="dialog" aria-modal="true"><button type="button" className="adm-drawer-backdrop" onClick={() => setEditing(null)} aria-label="Fechar"/><div className="adm-drawer-panel">
       <header><h3>{editing.id ? 'Editar promoção' : 'Nova promoção'}</h3><button type="button" onClick={() => setEditing(null)} aria-label="Fechar"><X size={20}/></button></header>
       <div className="adm-drawer-body">
+        <div className="adm-section-title">Foto de capa da promoção</div>
+        <ImagePicker kind="promo" value={editing.imageUrl} onChange={url => setEditing({ ...editing, imageUrl: url })}/>
         <div className="adm-grid">
           <label className="ob-field"><span>Etiqueta</span><input value={editing.badge} onChange={e => setEditing({ ...editing, badge: e.target.value })} placeholder="Ex.: Natal"/></label>
           <label className="ob-field ob-wide"><span>Título</span><input value={editing.title} onChange={e => setEditing({ ...editing, title: e.target.value })}/></label>
@@ -346,8 +348,6 @@ function PromotionsSection() {
           <label className="ob-field"><span>Ordem</span><input type="number" min={0} value={editing.sortOrder} onChange={e => setEditing({ ...editing, sortOrder: Number(e.target.value) })}/></label>
           <label className="adm-switch"><input type="checkbox" checked={editing.active} onChange={e => setEditing({ ...editing, active: e.target.checked })}/> Promoção ligada</label>
         </div>
-        <div className="adm-section-title">Imagem (opcional)</div>
-        <ImagePicker kind="promo" value={editing.imageUrl} onChange={url => setEditing({ ...editing, imageUrl: url })}/>
         <button type="button" className="ob-btn ob-btn-primary adm-full" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar promoção</button>
       </div>
     </div></div>}
