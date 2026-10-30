@@ -359,6 +359,7 @@ router.put("/admin/content", wrap(async (req, res) => {
       try { entry[1] = JSON.stringify(normalizeServiceCatalog(JSON.parse(value))); }
       catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Catálogo de serviços inválido"); }
     }
+    if (field.type === "showcase" && value && !value.split(",").every(id => /^(user-\d+|demo-[\w-]+)$/.test(id))) throw new HttpError(400, `${field.label}: lista inválida`);
     if (field.type === "demos" && value) {
       try { entry[1] = JSON.stringify(normalizeDemos(JSON.parse(value))); }
       catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Lista de portfólios inválida"); }

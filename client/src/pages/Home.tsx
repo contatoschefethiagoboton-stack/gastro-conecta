@@ -19,7 +19,9 @@ export default function Home() {
   const [cityTouched, setCityTouched] = useState(false);
   useEffect(() => { if (!cityTouched) setCity(c('home.searchCity')); }, [c('home.searchCity'), cityTouched]);
   const catalog = useQuery({ queryKey: ['gastro-professionals'], queryFn: () => api<{ professionals: Professional[] }>('/professionals'), retry: false });
-  const showcase = (catalog.data?.professionals ?? site.demos).slice(0, 3);
+  // Cards excluídos pelo painel não aparecem; os próximos ocupam o lugar.
+  const hidden = new Set(c('home.hiddenProfessionals').split(',').filter(Boolean));
+  const showcase = c('home.showProfessionals') === 'false' ? [] : (catalog.data?.professionals ?? site.demos).filter(p => !hidden.has(p.id)).slice(0, 3);
   const hasDemo = showcase.some(p => p.demo);
   const note = c('home.note').split('\n');
   return <main>

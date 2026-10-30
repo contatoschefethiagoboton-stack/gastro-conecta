@@ -1,6 +1,6 @@
 // Textos e imagens editáveis pelo painel de administração.
 // Cada chave tem um valor padrão; o que o administrador salvar substitui o padrão.
-export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services' | 'demos';
+export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services' | 'demos' | 'showcase';
 /** hidden: chave aceita e salva, mas sem campo próprio no painel (ex.: capas antigas, hoje dentro do catálogo de serviços). */
 export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string; hidden?: boolean };
 
@@ -172,6 +172,20 @@ export const contentFields: ContentField[] = [
   "label": "Título dos profissionais",
   "type": "text",
   "default": "Talento que dá gosto conhecer."
+ },
+ {
+  "key": "home.showProfessionals",
+  "group": "Página inicial",
+  "label": "Mostrar a seção de profissionais (“Talento que dá gosto conhecer”)",
+  "type": "boolean",
+  "default": "true"
+ },
+ {
+  "key": "home.hiddenProfessionals",
+  "group": "Página inicial",
+  "label": "Cards da seção de profissionais (exclua os que não quer na página inicial)",
+  "type": "showcase",
+  "default": ""
  },
  {
   "key": "home.howTitle",

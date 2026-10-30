@@ -9,7 +9,7 @@ import { EVENT_TYPES } from '@shared/promotions';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validators';
 import { serviceCatalogFrom, serviceLabel, REQUEST_CATEGORIES, SERVICE_ICONS, type ServiceCategory, type ServiceIcon } from '@shared/services';
 import { useSite } from '@/lib/site';
-import { demosFrom, type DemoProfessional } from '@shared/catalog';
+import { demosFrom, type DemoProfessional, type Professional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
@@ -338,6 +338,26 @@ function DemoEditor({ value, categories, onChange }: { value: DemoProfessional[]
   </div>;
 }
 
+/** Cards da seção de profissionais da página inicial: excluir ou mostrar de novo. */
+function ShowcaseEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [items, setItems] = useState<Professional[] | null>(null);
+  useEffect(() => { api<{ professionals: Professional[] }>('/professionals').then(r => setItems(r.professionals)).catch(() => setItems([])); }, []);
+  const hidden = value.split(',').filter(Boolean);
+  const toggle = (id: string) => onChange((hidden.includes(id) ? hidden.filter(h => h !== id) : [...hidden, id]).join(','));
+  if (!items) return <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div>;
+  const shown = items.filter(p => !hidden.includes(p.id)).slice(0, 3).map(p => p.id);
+  if (!items.length) return <Empty text="Nenhum profissional ou portfólio para mostrar."/>;
+  return <div className="adm-list">
+    <p className="adm-muted">A página inicial mostra os 3 primeiros cards não excluídos. Ao excluir um, o próximo da lista entra no lugar. Excluir daqui não apaga o profissional do catálogo; para apagar um portfólio demonstrativo, use a aba Serviços e capas.</p>
+    {items.map(p => { const off = hidden.includes(p.id); return <div className="adm-row adm-row-static" key={p.id}>
+      {p.image ? <img className="adm-row-thumb" src={p.image} alt=""/> : <span className="adm-row-thumb"><ImageIcon size={18}/></span>}
+      <div className="adm-row-main"><strong>{p.name}</strong><span>{p.type} · {p.city}{p.demo ? ' · portfólio ilustrativo' : ''}</span></div>
+      <div className="adm-row-tags">{off ? <span className="adm-tag adm-warn">Excluído da página inicial</span> : shown.includes(p.id) ? <span className="adm-tag adm-ok">Na página inicial</span> : <span className="adm-tag">Na fila</span>}</div>
+      <div className="adm-row-actions">{off ? <button type="button" onClick={() => toggle(p.id)}><RotateCcw size={14}/> Mostrar de novo</button> : <button type="button" className="danger" onClick={() => toggle(p.id)}><Trash2 size={14}/> Excluir</button>}</div>
+    </div>; })}
+  </div>;
+}
+
 function ContentSection() {
   const [fields, setFields] = useState<ContentField[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -366,6 +386,7 @@ function ContentSection() {
         {f.type === 'textarea' ? <textarea rows={f.key.startsWith('legal.') ? 14 : 3} value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })}/>
           : f.type === 'boolean' ? <label className="adm-switch"><input type="checkbox" checked={values[f.key] === 'true'} onChange={e => setValues({ ...values, [f.key]: e.target.checked ? 'true' : 'false' })}/> {values[f.key] === 'true' ? 'Ligado' : 'Desligado'}</label>
           : f.type === 'image' ? <ImagePicker value={values[f.key] ?? ''} onChange={url => setValues({ ...values, [f.key]: url })}/>
+          : f.type === 'showcase' ? <ShowcaseEditor value={values[f.key] ?? ''} onChange={v => setValues({ ...values, [f.key]: v })}/>
           : f.type === 'demos' ? <DemoEditor value={values[f.key] ? safeDemos(values[f.key], values) : demosFrom(values)} categories={values['services.catalog'] ? safeCatalog(values['services.catalog'], values) : serviceCatalogFrom(values)} onChange={list => setValues({ ...values, [f.key]: JSON.stringify(list) })}/>
           : f.type === 'services' ? <ServiceCatalogEditor value={values[f.key] ? safeCatalog(values[f.key], values) : serviceCatalogFrom(values)} onChange={list => setValues({ ...values, [f.key]: JSON.stringify(list) })}/>
           : <input value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })} inputMode={f.type === 'url' ? 'url' : undefined}/>}
