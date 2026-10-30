@@ -1,6 +1,6 @@
 // Textos e imagens editáveis pelo painel de administração.
 // Cada chave tem um valor padrão; o que o administrador salvar substitui o padrão.
-export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services';
+export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services' | 'demos' | 'showcase';
 /** hidden: chave aceita e salva, mas sem campo próprio no painel (ex.: capas antigas, hoje dentro do catálogo de serviços). */
 export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string; hidden?: boolean };
 
@@ -172,6 +172,20 @@ export const contentFields: ContentField[] = [
   "label": "Título dos profissionais",
   "type": "text",
   "default": "Talento que dá gosto conhecer."
+ },
+ {
+  "key": "home.showProfessionals",
+  "group": "Página inicial",
+  "label": "Mostrar a seção de profissionais (“Talento que dá gosto conhecer”)",
+  "type": "boolean",
+  "default": "true"
+ },
+ {
+  "key": "home.hiddenProfessionals",
+  "group": "Página inicial",
+  "label": "Cards da seção de profissionais (exclua os que não quer na página inicial)",
+  "type": "showcase",
+  "default": ""
  },
  {
   "key": "home.howTitle",
@@ -389,25 +403,35 @@ export const contentFields: ContentField[] = [
   "hidden": true
  },
  {
+  "key": "catalog.demos",
+  "group": "Serviços e capas",
+  "label": "Portfólios demonstrativos (exemplos ilustrativos na página inicial e no catálogo)",
+  "type": "demos",
+  "default": ""
+ },
+ {
   "key": "cover.demo.demo-chef",
   "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Ateliê da Mesa”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.demo.demo-buffet",
   "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Essência Buffet”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.demo.demo-brasa",
   "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Casa & Brasa”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  }
 ];
 

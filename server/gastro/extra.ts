@@ -15,6 +15,7 @@ import { createGcSession, gcCookieOptions, getUserByEmail, hashPassword, isOwner
 import { copilotProvider } from "./routes";
 import { clientContractDataComplete, loadDetails, PROVIDER_SCHEMA_VERSION, providerDetailsComplete } from "./profiles";
 import { allServices, findService, normalizeServiceCatalog } from "@shared/services";
+import { normalizeDemos } from "@shared/catalog";
 import { subscriptionSummary } from "./subscriptions";
 
 const router = Router();
@@ -357,6 +358,11 @@ router.put("/admin/content", wrap(async (req, res) => {
     if (field.type === "services" && value) {
       try { entry[1] = JSON.stringify(normalizeServiceCatalog(JSON.parse(value))); }
       catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Catálogo de serviços inválido"); }
+    }
+    if (field.type === "showcase" && value && !value.split(",").every(id => /^(user-\d+|demo-[\w-]+)$/.test(id))) throw new HttpError(400, `${field.label}: lista inválida`);
+    if (field.type === "demos" && value) {
+      try { entry[1] = JSON.stringify(normalizeDemos(JSON.parse(value))); }
+      catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Lista de portfólios inválida"); }
     }
     if (field.type === "url" && value && !isValidHttpUrl(value)) throw new HttpError(400, `${field.label}: link inválido`);
     if (field.type === "boolean" && !["true", "false"].includes(value)) throw new HttpError(400, `${field.label}: valor inválido`);

@@ -56,3 +56,22 @@ describe("valor sugerido pela plataforma", () => {
     expect(platformEstimateCents({ category: "gardening", type: "Paisagismo", guests: 1, areaM2: 200 })).toBeGreaterThan(0);
   });
 });
+
+describe("portfólios demonstrativos editáveis", () => {
+  it("sem nada salvo usa os exemplos padrão com as capas antigas", async () => {
+    const { demosFrom, DEFAULT_DEMOS } = await import("@shared/catalog");
+    const demos = demosFrom({ "cover.demo.demo-chef": "/api/gastro/media/9" });
+    expect(demos).toHaveLength(DEFAULT_DEMOS.length);
+    expect(demos[0].image).toBe("/api/gastro/media/9");
+  });
+  it("adiciona, gera id e permite lista vazia", async () => {
+    const { normalizeDemos, demoProfessionals, DEMO_CATALOG_KEY } = await import("@shared/catalog");
+    const saved = normalizeDemos([{ name: "Doce Encanto", categoryId: "Gastronomia", tags: "Bolos, Doces, " }]);
+    expect(saved[0].id).toBe("demo-doce-encanto");
+    expect(saved[0].tags).toEqual(["Bolos", "Doces"]);
+    expect(normalizeDemos([])).toEqual([]);
+    const cards = demoProfessionals({ [DEMO_CATALOG_KEY]: JSON.stringify(saved) }, () => "Chefs e cozinha");
+    expect(cards[0]).toMatchObject({ name: "Doce Encanto", type: "Chefs e cozinha", demo: true });
+    expect(() => normalizeDemos([{ name: "X" }])).toThrow(/nome/);
+  });
+});
