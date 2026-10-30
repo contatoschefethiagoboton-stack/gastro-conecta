@@ -58,7 +58,7 @@ export const DEFAULT_SERVICE_CATALOG: ServiceCategory[] = [
 
 /** Gera um id estável a partir do nome (sem acentos, minúsculo, com hífens). */
 export function slugify(text: string): string {
-  return String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  return String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
 const CALCULATORS = new Set<string>(REQUEST_CATEGORIES.map(c => c.id));

@@ -67,7 +67,7 @@ export function normalizeDemos(value: unknown): DemoProfessional[] {
     if (name.length < 2) throw new Error(`Portfólio ${index + 1}: informe o nome`);
     let id = String(raw?.id ?? '').trim().slice(0, 60);
     if (!/^demo-[\w-]+$/.test(id)) {
-      const base = `demo-${name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'portfolio'}`;
+      const base = `demo-${name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'portfolio'}`;
       id = base; let n = 2; while (ids.has(id)) id = `${base}-${n++}`;
     }
     if (ids.has(id)) throw new Error(`Portfólio “${name}” repetido`);

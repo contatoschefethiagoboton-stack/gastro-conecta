@@ -6,14 +6,51 @@
 //                     o status sempre é relido na API, nunca confiado no corpo recebido.
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { HttpError } from "@shared/_core/errors";
+import { normalizeDescriptor, PLATFORM_TAG } from "@shared/payments";
+import { getInternalFlag, setInternalFlag } from "./content";
+import { dbConfigured } from "./db";
 
 const API = "https://api.mercadopago.com";
 
-export const mpConfigured = () => Boolean(process.env.MP_ACCESS_TOKEN);
+// Chaves cadastradas pelo admin no painel (Pagamentos) têm prioridade sobre as variáveis do Render.
+type MpSettings = { accessToken: string; webhookSecret: string; descriptor: string };
+let settings: MpSettings = { accessToken: "", webhookSecret: "", descriptor: "" };
 
-async function mp<T>(path: string, init: { method?: string; body?: unknown; idempotencyKey?: string } = {}): Promise<T> {
-  const token = process.env.MP_ACCESS_TOKEN;
-  if (!token) throw new HttpError(503, "Pagamentos indisponíveis: Mercado Pago não configurado (MP_ACCESS_TOKEN)");
+/** Recarrega as chaves salvas no banco (chamado na inicialização, a cada hora e ao salvar no painel). */
+export async function refreshMpSettings() {
+  if (!dbConfigured()) return;
+  try {
+    settings = {
+      accessToken: (await getInternalFlag("mp.accessToken")) ?? "",
+      webhookSecret: (await getInternalFlag("mp.webhookSecret")) ?? "",
+      descriptor: (await getInternalFlag("mp.descriptor")) ?? "",
+    };
+  } catch { /* banco indisponível: mantém o que já estava carregado */ }
+}
+
+export async function saveMpSettings(input: Partial<MpSettings>) {
+  for (const [key, value] of Object.entries(input)) if (value !== undefined) await setInternalFlag(`mp.${key}`, value);
+  await refreshMpSettings();
+}
+
+const accessToken = () => settings.accessToken || process.env.MP_ACCESS_TOKEN || "";
+export const mpWebhookSecret = () => settings.webhookSecret || process.env.MP_WEBHOOK_SECRET || "";
+export const mpDescriptor = () => normalizeDescriptor(settings.descriptor || process.env.MP_STATEMENT_DESCRIPTOR || PLATFORM_TAG) || PLATFORM_TAG;
+export const mpConfigured = () => Boolean(accessToken());
+
+/** Situação das chaves para o painel (nunca devolve a chave inteira). */
+export function mpSettingsStatus() {
+  const mask = (value: string) => (value ? `••••${value.slice(-4)}` : "");
+  return {
+    accessToken: { configured: Boolean(accessToken()), source: settings.accessToken ? "painel" : process.env.MP_ACCESS_TOKEN ? "render" : "", hint: mask(accessToken()), test: accessToken().startsWith("TEST-") },
+    webhookSecret: { configured: Boolean(mpWebhookSecret()), source: settings.webhookSecret ? "painel" : process.env.MP_WEBHOOK_SECRET ? "render" : "", hint: mask(mpWebhookSecret()) },
+    descriptor: mpDescriptor(),
+  };
+}
+
+async function mp<T>(path: string, init: { method?: string; body?: unknown; idempotencyKey?: string; token?: string } = {}): Promise<T> {
+  const token = init.token ?? accessToken();
+  if (!token) throw new HttpError(503, "Pagamentos indisponíveis: cadastre as chaves do Mercado Pago no painel (Pagamentos)");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -52,7 +89,12 @@ export type MpPixPayment = {
   preapproval_id?: string;
 };
 
-export async function createPixPayment(input: { amountCents: number; description: string; payerEmail: string; externalReference: string; expiresAt: Date; notificationUrl?: string }) {
+export type PaymentMetadata = { assinante_id: number; codigo_assinante: string; tipo: string };
+
+/** Confere se a chave funciona (consulta a conta dona da chave). */
+export const testAccessToken = (token?: string) => mp<{ id: number; nickname?: string; email?: string; site_id?: string }>("/users/me", { token });
+
+export async function createPixPayment(input: { amountCents: number; description: string; payerEmail: string; externalReference: string; expiresAt: Date; notificationUrl?: string; metadata?: PaymentMetadata }) {
   return mp<MpPixPayment>("/v1/payments", {
     method: "POST",
     idempotencyKey: randomUUID(),
@@ -62,6 +104,8 @@ export async function createPixPayment(input: { amountCents: number; description
       payment_method_id: "pix",
       payer: { email: input.payerEmail },
       external_reference: input.externalReference,
+      statement_descriptor: mpDescriptor(),
+      metadata: { plataforma: "gastroconecta", ...(input.metadata ?? {}) },
       date_of_expiration: input.expiresAt.toISOString().replace("Z", "-00:00"),
       ...(input.notificationUrl ? { notification_url: input.notificationUrl } : {}),
     },
@@ -106,7 +150,7 @@ export const getAuthorizedPayment = (id: string | number) => mp<MpAuthorizedPaym
  * Manifesto: `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
  */
 export function verifyWebhookSignature(input: { signature?: string; requestId?: string; dataId?: string; secret?: string }): boolean {
-  const secret = input.secret ?? process.env.MP_WEBHOOK_SECRET;
+  const secret = input.secret ?? mpWebhookSecret();
   if (!secret || !input.signature) return false;
   const parts = Object.fromEntries(input.signature.split(",").map(part => part.split("=").map(s => s.trim()) as [string, string]));
   const ts = parts.ts, v1 = parts.v1;

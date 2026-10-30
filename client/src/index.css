@@ -404,3 +404,23 @@ img { max-width:100%; }
 .admin-card-actions span { display:inline-flex; align-items:center; gap:6px; font-weight:600; margin-right:auto; }
 .admin-card-actions button { display:inline-flex; align-items:center; gap:6px; min-height:38px; padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:#fff; font-weight:600; }
 .admin-card-actions button.danger { color:#b3261e; border-color:#f1c4bf; }
+
+/* Promoções: escolha do fornecedor pelo cliente */
+.promo-modal { position:fixed; inset:0; z-index:210; display:grid; place-items:center; padding:20px; }
+.promo-modal-backdrop { position:absolute; inset:0; border:0; background:rgba(20,18,16,.55); cursor:default; }
+.promo-modal-panel { position:relative; width:min(640px,100%); max-height:88vh; overflow-y:auto; background:#fff; border-radius:14px; padding:22px; box-shadow:0 30px 60px #0003; }
+.promo-modal-panel header { display:flex; justify-content:space-between; gap:14px; align-items:flex-start; margin-bottom:16px; }
+.promo-modal-panel header h3 { font-size:22px; margin-top:10px; }
+.promo-modal-panel header p { color:var(--muted); font-size:13px; margin-top:4px; }
+.promo-modal-close { border:1px solid var(--border); background:#fff; border-radius:99px; width:38px; height:38px; min-width:38px; display:grid; place-items:center; }
+.promo-modal-empty { display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:26px 10px; color:var(--muted); }
+.promo-modal-empty strong { color:var(--ink); }
+.promo-provider-list { display:flex; flex-direction:column; gap:10px; }
+.promo-provider { display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:12px; padding:12px; flex-wrap:wrap; }
+.promo-provider img, .promo-provider-img { width:64px; height:64px; min-width:64px; border-radius:10px; object-fit:cover; background:var(--cream); display:grid; place-items:center; color:var(--muted); }
+.promo-provider-info { flex:1 1 180px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.promo-provider-info strong { font:600 16px 'DM Sans',sans-serif; }
+.promo-provider-info span { font-size:12px; color:var(--muted); }
+.promo-provider-meta { display:inline-flex; align-items:center; gap:4px; }
+.promo-provider-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+@media(max-width:680px) { .promo-provider-actions { flex-direction:row; align-items:center; width:100%; justify-content:space-between; } }

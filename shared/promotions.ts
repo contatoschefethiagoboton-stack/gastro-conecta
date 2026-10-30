@@ -16,6 +16,8 @@ export type Promotion = {
   eventType?: string; // pré-seleciona a ocasião no orçamento
   imageUrl?: string;
   sortOrder?: number;
+  /** Adicional que o fornecedor paga para aparecer na promoção (centavos; 0 = grátis). */
+  providerFeeCents?: number;
 };
 
 export const EVENT_TYPES = ['Jantar em casa', 'Aniversário', 'Casamento', 'Evento corporativo', 'Confraternização', 'Outra ocasião'] as const;
@@ -93,4 +95,13 @@ export function isPromotionActive(p: Promotion, today: Date = new Date()): boole
 
 export function activePromotions(today: Date = new Date(), list: Promotion[] = defaultPromotions): Promotion[] {
   return list.filter(p => isPromotionActive(p, today));
+}
+
+/** Fim da janela em andamento (último segundo do dia "end"), ou null se a promoção não está no ar. */
+export function promotionWindowEnd(p: Promotion, today: Date = new Date()): Date | null {
+  if (!isPromotionActive(p, today)) return null;
+  const [m, d] = p.end.split('-').map(Number);
+  const now = (today.getMonth() + 1) * 100 + today.getDate();
+  const year = toKey(p.start) > toKey(p.end) && now >= toKey(p.start) ? today.getFullYear() + 1 : today.getFullYear();
+  return new Date(year, m - 1, d, 23, 59, 59);
 }

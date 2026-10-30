@@ -52,7 +52,7 @@ router.get("/site", wrap(async (_req, res) => {
 }));
 
 function mapPromotion(row: any): Promotion {
-  return { id: Number(row.id), active: Boolean(row.active), start: row.startMd, end: row.endMd, badge: row.badge, title: row.title, text: row.text, cta: row.ctaLabel, whatsappMessage: row.whatsappMessage, eventType: row.eventType ?? undefined, imageUrl: row.imageUrl ?? undefined, sortOrder: Number(row.sortOrder ?? 0) };
+  return { id: Number(row.id), active: Boolean(row.active), start: row.startMd, end: row.endMd, badge: row.badge, title: row.title, text: row.text, cta: row.ctaLabel, whatsappMessage: row.whatsappMessage, eventType: row.eventType ?? undefined, imageUrl: row.imageUrl ?? undefined, sortOrder: Number(row.sortOrder ?? 0), providerFeeCents: Number(row.providerFeeCents ?? 0) };
 }
 
 router.get("/promotions", wrap(async (_req, res) => {
@@ -60,7 +60,8 @@ router.get("/promotions", wrap(async (_req, res) => {
   if (dbConfigured()) {
     try { list = (await query<any[]>("SELECT * FROM gc_promotions WHERE active = 1 ORDER BY sortOrder ASC, id ASC")).map(mapPromotion); } catch { list = []; }
   }
-  res.set("Cache-Control", "no-store").json({ promotions: list.filter(p => isPromotionActive(p)) });
+  // O adicional cobrado do fornecedor não é exibido ao público.
+  res.set("Cache-Control", "no-store").json({ promotions: list.filter(p => isPromotionActive(p)).map(({ providerFeeCents, ...p }) => { void providerFeeCents; return p; }) });
 }));
 
 router.get("/media/:id", wrap(async (req, res) => {
@@ -367,6 +368,7 @@ router.put("/admin/content", wrap(async (req, res) => {
     if (field.type === "url" && value && !isValidHttpUrl(value)) throw new HttpError(400, `${field.label}: link inválido`);
     if (field.type === "boolean" && !["true", "false"].includes(value)) throw new HttpError(400, `${field.label}: valor inválido`);
     if (field.type === "image" && value && !/^(\/api\/gastro\/media\/\d+|\/img\/[\w.-]+|https:\/\/\S+)$/.test(value)) throw new HttpError(400, `${field.label}: imagem inválida`);
+    if (/^level\.(alto|medio)Min(Average|Reviews)$/.test(key) && !(/^\d+([.,]\d+)?$/.test(value) && Number(value.replace(",", ".")) <= (key.endsWith("Average") ? 5 : 1000))) throw new HttpError(400, `${field.label}: use um número${key.endsWith("Average") ? " de 0 a 5" : ""}`);
     if (key === "contact.whatsapp" && value && !/^\d{12,13}$/.test(value)) throw new HttpError(400, "WhatsApp: use só números com 55 + DDD (ex.: 5519999999999)");
   }
   await withTransaction(async connection => {
@@ -400,13 +402,14 @@ const promotionSchema = z.object({
   title: text(3, 160, "Título"),
   text: text(10, 1000, "Texto"),
   cta: text(2, 60, "Texto do botão"),
-  whatsappMessage: text(5, 600, "Mensagem do WhatsApp"),
+  whatsappMessage: z.string().trim().max(600).default(""),
   eventType: z.enum(EVENT_TYPES).nullable().optional(),
   imageUrl: z.string().trim().max(300).nullable().optional().refine(value => !value || /^(\/api\/gastro\/media\/\d+|https:\/\/\S+)$/.test(value), "Imagem inválida"),
   start: z.string().refine(isMonthDay, "Início inválido (MM-DD)"),
   end: z.string().refine(isMonthDay, "Fim inválido (MM-DD)"),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(999).default(0),
+  providerFeeCents: z.number().int().min(0).max(10_000_000).default(0),
 });
 
 router.get("/admin/promotions", wrap(async (req, res) => {
@@ -418,7 +421,7 @@ router.get("/admin/promotions", wrap(async (req, res) => {
 router.post("/admin/promotions", wrap(async (req, res) => {
   const context = await adminCtx(req);
   const p = body(req, promotionSchema);
-  const result = await execute("INSERT INTO gc_promotions (badge, title, text, ctaLabel, whatsappMessage, eventType, imageUrl, startMd, endMd, active, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [p.badge, p.title, p.text, p.cta, p.whatsappMessage, p.eventType ?? null, p.imageUrl || null, p.start, p.end, p.active, p.sortOrder]);
+  const result = await execute("INSERT INTO gc_promotions (badge, title, text, ctaLabel, whatsappMessage, eventType, imageUrl, startMd, endMd, active, sortOrder, providerFeeCents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [p.badge, p.title, p.text, p.cta, p.whatsappMessage, p.eventType ?? null, p.imageUrl || null, p.start, p.end, p.active, p.sortOrder, p.providerFeeCents]);
   await audit(context.user.id, "admin.promotion_create", { id: Number(result.insertId), title: p.title });
   res.status(201).json({ id: Number(result.insertId) });
 }));
@@ -427,7 +430,7 @@ router.patch("/admin/promotions/:id", wrap(async (req, res) => {
   const context = await adminCtx(req);
   const id = parse(idSchema, req.params.id);
   const p = body(req, promotionSchema);
-  const result = await execute("UPDATE gc_promotions SET badge = ?, title = ?, text = ?, ctaLabel = ?, whatsappMessage = ?, eventType = ?, imageUrl = ?, startMd = ?, endMd = ?, active = ?, sortOrder = ? WHERE id = ?", [p.badge, p.title, p.text, p.cta, p.whatsappMessage, p.eventType ?? null, p.imageUrl || null, p.start, p.end, p.active, p.sortOrder, id]);
+  const result = await execute("UPDATE gc_promotions SET badge = ?, title = ?, text = ?, ctaLabel = ?, whatsappMessage = ?, eventType = ?, imageUrl = ?, startMd = ?, endMd = ?, active = ?, sortOrder = ?, providerFeeCents = ? WHERE id = ?", [p.badge, p.title, p.text, p.cta, p.whatsappMessage, p.eventType ?? null, p.imageUrl || null, p.start, p.end, p.active, p.sortOrder, p.providerFeeCents, id]);
   if (!result.affectedRows) throw new HttpError(404, "Promoção não encontrada");
   await audit(context.user.id, "admin.promotion_update", { id, title: p.title, active: p.active });
   res.json({ ok: true });
