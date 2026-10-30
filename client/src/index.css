@@ -246,6 +246,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .quote-summary { display:flex; flex-direction:column; gap:9px; background:#f6f3eb; padding:18px; border-radius:7px; margin-top:22px; }
 .quote-summary strong { font-size:13px; font-weight:500; margin-bottom:3px; }
 .quote-summary span { display:flex; gap:6px; font-size:11px; color:#8d8971; }
+.quote-estimate { display:flex; gap:14px; align-items:flex-start; background:#fdf1ec; border:1px solid #f3cdbd; color:var(--paprika); padding:16px 18px; border-radius:8px; margin:6px 0 14px; }
+.quote-estimate > div { display:flex; flex-direction:column; gap:2px; color:var(--ink); }
+.quote-estimate span { font-size:12px; color:var(--muted); }
+.quote-estimate strong { font:600 24px/1.2 'DM Sans',sans-serif; color:var(--paprika); }
+.quote-estimate small { font-size:12px; color:#6d6f66; line-height:1.45; }
 .quote-success { text-align:center; padding:80px 0; display:flex; align-items:center; flex-direction:column; }
 .success-icon { width:90px; height:90px; border-radius:50%; background:#eef1e6; color:#73885d; display:grid; place-items:center; margin-bottom:24px; }
 .quote-success>p { max-width:500px; color:#928b77; margin-top:24px; }

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, BadgePercent, Calculator, ChefHat, Leaf, Loader2, Plus, Send, Sparkles, Trash2, TrendingUp, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, BadgePercent, Calculator, ChefHat, Leaf, Loader2, Minus, Plus, RotateCcw, Send, Sparkles, Trash2, TrendingUp, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import {
-  calculateMealPrep, CLEANING_RATES, estimateAreaService, estimateBrigade, estimateIngredients, EVENT_STYLES, GARDEN_RATES, itemsTotalCents, MEAL_PREP_DEFAULTS,
+  calculateMealPrep, CLEANING_RATES, estimateAreaService, estimateBrigade, estimateIngredients, EVENT_STYLES, GARDEN_RATES, itemsTotalCents, MEAL_PREP_DEFAULTS, mealPrepInputFor,
   profitability, staffTotalCents, styleForEventType, type EstimateItem, type EventStyle, type MealPrepInput, type StaffItem,
 } from "@shared/copilot";
 import { SCOPE_LABELS, type ContractScope, type RequestCategory } from "@shared/services";
@@ -129,6 +129,24 @@ export function ProfitBox({ priceCents, costCents }: { priceCents: number; costC
   </div>;
 }
 
+// ------------------------------------------------------------------ ajuste sobre a sugestão da plataforma
+
+function PriceAdjuster({ platformCents, amountCents, copilotCents, onChange }: { platformCents: number; amountCents: number; copilotCents: number; onChange: (cents: number) => void }) {
+  const diff = Math.round(((amountCents - platformCents) / platformCents) * 1000) / 10;
+  const step = (percent: number) => onChange(Math.max(100, Math.round((amountCents * (1 + percent / 100)) / 100) * 100));
+  return <div className="cp-adjust" role="group" aria-label="Ajustar valor">
+    <div><span>Valor sugerido pela plataforma</span><strong>{formatMoney(platformCents)}</strong><small>{diff === 0 ? "Sua proposta está igual à sugestão." : `Sua proposta está ${Math.abs(diff).toLocaleString("pt-BR")}% ${diff > 0 ? "acima" : "abaixo"} da sugestão.`} O cliente compara as propostas e escolhe a melhor.</small></div>
+    <div className="cp-adjust-buttons">
+      <button type="button" className="dash-small-button dash-ghost-button" onClick={() => step(-10)}><Minus size={13}/> 10%</button>
+      <button type="button" className="dash-small-button dash-ghost-button" onClick={() => step(-5)}><Minus size={13}/> 5%</button>
+      <button type="button" className="dash-small-button" onClick={() => step(5)}><Plus size={13}/> 5%</button>
+      <button type="button" className="dash-small-button" onClick={() => step(10)}><Plus size={13}/> 10%</button>
+      <button type="button" className="dash-small-button dash-ghost-button" onClick={() => onChange(platformCents)}><RotateCcw size={13}/> Sugestão</button>
+      {copilotCents > 0 && copilotCents !== platformCents && <button type="button" className="dash-small-button dash-ghost-button" onClick={() => onChange(copilotCents)}><Calculator size={13}/> Usar cálculo do Copilot</button>}
+    </div>
+  </div>;
+}
+
 // ------------------------------------------------------------------ montar e enviar proposta
 
 export function ProposalComposer({ event, onClose }: { event: EventItem; onClose: () => void }) {
@@ -136,12 +154,14 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
   const category = event.category as RequestCategory;
   const [scope, setScope] = useState<ContractScope>(event.scope === "full" ? "full" : "labor");
   const [eventCalc, setEventCalc] = useState<EventCalc>(() => initialEventCalc(event.guests, event.type, event.details?.withAlcohol !== false));
-  const [meal, setMeal] = useState<MealPrepInput>(() => ({ ...MEAL_PREP_DEFAULTS, meals: Math.max(1, Number(event.details?.mealsPerWeek ?? 10) * Number(event.details?.weeks ?? 1)) }));
+  const [meal, setMeal] = useState<MealPrepInput>(() => mealPrepInputFor(Math.max(1, Number(event.details?.mealsPerWeek ?? 10) * Number(event.details?.weeks ?? 1))));
   const [area, setArea] = useState<AreaCalc>(() => initialAreaCalc(category === "gardening" ? "gardening" : "cleaning", event.details?.propertyKind, Number(event.details?.areaM2 ?? 80)));
   const [extraCents, setExtraCents] = useState(0);
   const [margin, setMargin] = useState(30);
   const [discount, setDiscount] = useState(0);
-  const [amountText, setAmountText] = useState("");
+  // Valor sugerido pela plataforma com base no pedido; o profissional pode aumentar ou diminuir.
+  const platformCents = Number(event.details?.suggestedCents) || 0;
+  const [amountText, setAmountText] = useState(() => (platformCents > 0 ? centsInput(platformCents) : ""));
   const [message, setMessage] = useState("");
   const [terms, setTerms] = useState("50% via Pix na confirmação e 50% até o dia do serviço.");
   const [time, setTime] = useState(event.time ?? "");
@@ -181,9 +201,10 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
       <label className="dash-field"><span>Outros custos (transporte, gás, aluguel…) R$</span><MoneyInput cents={extraCents} label="Outros custos" onChange={setExtraCents}/></label>
       {category === "event" && <label className="dash-field"><span>Margem desejada (%)</span><Num value={margin} label="Margem" onChange={setMargin}/></label>}
       <label className="dash-field"><span>Desconto (%)</span><Num value={discount} label="Desconto" onChange={v => setDiscount(Math.min(100, v))}/></label>
-      <label className="dash-field"><span>Valor da proposta (R$)</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">Sugestão do Copilot: {formatMoney(suggestedCents)}. Você pode alterar.</small></label>
+      <label className="dash-field"><span>Valor da proposta (R$)</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">{platformCents > 0 ? `Sugestão da plataforma: ${formatMoney(platformCents)} · cálculo do Copilot: ${formatMoney(suggestedCents)}.` : `Sugestão do Copilot: ${formatMoney(suggestedCents)}. Você pode alterar.`}</small></label>
       <label className="dash-field"><span>Horário</span><input type="time" value={time} onChange={e => setTime(e.target.value)}/></label>
     </div>
+    {platformCents > 0 && <PriceAdjuster platformCents={platformCents} amountCents={amountCents} copilotCents={suggestedCents} onChange={c => setAmountText(centsInput(c))}/>}
     <ProfitBox priceCents={amountCents} costCents={costCents}/>
     <label className="dash-field"><span>Condições de pagamento</span><input required value={terms} onChange={e => setTerms(e.target.value)} maxLength={600}/></label>
     <label className="dash-field"><span>Mensagem ao cliente</span><textarea required rows={4} value={message} onChange={e => setMessage(e.target.value)} placeholder="Cardápio, o que está incluso, equipe, diferenciais e disponibilidade." maxLength={5000}/></label>

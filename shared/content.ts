@@ -1,7 +1,8 @@
 // Textos e imagens editáveis pelo painel de administração.
 // Cada chave tem um valor padrão; o que o administrador salvar substitui o padrão.
-export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean';
-export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string };
+export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services';
+/** hidden: chave aceita e salva, mas sem campo próprio no painel (ex.: capas antigas, hoje dentro do catálogo de serviços). */
+export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string; hidden?: boolean };
 
 export const contentFields: ContentField[] = [
  {
@@ -341,57 +342,69 @@ export const contentFields: ContentField[] = [
   "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Cadastro gratuito para clientes e propostas personalizadas."
  },
  {
+  "key": "services.catalog",
+  "group": "Serviços e capas",
+  "label": "Serviços oferecidos (cards da página inicial, cadastro do profissional e pedidos de orçamento)",
+  "type": "services",
+  "default": ""
+ },
+ {
   "key": "cover.cat.Gastronomia",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do card “Chefs e cozinha”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.cat.personal",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do card “Personal chef”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.cat.Bar & salão",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do card “Bar & salão”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.cat.Limpeza",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do card “Limpeza”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.cat.Jardinagem",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do card “Jardinagem”",
   "type": "image",
-  "default": ""
+  "default": "",
+  "hidden": true
  },
  {
   "key": "cover.demo.demo-chef",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Ateliê da Mesa”",
   "type": "image",
   "default": ""
  },
  {
   "key": "cover.demo.demo-buffet",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Essência Buffet”",
   "type": "image",
   "default": ""
  },
  {
   "key": "cover.demo.demo-brasa",
-  "group": "Fotos de capa",
+  "group": "Serviços e capas",
   "label": "Capa do portfólio demonstrativo “Casa & Brasa”",
   "type": "image",
   "default": ""

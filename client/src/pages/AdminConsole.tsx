@@ -7,7 +7,9 @@ import { uploadFile } from '@/lib/upload';
 import type { ContentField } from '@shared/content';
 import { EVENT_TYPES } from '@shared/promotions';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validators';
-import { serviceLabel } from '@shared/services';
+import { serviceCatalogFrom, serviceLabel, REQUEST_CATEGORIES, SERVICE_ICONS, type ServiceCategory, type ServiceIcon } from '@shared/services';
+import { useSite } from '@/lib/site';
+import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
 type Section = 'overview' | 'users' | 'subscriptions' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
@@ -170,7 +172,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
             {d.faceUrl && <label className="adm-verify"><input type="checkbox" checked={Boolean(d.faceVerified)} onChange={e => void patch({ faceVerified: e.target.checked }, 'face')}/> <ScanFace size={15}/> Rosto conferido</label>}
           </div>
           <Field label="Documento" value={d.documentType === 'cnpj' ? `CNPJ${d.companyType ? ` (${d.companyType})` : ''}` : d.documentType === 'cpf' ? 'CPF (pessoa física)' : ''}/>
-          <Field label="Serviços" value={Array.isArray(d.services) ? d.services.map(serviceLabel).join(', ') : ''}/>
+          <ServicesField ids={d.services}/>
           <Field label="Nome completo" value={d.fullName}/><Field label="CNPJ" value={d.cnpj ? formatCNPJ(d.cnpj) : ""}/><Field label="Razão social" value={d.companyName}/><Field label="Nome fantasia" value={d.tradeName}/><Field label="CPF" value={d.cpf ? formatCPF(d.cpf) : ""}/><Field label="Nascimento" value={d.birthDate ? d.birthDate.split("-").reverse().join("/") : ""}/><Field label="Telefone" value={d.phone ? formatPhone(d.phone) : ""}/>
           <Field label="Endereço" value={[d.street, d.number, d.complement, d.district, d.city && `${d.city}/${d.state}`, d.cep && formatCEP(d.cep)].filter(Boolean).join(', ')}/>
           <Field label="Categoria" value={d.category}/><Field label="Especialidade" value={d.specialty}/><Field label="Funções" value={Array.isArray(d.roles) ? d.roles.join(', ') : ''}/>
@@ -237,6 +239,68 @@ function ImagePicker({ value, onChange, kind = 'site' }: { value: string; onChan
   </div>;
 }
 
+function ServicesField({ ids }: { ids: unknown }) {
+  const { serviceCatalog } = useSite();
+  return <Field label="Serviços" value={Array.isArray(ids) ? ids.map(id => serviceLabel(id, serviceCatalog)).join(', ') : ''}/>;
+}
+
+const safeCatalog = (raw: string, values: Record<string, string>): ServiceCategory[] => {
+  try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return parsed; } catch { /* volta ao catálogo salvo */ }
+  return serviceCatalogFrom(values);
+};
+
+/** Categorias de serviço (cards da página inicial) e as profissões de cada uma. */
+function ServiceCatalogEditor({ value, onChange }: { value: ServiceCategory[]; onChange: (list: ServiceCategory[]) => void }) {
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const set = (i: number, patch: Partial<ServiceCategory>) => onChange(value.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= value.length) return; const next = [...value]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+  const removeCategory = (i: number) => {
+    if (value.length <= 1) { toast.error('Mantenha pelo menos uma categoria.'); return; }
+    if (!confirm(`Excluir a categoria “${value[i].name || 'sem nome'}” e todas as profissões dela? Profissionais cadastrados nessas profissões deixam de receber pedidos delas até escolherem outra.`)) return;
+    onChange(value.filter((_, idx) => idx !== i));
+  };
+  const addService = (i: number) => {
+    const label = (drafts[i] ?? '').trim();
+    if (label.length < 2) { toast.error('Digite o nome da profissão.'); return; }
+    if (value[i].services.some(s => s.label.toLowerCase() === label.toLowerCase())) { toast.error('Essa profissão já existe nesta categoria.'); return; }
+    set(i, { services: [...value[i].services, { id: '', label }] });
+    setDrafts(d => ({ ...d, [i]: '' }));
+  };
+  const removeService = (i: number, k: number) => {
+    const svc = value[i].services[k];
+    if (value[i].services.length <= 1) { toast.error('A categoria precisa de pelo menos uma profissão. Para tirar tudo, exclua a categoria.'); return; }
+    if (svc.id && !confirm(`Excluir a profissão “${svc.label}”? Profissionais cadastrados nela deixam de receber pedidos dela.`)) return;
+    set(i, { services: value[i].services.filter((_, idx) => idx !== k) });
+  };
+  const addCategory = () => onChange([...value, { id: '', name: 'Novo serviço', subtitle: '', icon: 'utensils', calculator: 'event', cover: '', services: [] }]);
+  return <div className="adm-svc">
+    <p className="adm-muted">Cada categoria vira um card na página inicial e aparece no pedido de orçamento. As profissões são o que o profissional escolhe no cadastro e o que o cliente pode pedir. Depois de mudar, clique em <strong>Salvar e publicar</strong>.</p>
+    {value.map((cat, i) => { const Icon = serviceIcon(cat.icon); return <div className="adm-svc-card" key={cat.id || `novo-${i}`}>
+      <div className="adm-svc-head">
+        <span className="adm-svc-icon"><Icon size={20}/></span>
+        <input className="adm-svc-name" value={cat.name} aria-label="Nome da categoria" placeholder="Nome do serviço (ex.: Confeitaria)" maxLength={80} onChange={e => set(i, { name: e.target.value })}/>
+        <div className="adm-row-actions">
+          <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Mover para cima">↑</button>
+          <button type="button" onClick={() => move(i, 1)} disabled={i === value.length - 1} aria-label="Mover para baixo">↓</button>
+          <button type="button" className="danger" onClick={() => removeCategory(i)}><Trash2 size={14}/> Excluir</button>
+        </div>
+      </div>
+      <div className="adm-svc-grid">
+        <label className="adm-content-field"><span className="adm-content-label">Frase do card</span><input value={cat.subtitle} maxLength={160} placeholder="Ex.: Bolos, doces e mesas de sobremesa" onChange={e => set(i, { subtitle: e.target.value })}/></label>
+        <label className="adm-content-field"><span className="adm-content-label">Ícone</span><select value={cat.icon} onChange={e => set(i, { icon: e.target.value as ServiceIcon })}>{SERVICE_ICONS.map(ic => <option key={ic} value={ic}>{SERVICE_ICON_LABELS[ic]}</option>)}</select></label>
+        <label className="adm-content-field"><span className="adm-content-label">Como a plataforma sugere o valor</span><select value={cat.calculator} onChange={e => set(i, { calculator: e.target.value as ServiceCategory['calculator'] })}>{REQUEST_CATEGORIES.map(rc => <option key={rc.id} value={rc.id}>{rc.label}</option>)}</select></label>
+      </div>
+      <div className="adm-content-field"><span className="adm-content-label">Foto de capa do card</span><ImagePicker value={cat.cover} onChange={url => set(i, { cover: url })}/></div>
+      <div className="adm-content-field"><span className="adm-content-label">Profissões desta categoria</span>
+        <div className="adm-svc-chips">{cat.services.map((svc, k) => <span className="adm-svc-chip" key={svc.id || `n-${k}`}><input value={svc.label} aria-label="Nome da profissão" maxLength={100} onChange={e => set(i, { services: cat.services.map((x, idx) => (idx === k ? { ...x, label: e.target.value } : x)) })}/><button type="button" aria-label={`Excluir ${svc.label}`} onClick={() => removeService(i, k)}><X size={14}/></button></span>)}</div>
+        <div className="adm-svc-add"><input value={drafts[i] ?? ''} placeholder="Nova profissão (ex.: Confeiteiro(a))" maxLength={100} onChange={e => setDrafts(d => ({ ...d, [i]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addService(i); } }}/><button type="button" className="ob-btn ob-btn-outline" onClick={() => addService(i)}><Plus size={16}/> Adicionar profissão</button></div>
+        {!cat.services.length && <small className="adm-svc-warn">Adicione pelo menos uma profissão antes de salvar.</small>}
+      </div>
+    </div>; })}
+    <button type="button" className="ob-btn ob-btn-primary adm-svc-new" onClick={addCategory}><Plus size={16}/> Criar novo serviço</button>
+  </div>;
+}
+
 function ContentSection() {
   const [fields, setFields] = useState<ContentField[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -244,7 +308,8 @@ function ContentSection() {
   const [group, setGroup] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { api<{ fields: ContentField[]; values: Record<string, string> }>('/admin/content').then(r => { setFields(r.fields); setValues(r.values); setSaved(r.values); setGroup(r.fields[0]?.group ?? ''); }).catch(e => toast.error(errText(e))); }, []);
-  const groups = [...new Set(fields.map(f => f.group))];
+  const visible = fields.filter(f => !f.hidden);
+  const groups = [...new Set(visible.map(f => f.group))];
   const changed = Object.keys(values).filter(k => values[k] !== saved[k]);
   const save = async () => {
     setBusy(true);
@@ -259,11 +324,12 @@ function ContentSection() {
   return <div className="adm-stack">
     <div className="adm-tabs" role="tablist">{groups.map(g => <button key={g} type="button" className={g === group ? 'is-active' : ''} onClick={() => setGroup(g)}>{g}</button>)}</div>
     <Card>
-      <div className="adm-content-fields">{fields.filter(f => f.group === group).map(f => <div className="adm-content-field" key={f.key}>
+      <div className="adm-content-fields">{visible.filter(f => f.group === group).map(f => <div className="adm-content-field" key={f.key}>
         <div className="adm-content-label"><span>{f.label}</span>{values[f.key] !== f.default && <button type="button" title="Voltar ao texto original" onClick={() => void reset(f.key)}><RotateCcw size={13}/> original</button>}</div>
         {f.type === 'textarea' ? <textarea rows={f.key.startsWith('legal.') ? 14 : 3} value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })}/>
           : f.type === 'boolean' ? <label className="adm-switch"><input type="checkbox" checked={values[f.key] === 'true'} onChange={e => setValues({ ...values, [f.key]: e.target.checked ? 'true' : 'false' })}/> {values[f.key] === 'true' ? 'Ligado' : 'Desligado'}</label>
           : f.type === 'image' ? <ImagePicker value={values[f.key] ?? ''} onChange={url => setValues({ ...values, [f.key]: url })}/>
+          : f.type === 'services' ? <ServiceCatalogEditor value={values[f.key] ? safeCatalog(values[f.key], values) : serviceCatalogFrom(values)} onChange={list => setValues({ ...values, [f.key]: JSON.stringify(list) })}/>
           : <input value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })} inputMode={f.type === 'url' ? 'url' : undefined}/>}
       </div>)}</div>
     </Card>

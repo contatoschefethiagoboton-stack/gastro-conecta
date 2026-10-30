@@ -70,11 +70,11 @@ export function RadarPanel({ user }: { user: DashboardUser }) {
       {query.isLoading ? <LoadingState/> : !list.length ? <EmptyState title="Nenhum pedido no radar" detail={radar.length ? "Ajuste os filtros para ver outros pedidos." : "Quando houver pedidos compatíveis com os seus serviços, eles aparecem aqui."}/> : <div className="dash-record-list">{list.map(e => <article className="dash-record" key={e.id}>
         <div className="dash-record-main"><span className="dash-list-icon orange"><Activity size={17}/></span><div>
           <h4>{e.title} <span className={`dash-client-tag ${e.clientTag === "Cliente Antigo" ? "is-returning" : ""}`}>{e.clientTag === "Cliente Antigo" ? <UserCheck size={12}/> : <UserPlus size={12}/>} {e.clientTag}</span></h4>
-          <p>{categoryLabel[e.category]} · {e.type} · {e.city} · {e.guests} pessoa(s){e.details?.mealPlan ? ` · ${e.details.mealPlan}` : ""}{e.details?.areaM2 ? ` · ${e.details.areaM2} m²` : ""}</p>
+          <p>{e.details?.serviceLabel ?? e.details?.serviceCategoryName ?? categoryLabel[e.category]} · {e.type} · {e.city} · {e.guests} pessoa(s){e.details?.mealPlan ? ` · ${e.details.mealPlan}` : ""}{e.details?.areaM2 ? ` · ${e.details.areaM2} m²` : ""}</p>
           <span>{formatDate(e.date)}{e.time ? ` às ${e.time}` : ""} · {e.scope === "full" ? "quer serviço completo" : e.scope === "labor" ? "quer só mão de obra" : "escopo a combinar"}</span>
           {e.clientTag === "Cliente Antigo" && <small className="dash-loyalty-tip">Cliente que volta: ofereça um desconto de fidelidade ou um pacote especial.</small>}
         </div></div>
-        <div className="dash-record-actions"><strong>{formatMoney(e.budgetCents)}</strong><span className={`dash-score ${scoreBand(e.score).className}`}>{e.score} · {scoreBand(e.score).label}</span>
+        <div className="dash-record-actions"><span className="dash-suggested">Sugestão da plataforma<strong>{formatMoney(Number(e.details?.suggestedCents) || e.budgetCents)}</strong></span><span className={`dash-score ${scoreBand(e.score).className}`}>{e.score} · {scoreBand(e.score).label}</span>
           {e.myProposal === "pending" ? <span className="dash-status dash-status-pending">Proposta enviada</span> : <>
             <button className="dash-small-button" type="button" disabled={blocked} onClick={() => setComposing(e)}><Send size={14}/> {e.myProposal ? "Nova proposta" : "Aceitar e propor"}</button>
             <button className="dash-small-button dash-ghost-button" type="button" disabled={busy === `dismiss-${e.id}`} onClick={() => void run(`dismiss-${e.id}`, () => post(`/events/${e.id}/dismiss`), "Pedido recusado e removido do seu radar.")}><X size={14}/> Recusar</button>
