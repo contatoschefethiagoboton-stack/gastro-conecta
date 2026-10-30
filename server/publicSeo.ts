@@ -1,4 +1,5 @@
-import { professionals } from '../shared/catalog';
+import { demoProfessionals } from '../shared/catalog';
+import { findCategory, serviceCatalogFrom } from '../shared/services';
 import { loadProfessionals } from './gastro/catalog';
 import { businessDefaults, whatsappLink } from '../shared/business';
 import { getSiteContent } from './gastro/content';
@@ -39,7 +40,7 @@ export async function applyPublicSeo(template:string, originalUrl:string) {
  const waDisplay=site['contact.whatsappDisplay']||businessDefaults.whatsappDisplay;
  if(path==='/'){const sameAs=[site['contact.instagram'],site['contact.facebook']].filter(v=>v&&/^https:\/\//.test(v));const ld:Record<string,unknown>={'@context':'https://schema.org','@type':'FoodEstablishment',name:businessDefaults.name,telephone:'+'+waNumber,email:site['contact.email']||businessDefaults.email,areaServed:region,servesCuisine:'Brasileira',...(sameAs.length?{sameAs}:{})};if(origin&&/^https:\/\//.test(origin))ld.url=new URL('/',origin).href;head+=`<script type="application/ld+json">${JSON.stringify(ld).replace(/</g,'\\u003c')}</script>`;}
  const contact=path==='/'?`<p>Atendimento em ${escape(region)}. Fale Conosco pelo WhatsApp <a href="${escape(whatsappLink(undefined,waNumber))}">${escape(waDisplay)}</a>.</p>`:'';
- const cards=(path==='/'||path==='/profissionais')&&site['catalog.showDemo']!=='false'?professionals.map(p=>`<article><h2><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h2><p>${escape(p.type)} · ${escape(p.city)}</p><p>${escape(p.description)}</p><p>Portfólio ilustrativo.</p></article>`).join(''):'';
+ const cards=(path==='/'||path==='/profissionais')&&site['catalog.showDemo']!=='false'?demoProfessionals(site,id=>findCategory(serviceCatalogFrom(site),id)?.name).map(p=>`<article><h2><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h2><p>${escape(p.type)} · ${escape(p.city)}</p><p>${escape(p.description)}</p><p>Portfólio ilustrativo.</p></article>`).join(''):'';
  const body=`<main><h1>${escape(page.heading)}</h1><p>${escape(page.body)}</p>${detail}<nav><a href="/profissionais">Encontre um profissional</a> <a href="/orcamento">Planeje seu evento</a> <a href="/como-funciona">Como funciona</a> <a href="/sobre">Quem somos</a> <a href="/para-profissionais">Sou profissional</a></nav>${contact}<h2>Gastronomia que conecta pessoas</h2>${cards}</main>`;
  return {html:template.replace(/<title>[\s\S]*?<\/title>/,'').replace(/<meta (?:name="(?:description|twitter:title|twitter:description)"|property="(?:og:title|og:description)")[^>]*>/g,'').replace('</head>',head+'</head>').replace(/<div id="root">[\s\S]*?<\/div>/,`<div id="root">${body}</div>`),status};
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ArrowUpRight, Check, CookingPot, Utensils, MapPin, Search, ShieldCheck, Handshake, ClipboardList, Sparkles, Users, ChevronDown } from 'lucide-react';
-import { professionals as examples, type Professional } from '@shared/catalog';
+import type { Professional } from '@shared/catalog';
 import { api } from '@/lib/api';
 import { useSite, Lines } from '@/lib/site';
 import ProfessionalCard from '@/components/ProfessionalCard';
@@ -19,7 +19,7 @@ export default function Home() {
   const [cityTouched, setCityTouched] = useState(false);
   useEffect(() => { if (!cityTouched) setCity(c('home.searchCity')); }, [c('home.searchCity'), cityTouched]);
   const catalog = useQuery({ queryKey: ['gastro-professionals'], queryFn: () => api<{ professionals: Professional[] }>('/professionals'), retry: false });
-  const showcase = (catalog.data?.professionals ?? (c('catalog.showDemo') === 'false' ? [] : examples)).slice(0, 3);
+  const showcase = (catalog.data?.professionals ?? site.demos).slice(0, 3);
   const hasDemo = showcase.some(p => p.demo);
   const note = c('home.note').split('\n');
   return <main>

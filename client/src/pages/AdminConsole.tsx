@@ -9,6 +9,7 @@ import { EVENT_TYPES } from '@shared/promotions';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validators';
 import { serviceCatalogFrom, serviceLabel, REQUEST_CATEGORIES, SERVICE_ICONS, type ServiceCategory, type ServiceIcon } from '@shared/services';
 import { useSite } from '@/lib/site';
+import { demosFrom, type DemoProfessional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
@@ -301,6 +302,42 @@ function ServiceCatalogEditor({ value, onChange }: { value: ServiceCategory[]; o
   </div>;
 }
 
+const safeDemos = (raw: string, values: Record<string, string>): DemoProfessional[] => {
+  try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return parsed; } catch { /* volta à lista salva */ }
+  return demosFrom(values);
+};
+
+/** Portfólios demonstrativos: adicionar, editar e excluir. */
+function DemoEditor({ value, categories, onChange }: { value: DemoProfessional[]; categories: ServiceCategory[]; onChange: (list: DemoProfessional[]) => void }) {
+  const set = (i: number, patch: Partial<DemoProfessional>) => onChange(value.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= value.length) return; const next = [...value]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+  const remove = (i: number) => { if (confirm(`Excluir o portfólio demonstrativo “${value[i].name || 'sem nome'}”?`)) onChange(value.filter((_, idx) => idx !== i)); };
+  const add = () => onChange([...value, { id: '', name: 'Novo portfólio', categoryId: categories[0]?.id ?? '', category: '', city: '', description: '', image: '', tags: [] }]);
+  return <div className="adm-svc">
+    <p className="adm-muted">Exemplos ilustrativos mostrados na página inicial e no catálogo (sempre com o selo “Portfólio ilustrativo”). Para escondê-los do site, use a aba <strong>Catálogo</strong>.</p>
+    {!value.length && <Empty text="Nenhum portfólio demonstrativo."/>}
+    {value.map((d, i) => <div className="adm-svc-card" key={d.id || `novo-${i}`}>
+      <div className="adm-svc-head">
+        <input className="adm-svc-name" value={d.name} aria-label="Nome do portfólio" placeholder="Nome (ex.: Ateliê da Mesa)" maxLength={100} onChange={e => set(i, { name: e.target.value })}/>
+        <div className="adm-row-actions">
+          <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Mover para cima">↑</button>
+          <button type="button" onClick={() => move(i, 1)} disabled={i === value.length - 1} aria-label="Mover para baixo">↓</button>
+          <button type="button" className="danger" onClick={() => remove(i)}><Trash2 size={14}/> Excluir</button>
+        </div>
+      </div>
+      <div className="adm-svc-grid">
+        <label className="adm-content-field"><span className="adm-content-label">Especialidade (linha acima do nome)</span><input value={d.category} maxLength={100} placeholder="Ex.: Italiana contemporânea" onChange={e => set(i, { category: e.target.value })}/></label>
+        <label className="adm-content-field"><span className="adm-content-label">Serviço</span><select value={d.categoryId} onChange={e => set(i, { categoryId: e.target.value })}><option value="">—</option>{categories.map(c => <option key={c.id || c.name} value={c.id}>{c.name}</option>)}</select></label>
+        <label className="adm-content-field"><span className="adm-content-label">Cidade</span><input value={d.city} maxLength={100} placeholder="Ex.: Campinas, SP" onChange={e => set(i, { city: e.target.value })}/></label>
+      </div>
+      <label className="adm-content-field"><span className="adm-content-label">Descrição</span><textarea rows={3} maxLength={1000} value={d.description} onChange={e => set(i, { description: e.target.value })}/></label>
+      <label className="adm-content-field"><span className="adm-content-label">Etiquetas (separadas por vírgula)</span><input value={d.tags.join(', ')} placeholder="Ex.: Chef executivo, Jantar em casa" onChange={e => set(i, { tags: e.target.value.split(',').map(t => t.trimStart()) })}/></label>
+      <div className="adm-content-field"><span className="adm-content-label">Foto de capa</span><ImagePicker value={d.image} onChange={url => set(i, { image: url })}/></div>
+    </div>)}
+    <button type="button" className="ob-btn ob-btn-primary adm-svc-new" onClick={add}><Plus size={16}/> Adicionar portfólio</button>
+  </div>;
+}
+
 function ContentSection() {
   const [fields, setFields] = useState<ContentField[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -329,6 +366,7 @@ function ContentSection() {
         {f.type === 'textarea' ? <textarea rows={f.key.startsWith('legal.') ? 14 : 3} value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })}/>
           : f.type === 'boolean' ? <label className="adm-switch"><input type="checkbox" checked={values[f.key] === 'true'} onChange={e => setValues({ ...values, [f.key]: e.target.checked ? 'true' : 'false' })}/> {values[f.key] === 'true' ? 'Ligado' : 'Desligado'}</label>
           : f.type === 'image' ? <ImagePicker value={values[f.key] ?? ''} onChange={url => setValues({ ...values, [f.key]: url })}/>
+          : f.type === 'demos' ? <DemoEditor value={values[f.key] ? safeDemos(values[f.key], values) : demosFrom(values)} categories={values['services.catalog'] ? safeCatalog(values['services.catalog'], values) : serviceCatalogFrom(values)} onChange={list => setValues({ ...values, [f.key]: JSON.stringify(list) })}/>
           : f.type === 'services' ? <ServiceCatalogEditor value={values[f.key] ? safeCatalog(values[f.key], values) : serviceCatalogFrom(values)} onChange={list => setValues({ ...values, [f.key]: JSON.stringify(list) })}/>
           : <input value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })} inputMode={f.type === 'url' ? 'url' : undefined}/>}
       </div>)}</div>

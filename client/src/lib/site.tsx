@@ -1,7 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { contentDefaults, type SiteContent } from '@shared/content';
-import { serviceCatalogFrom } from '@shared/services';
+import { findCategory, serviceCatalogFrom } from '@shared/services';
+import { demoProfessionals } from '@shared/catalog';
 import { businessDefaults, whatsappLink } from '@shared/business';
 import { api } from '@/lib/api';
 
@@ -20,6 +21,8 @@ export function useSite() {
     whatsappNumber,
     /** Categorias e profissões editáveis no painel (Serviços e capas). */
     serviceCatalog: serviceCatalogFrom(content),
+    /** Portfólios demonstrativos (reserva enquanto o catálogo da API carrega). */
+    demos: demoProfessionals(content, id => findCategory(serviceCatalogFrom(content), id)?.name),
     whatsappDisplay: c('contact.whatsappDisplay') || businessDefaults.whatsappDisplay,
     wa: (message?: string) => whatsappLink(message, whatsappNumber),
   };

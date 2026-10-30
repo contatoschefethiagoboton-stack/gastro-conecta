@@ -1,6 +1,6 @@
 import { dbConfigured, query } from "./db";
-import { professionals as catalogProfessionals, type Professional } from "../../shared/catalog";
-import { allServices } from "../../shared/services";
+import { demoProfessionals, type Professional } from "../../shared/catalog";
+import { allServices, findCategory } from "../../shared/services";
 import { getServiceCatalog, getSiteContent } from "./content";
 import { PROVIDER_SCHEMA_VERSION } from "./profiles";
 import { VISIBLE_SUBSCRIPTION_SQL } from "./subscriptions";
@@ -17,8 +17,9 @@ const NETWORK_LABELS: Record<string, string> = { instagram: "Instagram", faceboo
  */
 export async function loadProfessionals(): Promise<Professional[]> {
   const content = await getSiteContent();
-  // Capa dos portfólios demonstrativos pode ser trocada no painel (Fotos de capa).
-  const demos = content["catalog.showDemo"] === "false" ? [] : catalogProfessionals.map(p => (content[`cover.demo.${p.id}`] ? { ...p, image: content[`cover.demo.${p.id}`] } : p));
+  // Portfólios demonstrativos editáveis no painel (Serviços e capas).
+  const catalog = await getServiceCatalog();
+  const demos = demoProfessionals(content, id => findCategory(catalog, id)?.name);
   if (!dbConfigured()) return demos;
   let rows: any[] = [];
   try {
@@ -35,7 +36,6 @@ export async function loadProfessionals(): Promise<Professional[]> {
   } catch {
     return demos;
   }
-  const catalog = await getServiceCatalog();
   const known = allServices(catalog);
   const real = rows.flatMap(row => {
     let d: any = {};
