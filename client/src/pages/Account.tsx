@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSite } from "@/lib/site";
 import "../dashboard.css";
 
 type AccountMode = "login" | "register" | "forgot";
@@ -47,7 +48,9 @@ export default function Account() {
   const [email, setEmail] = useState("");
   const [city, setCity] = useState("");
   const [password, setPassword] = useState("");
-  const [accountType, setAccountType] = useState<AccountType>("client");
+  const [accountType, setAccountType] = useState<AccountType>(() => new URLSearchParams(window.location.search).get("cadastro") === "profissional" ? "provider" : "client");
+  const [serviceId, setServiceId] = useState("");
+  const { serviceCatalog } = useSite();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -87,6 +90,10 @@ export default function Account() {
       setErrorMessage("Escolha uma senha que cumpra todos os requisitos de segurança.");
       return;
     }
+    if (mode === "register" && accountType === "provider" && !serviceId) {
+      setErrorMessage("Escolha qual profissional você é.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -102,6 +109,7 @@ export default function Account() {
                 password,
                 accountType,
                 city: city.trim(),
+                ...(accountType === "provider" ? { serviceId } : {}),
               },
         ),
       });
@@ -230,15 +238,29 @@ export default function Account() {
                   <span>Quero participar como</span>
                   <select value={accountType} onChange={(event) => setAccountType(event.target.value as AccountType)}>
                     <option value="client">Cliente (quero contratar — grátis)</option>
-                    <option value="provider">Profissional (chef, garçom, barman, limpeza, jardinagem…)</option>
+                    <option value="provider">Profissional (quero oferecer meus serviços)</option>
                   </select>
                 </label>
               </div>
             )}
 
             {mode === "register" && accountType === "provider" && (
+              <label className="account-field">
+                <span>Qual profissional você é?</span>
+                <select required value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
+                  <option value="">Selecione a sua profissão</option>
+                  {serviceCatalog.map((category) => (
+                    <optgroup key={category.id} label={category.name}>
+                      {category.services.map((service) => <option key={service.id} value={service.id}>{service.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {mode === "register" && accountType === "provider" && (
               <p className="account-next-step">
-                Depois de criar o acesso, você completa o cadastro: CPF ou CNPJ (MEI ou Limitada), logo, foto do rosto, pelo menos 3 fotos de trabalhos anteriores e dados bancários/Pix. Após a aprovação, ative a assinatura mensal via Pix para aparecer no catálogo.
+                Depois de criar o acesso, você completa o cadastro (pode marcar outras profissões também): CPF ou CNPJ (MEI ou Limitada), logo, foto do rosto, pelo menos 3 fotos de trabalhos anteriores e dados bancários/Pix. Após a aprovação, ative a assinatura mensal via Pix para aparecer no catálogo.
               </p>
             )}
 

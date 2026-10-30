@@ -3,7 +3,8 @@ import { Camera, Check, ImagePlus, Loader2, Upload, X, Building2, UserRound, Lan
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile, type MediaKind } from '@/lib/upload';
-import { SERVICE_GROUPS, SERVICE_TYPES } from '@shared/services';
+import { allServices } from '@shared/services';
+import { useSite } from '@/lib/site';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone, isValidCEP, isValidCNPJ, isValidCPF, isValidHttpUrl, isValidPhoneBR, isValidPixKey, onlyDigits, PIX_KEY_TYPES, UFS, type PixKeyType } from '@shared/validators';
 import '../admin.css';
 
@@ -104,9 +105,10 @@ export default function Onboarding({ mode, onDone }: { mode: 'required' | 'edit'
   const [companyName, setCompanyName] = useState('');
   const [tradeName, setTradeName] = useState('');
   const [services, setServices] = useState<string[]>([]);
+  const { serviceCatalog } = useSite();
+  const knownServices = allServices(serviceCatalog);
   const [specialty, setSpecialty] = useState('');
   const [bio, setBio] = useState('');
-  const [priceFrom, setPriceFrom] = useState('');
   const [logo, setLogo] = useState<Media | null>(null);
   const [photos, setPhotos] = useState<Media[]>([]);
   const [bank, setBank] = useState<Bank>(emptyBank);
@@ -128,7 +130,7 @@ export default function Onboarding({ mode, onDone }: { mode: 'required' | 'edit'
       setCnpj(formatCNPJ(d.cnpj ?? '')); setCompanyName(d.companyName ?? ''); setTradeName(d.tradeName ?? '');
       if (d.companyType) setCompanyType(d.companyType);
       setServices(Array.isArray(d.services) ? d.services : []);
-      setSpecialty(d.specialty ?? ''); setBio(d.bio ?? d.experience ?? ''); setPriceFrom(d.priceFrom ? String(d.priceFrom) : '');
+      setSpecialty(d.specialty ?? ''); setBio(d.bio ?? d.experience ?? '');
       if (d.avatarMediaId && d.avatarUrl) setLogo({ id: d.avatarMediaId, url: d.avatarUrl });
       setPhotos(Array.isArray(d.serviceUrls) ? d.serviceUrls : []);
       if (d.bank) setBank({ ...emptyBank, ...d.bank, holderDocument: d.bank.holderDocument?.length === 14 ? formatCNPJ(d.bank.holderDocument) : formatCPF(d.bank.holderDocument ?? '') });
@@ -152,7 +154,7 @@ export default function Onboarding({ mode, onDone }: { mode: 'required' | 'edit'
         if (!isValidCNPJ(cnpj)) e.cnpj = 'CNPJ inválido';
         if (companyName.trim().length < 3) e.companyName = 'Informe a razão social';
       }
-      if (!services.length) e.services = 'Escolha pelo menos um serviço';
+      if (!services.some(id => knownServices.some(k => k.id === id))) e.services = 'Escolha pelo menos um serviço';
       if (specialty.trim().length < 2) e.specialty = 'Informe sua especialidade';
       if (bio.trim().length < 30) e.bio = 'Apresente seu trabalho (mínimo 30 caracteres)';
       if (!logo) e.logo = 'Envie sua logo ou foto de perfil';
@@ -177,7 +179,7 @@ export default function Onboarding({ mode, onDone }: { mode: 'required' | 'edit'
       const common = { fullName: fullName.trim(), phone, ...address, faceMediaId: face!.id };
       const payload = isClient
         ? { ...common, cpf }
-        : { ...common, documentType, cpf: documentType === 'cpf' ? cpf : '', cnpj: documentType === 'cnpj' ? cnpj : '', ...(documentType === 'cnpj' ? { companyType } : {}), companyName: companyName.trim(), tradeName: tradeName.trim(), services, specialty: specialty.trim(), bio: bio.trim(), priceFrom: Math.max(0, Math.round(Number(priceFrom.replace(',', '.')) || 0)), avatarMediaId: logo!.id, serviceMediaIds: photos.map(p => p.id), bank: { ...bank, holderName: bank.holderName.trim(), bankName: bank.bankName.trim(), agency: bank.agency.trim(), account: bank.account.trim(), pixKey: bank.pixKey.trim() }, socials, website: website.trim() };
+        : { ...common, documentType, cpf: documentType === 'cpf' ? cpf : '', cnpj: documentType === 'cnpj' ? cnpj : '', ...(documentType === 'cnpj' ? { companyType } : {}), companyName: companyName.trim(), tradeName: tradeName.trim(), services: services.filter(id => knownServices.some(k => k.id === id)), specialty: specialty.trim(), bio: bio.trim(), avatarMediaId: logo!.id, serviceMediaIds: photos.map(p => p.id), bank: { ...bank, holderName: bank.holderName.trim(), bankName: bank.bankName.trim(), agency: bank.agency.trim(), account: bank.account.trim(), pixKey: bank.pixKey.trim() }, socials, website: website.trim() };
       await api('/onboarding', { method: 'PUT', body: JSON.stringify(payload) });
       toast.success(isClient ? 'Dados salvos. Você já pode aceitar propostas.' : mode === 'required' ? 'Cadastro enviado! Agora é só aguardar a aprovação.' : 'Cadastro atualizado.');
       onDone?.();
@@ -234,12 +236,11 @@ export default function Onboarding({ mode, onDone }: { mode: 'required' | 'edit'
         </div>
       </Section>
       <Section icon={<MapPin size={18}/>} title="Endereço" hint="O endereço completo não aparece no site; só cidade e estado."><AddressFields value={address} onChange={setAddress} errors={errors}/></Section>
-      <Section icon={<BriefcaseBusiness size={18}/>} title="Serviços que você oferece">
-        {SERVICE_GROUPS.map(group => <div key={group} className="ob-service-group"><strong>{group}</strong><div className="ob-chips">{SERVICE_TYPES.filter(s => s.group === group).map(s => <button type="button" key={s.id} className={services.includes(s.id) ? 'is-on' : ''} onClick={() => toggleService(s.id)}>{services.includes(s.id) && <Check size={14}/>} {s.label}</button>)}</div></div>)}
+      <Section icon={<BriefcaseBusiness size={18}/>} title="Serviços que você oferece" hint="Marque exatamente o que você faz: você só recebe pedidos dessas profissões. Os valores são definidos em cada proposta.">
+        {serviceCatalog.map(group => <div key={group.id} className="ob-service-group"><strong>{group.name}</strong><div className="ob-chips">{group.services.map(s => <button type="button" key={s.id} className={services.includes(s.id) ? 'is-on' : ''} onClick={() => toggleService(s.id)}>{services.includes(s.id) && <Check size={14}/>} {s.label}</button>)}</div></div>)}
         {err('services')}
         <div className="ob-grid">
           <Input wide label="Especialidade" required value={specialty} onChange={setSpecialty} placeholder="Ex.: cozinha italiana, marmitas fit, limpeza pós-obra" error={errors.specialty}/>
-          <Input label="A partir de (R$, opcional)" value={priceFrom} onChange={v => setPriceFrom(v.replace(/[^\d,.]/g, ''))} inputMode="numeric" placeholder="Ex.: 150"/>
           <label className={`ob-field ob-wide ${errors.bio ? 'has-error' : ''}`}><span>Apresentação<i> *</i></span><textarea rows={4} maxLength={3000} value={bio} onChange={e => setBio(e.target.value)} placeholder="Conte sua experiência, estilo de trabalho e os serviços que você atende."/>{errors.bio && <small>{errors.bio}</small>}</label>
         </div>
       </Section>

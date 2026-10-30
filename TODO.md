@@ -32,3 +32,9 @@
 - [x] Esqueci minha senha, troca de senha no painel e link de redefinição gerado pelo admin; foto do rosto conferida pela administração.
 - [ ] Configurar no Render: MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, GASTRO_PUBLIC_ORIGIN, RESEND_API_KEY/MAIL_FROM e preço (GC_SUBSCRIPTION_PRICE_CENTS); cadastrar o webhook no Mercado Pago e confirmar que a conta tem Pix automático habilitado.
 - [ ] Revisão jurídica do modelo de contrato e da política de privacidade (foto do rosto/LGPD).
+
+## Serviços editáveis e orçamento dinâmico
+
+- [x] Painel → Textos do site → "Serviços e capas": criar, renomear, reordenar e excluir categorias de serviço e suas profissões, com foto de capa, ícone e forma de cálculo do valor.
+- [x] Cadastro: profissional escolhe a profissão exata ao criar a conta (lista vem do painel).
+- [x] Preços removidos dos cards e perfis; o valor é sugerido pela plataforma a partir do pedido do cliente. O profissional ajusta (±5%/±10% ou valor livre) e o cliente compara as propostas (menor valor primeiro).

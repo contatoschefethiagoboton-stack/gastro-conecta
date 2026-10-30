@@ -1,7 +1,7 @@
 import { dbConfigured, query } from "./db";
 import { professionals as catalogProfessionals, type Professional } from "../../shared/catalog";
-import { serviceById } from "../../shared/services";
-import { getSiteContent } from "./content";
+import { allServices } from "../../shared/services";
+import { getServiceCatalog, getSiteContent } from "./content";
 import { PROVIDER_SCHEMA_VERSION } from "./profiles";
 import { VISIBLE_SUBSCRIPTION_SQL } from "./subscriptions";
 import { isTopRated } from "./rules";
@@ -35,11 +35,13 @@ export async function loadProfessionals(): Promise<Professional[]> {
   } catch {
     return demos;
   }
+  const catalog = await getServiceCatalog();
+  const known = allServices(catalog);
   const real = rows.flatMap(row => {
     let d: any = {};
     try { d = JSON.parse(row.details ?? "{}"); } catch { d = {}; }
     if (d.schemaVersion !== PROVIDER_SCHEMA_VERSION) return [];
-    const services = (Array.isArray(d.services) ? d.services : []).map((id: string) => serviceById(id)).filter(Boolean);
+    const services = (Array.isArray(d.services) ? d.services : []).map((id: string) => known.find(s => s.id === id)).filter(Boolean) as typeof known;
     const specialty = typeof row.specialty === "string" ? row.specialty.trim() : "";
     const socials = d.socials && typeof d.socials === "object"
       ? Object.entries(d.socials as Record<string, string>).filter(([, url]) => typeof url === "string" && /^https?:\/\//.test(url)).map(([network, url]) => ({ network: NETWORK_LABELS[network] ?? network, url }))
@@ -49,14 +51,14 @@ export async function loadProfessionals(): Promise<Professional[]> {
     const professional: Professional = {
       id: `user-${Number(row.id)}`,
       name: String(d.tradeName || (d.documentType === "cnpj" ? d.companyName : "") || row.name || "Profissional GastroConecta"),
-      type: services[0]?.group ?? "Gastronomia",
+      type: services[0]?.group ?? "Profissional",
+      categoryIds: [...new Set(services.map(s => s.categoryId))],
       category: specialty || services[0]?.label || "Profissional",
       city: d.city && d.state ? `${d.city}, ${d.state}` : String(row.city ?? ""),
       description: String(row.bio ?? ""),
       image: mediaUrl(d.avatarMediaId),
-      price: Number(d.priceFrom ?? 0) || 0,
-      tags: services.slice(0, 4).map((s: any) => s.label),
-      services: services.map((s: any) => s.label),
+      tags: services.slice(0, 4).map(s => s.label),
+      services: services.map(s => s.label),
       featured: Boolean(row.featured),
       demo: false,
       rating: { average, count },

@@ -631,3 +631,11 @@
   .dash-category-grid { grid-template-columns: 1fr; }
   .cp-actions > * { flex: 1 1 100%; justify-content: center; }
 }
+/* Proposta: ajuste sobre o valor sugerido pela plataforma */
+.cp-adjust { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; border: 1px solid #f3cdbd; background: #fdf1ec; border-radius: 12px; padding: 12px 16px; }
+.cp-adjust > div:first-child { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; min-width: 220px; flex: 1 1 260px; }
+.cp-adjust strong { font-size: 18px; color: #c4471f; }
+.cp-adjust small { color: #6d6f66; }
+.cp-adjust-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.dash-suggested { display: inline-flex; flex-direction: column; align-items: flex-end; font-size: 11px; color: #787a70; line-height: 1.25; }
+.dash-best-price { display: inline-block; font-size: 11px; font-weight: 600; color: #2f5c3d; background: #eef6f0; border-radius: 99px; padding: 2px 8px; }

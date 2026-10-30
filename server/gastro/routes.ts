@@ -2,12 +2,14 @@ import { Router, type Express, type Request } from "express";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { HttpError } from "@shared/_core/errors";
-import { serviceMatchesRequest, type RequestCategory } from "@shared/services";
+import { findCategory, findService, serviceMatchesRequest, type RequestCategory } from "@shared/services";
+import { platformEstimateCents } from "@shared/copilot";
 import { conversionRate } from "@shared/copilot";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { ENV } from "../_core/env";
 import { execute, query, withTransaction } from "./db";
 import { loadProfessionals } from "./catalog";
+import { getServiceCatalog } from "./content";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { clearGcSession, createGcSession, createLocalUser, gcCookieOptions, getUserByEmail, isOwner, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AccountType, type AuthContext } from "./auth";
 import { calculateIntentScore, isoDate } from "./rules";
@@ -126,14 +128,21 @@ router.get("/me", wrap(async (req, res) => {
   } });
 }));
 
-const registerSchema = z.object({ name: z.string().trim().min(2).max(160), email: emailSchema, password: passwordSchema, accountType: accountTypeSchema, city: z.string().trim().min(2).max(160) });
+const registerSchema = z.object({ name: z.string().trim().min(2).max(160), email: emailSchema, password: passwordSchema, accountType: accountTypeSchema, city: z.string().trim().min(2).max(160), serviceId: z.string().trim().max(60).optional() });
 const loginSchema = z.object({ email: emailSchema, password: passwordSchema });
 
 router.post("/register", wrap(async (req, res) => {
   const input = body(req, registerSchema);
   limit(`login:${clientIp(req)}:${input.email.toLowerCase()}`, 8, 15 * 60_000);
   if (!passwordIsStrong(input.password)) throw new HttpError(400, "A senha deve ter 10 caracteres, maiúscula, minúscula, número e caractere especial");
+  // Profissional escolhe a profissão exata já no cadastro (lista editável no painel).
+  const service = input.accountType === "provider" ? findService(await getServiceCatalog(), input.serviceId) : undefined;
+  if (input.accountType === "provider" && !service) throw new HttpError(400, "Escolha qual profissional você é");
   const created = await createLocalUser(input);
+  if (service) {
+    await execute("INSERT INTO gc_profile_details (userId, details, completedAt) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE details = VALUES(details)", [created.user.id, JSON.stringify({ kind: "provider", services: [service.id] })]);
+    await execute("UPDATE account_profiles SET specialty = ? WHERE userId = ?", [service.label.slice(0, 160), created.user.id]);
+  }
   const token = await createGcSession(created.user.id);
   res.cookie("gc_session", token, gcCookieOptions(req));
   res.status(201).json({ user: publicUser({ user: created.user, profile: created.profile, source: "gastro" }) });
@@ -215,6 +224,7 @@ router.get("/events", wrap(async (req, res) => {
     return;
   }
   const services = await providerServices(me);
+  const catalog = await getServiceCatalog();
   // Radar: pedidos abertos compatíveis, não recusados, não exclusivos de outro profissional.
   const open = await query<any[]>(`SELECT e.*, (SELECT p.status FROM gastro_proposals p WHERE p.eventId = e.id AND p.providerId = ? LIMIT 1) myProposal
     FROM gastro_events e WHERE e.status = 'open' AND e.providerId IS NULL AND (e.preferredProviderId IS NULL OR e.preferredProviderId = ?)
@@ -229,7 +239,7 @@ router.get("/events", wrap(async (req, res) => {
     const previous = (history.get(Number(row.clientId)) ?? 0) - (row.status === "booked" || row.status === "completed" ? 1 : 0);
     return previous > 0 ? { clientTag: "Cliente Antigo" as const, clientPreviousEvents: previous } : { clientTag: "Cliente Novo" as const, clientPreviousEvents: 0 };
   };
-  const radar = open.filter(row => serviceMatchesRequest(services, (row.category ?? "event") as RequestCategory)).map(row => ({ ...mapEvent(row, false), ...tagClient(row), ...(row.myProposal ? { myProposal: row.myProposal } : {}) }));
+  const radar = open.filter(row => serviceMatchesRequest(services, (row.category ?? "event") as RequestCategory, catalog, json(row.details))).map(row => ({ ...mapEvent(row, false), ...tagClient(row), ...(row.myProposal ? { myProposal: row.myProposal } : {}) }));
   const own = [];
   for (const row of mine) {
     const { details } = await loadDetails(Number(row.clientId));
@@ -242,11 +252,12 @@ router.get("/events", wrap(async (req, res) => {
 const eventSchema = z.object({
   title: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(100), category: categorySchema.default("event"),
   date: dateSchema.optional(), time: timeSchema.optional(), city: z.string().trim().min(2).max(160), location: z.string().trim().max(240).optional(),
-  guests: z.number().int().min(1).max(100000), budgetCents: z.number().int().min(0).max(2_000_000_000), description: z.string().max(5000).optional(),
+  guests: z.number().int().min(1).max(100000), budgetCents: z.number().int().min(0).max(2_000_000_000).default(0), description: z.string().max(5000).optional(),
   stage: z.enum(["ready", "comparing", "research"]), professionalId: z.string().max(160).optional(), scope: z.enum(["labor", "full", "either"]).optional(),
   details: z.object({
     mealPlan: z.string().max(60).optional(), mealsPerWeek: z.number().int().min(1).max(200).optional(), weeks: z.number().int().min(1).max(52).optional(),
     areaM2: z.number().int().min(1).max(1_000_000).optional(), propertyKind: z.string().max(60).optional(), withAlcohol: z.boolean().optional(), restrictions: z.string().max(500).optional(),
+    serviceCategoryId: z.string().max(60).optional(), serviceId: z.string().max(60).optional(),
   }).strict().default({}),
 });
 
@@ -264,9 +275,20 @@ router.post("/events", wrap(async (req, res) => {
       if (!provider[0] || (await phaseFor(preferredProviderId)) === "blocked") throw new HttpError(400, "O profissional selecionado não está disponível");
     } else if (!input.professionalId.startsWith("demo-")) throw new HttpError(400, "Profissional selecionado inválido");
   }
+  // Categoria e profissão exata escolhidas pelo cliente; a categoria define a calculadora.
+  const catalog = await getServiceCatalog();
+  const wantedCategory = findCategory(catalog, input.details.serviceCategoryId);
+  const wantedService = wantedCategory ? findService(catalog, input.details.serviceId) : undefined;
+  const details: Record<string, unknown> = { ...input.details, serviceCategoryId: wantedCategory?.id, serviceId: wantedService?.categoryId === wantedCategory?.id ? wantedService?.id : undefined };
+  if (wantedCategory) { input.category = wantedCategory.calculator; details.serviceCategoryName = wantedCategory.name; }
+  if (details.serviceId && wantedService) details.serviceLabel = wantedService.label;
+  // O valor é sugerido pela plataforma a partir das informações do pedido (o cliente não precisa informar).
+  const suggestedCents = platformEstimateCents({ category: input.category, type: input.type, guests: input.guests, scope: input.scope, withAlcohol: input.details.withAlcohol, mealsPerWeek: input.details.mealsPerWeek, weeks: input.details.weeks, areaM2: input.details.areaM2, propertyKind: input.details.propertyKind, serviceLabel: wantedService && details.serviceId ? wantedService.label : undefined });
+  details.suggestedCents = suggestedCents;
+  if (!input.budgetCents) input.budgetCents = suggestedCents;
   const score = calculateIntentScore(input);
   const result = await execute("INSERT INTO gastro_events (clientId, preferredProviderId, title, type, category, eventDate, eventTime, city, location, guests, budgetCents, description, stage, score, scope, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [context.user.id, preferredProviderId, input.title, input.type, input.category, input.date ?? null, input.time ?? null, input.city, input.location ?? null, input.guests, input.budgetCents, input.description ?? null, input.stage, score, input.scope ?? null, JSON.stringify(input.details)]);
+    [context.user.id, preferredProviderId, input.title, input.type, input.category, input.date ?? null, input.time ?? null, input.city, input.location ?? null, input.guests, input.budgetCents, input.description ?? null, input.stage, score, input.scope ?? null, JSON.stringify(details)]);
   const rows = await query<any[]>("SELECT * FROM gastro_events WHERE id = ?", [result.insertId]);
   res.status(201).json({ event: mapEvent(rows[0]) });
 }));
@@ -584,7 +606,7 @@ export function copilotProvider() {
 async function callCopilot(history: Array<{ role: "user" | "assistant"; content: string }>, accountType: AccountType, catalog: Awaited<ReturnType<typeof loadProfessionals>>) {
   const { base, key, model } = copilotProvider();
   if (!base || !key) throw new HttpError(503, "Copilot indisponível: credencial de IA não configurada");
-  const catalogContext = catalog.slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, price: item.price, topRated: item.topRated, demo: item.demo }));
+  const catalogContext = catalog.slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, topRated: item.topRated, demo: item.demo }));
   const system = `Você é o Copilot do GastroConecta. Perfil atual: ${accountType === "provider" ? "profissional" : "cliente"}. Clientes usam a plataforma de graça; profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem) pagam só uma assinatura mensal fixa e recebem 100% do valor negociado, sem comissão. Ajude profissionais a calcular ingredientes, porções, brigada, custos de marmitas, limpeza e jardinagem, preço e margem; sempre lembre que os valores são estimativas editáveis. Ajude clientes a descrever pedidos e escolher profissionais do catálogo abaixo. Não exponha e-mails, documentos ou IDs internos. Portfólios demo são ilustrativos e não contratáveis. Não invente avaliações, disponibilidade ou garantias jurídicas. Catálogo: ${JSON.stringify(catalogContext)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);

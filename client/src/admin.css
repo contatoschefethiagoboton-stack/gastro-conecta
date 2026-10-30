@@ -252,3 +252,22 @@
 .adm-reset-link { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .adm-reset-link code { flex:1 1 220px; min-width:0; overflow-wrap:anywhere; background:#f5f1e9; border-radius:8px; font-size:11px; padding:8px; }
 .adm-reset-link button { display:inline-flex; align-items:center; gap:4px; border:1px solid #e7e3dc; border-radius:8px; background:#fff; padding:6px 10px; }
+
+/* Catálogo de serviços (Textos do site → Serviços e capas) */
+.adm-svc { display:flex; flex-direction:column; gap:14px; }
+.adm-svc-card { border:1px solid var(--ob-line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:14px; background:#fff; }
+.adm-svc-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.adm-svc-icon { width:40px; height:40px; min-width:40px; border-radius:10px; background:var(--ob-soft); display:grid; place-items:center; color:var(--ob-orange); }
+.adm-svc-name { flex:1 1 220px; min-height:44px; padding:10px 12px; border:1px solid var(--ob-line); border-radius:9px; font:600 15px 'Inter',sans-serif; color:var(--ob-ink); }
+.adm-svc-head .adm-row-actions button:disabled { opacity:.4; cursor:not-allowed; }
+.adm-svc-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap:12px; }
+.adm-svc-grid select, .adm-svc-add input, .adm-svc-chip input { min-height:44px; padding:10px 12px; border:1px solid var(--ob-line); border-radius:9px; background:#fff; font:14px 'Inter',sans-serif; color:var(--ob-ink); width:100%; }
+.adm-svc-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.adm-svc-chip { display:inline-flex; align-items:center; gap:2px; border:1px solid var(--ob-line); border-radius:99px; padding:2px 4px 2px 2px; background:var(--ob-soft); }
+.adm-svc-chip input { min-height:34px; border:0; background:transparent; width:auto; field-sizing:content; min-width:120px; padding:4px 10px; }
+.adm-svc-chip button { border:0; background:none; color:var(--ob-red); cursor:pointer; width:28px; height:28px; display:grid; place-items:center; border-radius:99px; }
+.adm-svc-add { display:flex; gap:8px; flex-wrap:wrap; }
+.adm-svc-add input { flex:1 1 220px; width:auto; }
+.adm-svc-warn { color:var(--ob-red); font-size:12.5px; }
+.adm-svc-new { align-self:flex-start; }
+@media (max-width: 720px) { .adm-svc-grid { grid-template-columns:minmax(0,1fr); } }

@@ -172,3 +172,63 @@ export function profitability(priceCents: number, costCents: number) {
 export function conversionRate(submitted: number, won: number): number {
   return submitted > 0 ? Math.round((won / submitted) * 1000) / 10 : 0;
 }
+
+// ------------------------------------------------------------------ valor sugerido pela plataforma
+
+/** Margem padrão usada na sugestão de valor para eventos (sobre o custo de equipe e insumos). */
+export const PLATFORM_EVENT_MARGIN = 30;
+
+/** Marmitas: horas de trabalho proporcionais ao tamanho do pacote (mínimo de 2h). */
+export const mealPrepInputFor = (meals: number): MealPrepInput => {
+  const total = Math.max(1, Math.floor(meals || 0));
+  return { ...MEAL_PREP_DEFAULTS, meals: total, laborHours: Math.max(2, Math.ceil(total * 0.4)) };
+};
+
+export type EstimateRequest = {
+  category: 'event' | 'mealPrep' | 'cleaning' | 'gardening';
+  type: string;
+  guests: number;
+  scope?: 'labor' | 'full' | 'either';
+  withAlcohol?: boolean;
+  mealsPerWeek?: number;
+  weeks?: number;
+  areaM2?: number;
+  propertyKind?: string;
+  /** Profissão exata pedida (rótulo). Se for uma função da brigada, só ela entra na conta. */
+  serviceLabel?: string;
+};
+
+/**
+ * Valor sugerido pela plataforma a partir das informações do pedido do cliente.
+ * O profissional vê essa sugestão ao montar a proposta e pode aumentar ou diminuir;
+ * o cliente compara as propostas recebidas e escolhe a melhor.
+ */
+export function platformEstimateCents(r: EstimateRequest): number {
+  if (r.category === 'mealPrep') return calculateMealPrep(mealPrepInputFor(Math.max(1, r.mealsPerWeek ?? 10) * Math.max(1, r.weeks ?? 1))).priceCents;
+  if (r.category === 'cleaning' || r.category === 'gardening') {
+    const rates = (r.category === 'cleaning' ? CLEANING_RATES : GARDEN_RATES) as Record<string, { m2PerHour: number; hourlyCents: number }>;
+    const kind = r.propertyKind && rates[r.propertyKind] ? r.propertyKind : r.type && rates[r.type] ? r.type : Object.keys(rates)[0];
+    return estimateAreaService(Math.max(1, r.areaM2 ?? 80), rates[kind]).totalCents;
+  }
+  const style = styleForEventType(r.type);
+  const withAlcohol = r.withAlcohol !== false;
+  let staff = estimateBrigade(r.guests, style, withAlcohol);
+  const role = r.serviceLabel ? staffRoleFor(r.serviceLabel) : null;
+  if (role) {
+    const only = staff.filter(s => s.role === role);
+    staff = only.length ? only : [{ role, count: 1, dailyCents: DEFAULT_DAILY_CENTS[role] ?? 15000 }];
+  }
+  const ingredients = r.scope === 'full' && !role ? itemsTotalCents(estimateIngredients(r.guests, style, withAlcohol)) : 0;
+  return Math.round((staffTotalCents(staff) + ingredients) * (1 + PLATFORM_EVENT_MARGIN / 100));
+}
+
+/** Função da brigada correspondente à profissão pedida (garçom, barman, cozinheiro…), se houver. */
+function staffRoleFor(label: string): string | null {
+  const t = label.toLowerCase();
+  if (/gar[cç]om|gar[cç]onete/.test(t)) return 'Garçom / garçonete';
+  if (/barman|bartender|bar\b/.test(t)) return 'Barman';
+  if (/auxiliar|ajudante/.test(t)) return 'Auxiliar de cozinha';
+  if (/churrasqueir/.test(t)) return 'Churrasqueiro';
+  if (/cozinheir/.test(t)) return 'Cozinheiro(a)';
+  return null;
+}

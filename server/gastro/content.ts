@@ -1,4 +1,5 @@
 import { contentDefaults, mergeContent, type SiteContent } from "@shared/content";
+import { serviceCatalogFrom, type ServiceCategory } from "@shared/services";
 import { dbConfigured, query } from "./db";
 
 let cache: { at: number; value: SiteContent } | null = null;
@@ -17,6 +18,11 @@ export async function getSiteContent(): Promise<SiteContent> {
   } catch {
     return { ...contentDefaults };
   }
+}
+
+/** Catálogo de serviços atual (editável no painel). */
+export async function getServiceCatalog(): Promise<ServiceCategory[]> {
+  return serviceCatalogFrom(await getSiteContent());
 }
 
 export function invalidateSiteContent() {

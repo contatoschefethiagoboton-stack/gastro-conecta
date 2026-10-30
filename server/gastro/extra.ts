@@ -8,13 +8,13 @@ import { EVENT_TYPES, isMonthDay, isPromotionActive, defaultPromotions, type Pro
 import { isValidCEP, isValidCNPJ, isValidCPF, isValidHttpUrl, isValidPhoneBR, isValidPixKey, isValidUF, normalizeSocial, onlyDigits, type PixKeyType } from "@shared/validators";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query, withTransaction } from "./db";
-import { getSiteContent, invalidateSiteContent } from "./content";
+import { getServiceCatalog, getSiteContent, invalidateSiteContent } from "./content";
 import { assertOwnedMedia, MEDIA_KINDS, MEDIA_RULES, mediaUrl, pruneProfileMedia, saveMedia, type MediaKind } from "./media";
 import { adminExists, consumeSetupCode, createOrPromoteAdmin, dbState, verifySetupCode } from "./bootstrap";
 import { createGcSession, gcCookieOptions, getUserByEmail, hashPassword, isOwner, normalizeEmail, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AuthContext } from "./auth";
 import { copilotProvider } from "./routes";
 import { clientContractDataComplete, loadDetails, PROVIDER_SCHEMA_VERSION, providerDetailsComplete } from "./profiles";
-import { SERVICE_IDS, SERVICE_TYPES } from "@shared/services";
+import { allServices, findService, normalizeServiceCatalog } from "@shared/services";
 import { subscriptionSummary } from "./subscriptions";
 
 const router = Router();
@@ -163,10 +163,9 @@ const providerSchema = z.object({
   fullName: text(5, 160, "Nome completo"),
   phone: phoneField,
   ...addressShape,
-  services: z.array(z.enum(SERVICE_IDS)).min(1, "Escolha pelo menos um serviço").max(SERVICE_IDS.length),
+  services: z.array(z.string().trim().min(1).max(60)).min(1, "Escolha pelo menos um serviço").max(60),
   specialty: text(2, 160, "Especialidade"),
   bio: text(30, 3000, "Apresentação"),
-  priceFrom: z.number().int().min(0).max(100000).default(0),
   avatarMediaId: mediaId,
   faceMediaId: mediaId,
   serviceMediaIds: z.array(mediaId).min(MIN_SERVICE_PHOTOS, `Envie pelo menos ${MIN_SERVICE_PHOTOS} fotos de trabalhos anteriores`).max(20, "Máximo de 20 fotos"),
@@ -236,6 +235,10 @@ router.put("/onboarding", wrap(async (req, res) => {
     keepMedia = [input.faceMediaId];
   } else {
     const input = parse(providerSchema, req.body);
+    // Só valem profissões que existem no catálogo atual (o admin pode ter excluído alguma).
+    const catalog = await getServiceCatalog();
+    input.services = [...new Set(input.services)].filter(id => findService(catalog, id));
+    if (!input.services.length) throw new HttpError(400, "Escolha pelo menos um serviço da lista");
     await assertOwnedMedia(context.user.id, [input.avatarMediaId], "avatar");
     await assertOwnedMedia(context.user.id, [input.faceMediaId], "face");
     await assertOwnedMedia(context.user.id, input.serviceMediaIds, "service");
@@ -247,7 +250,8 @@ router.put("/onboarding", wrap(async (req, res) => {
     await connection.execute("INSERT INTO gc_profile_details (userId, details, completedAt) VALUES (?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE details = VALUES(details), completedAt = COALESCE(completedAt, CURRENT_TIMESTAMP)", [context.user.id, JSON.stringify(details)]);
     const place = `${details.city} - ${details.state}`.slice(0, 160);
     if (type === "provider") {
-      const labels = (details.services as string[]).map(id => SERVICE_TYPES.find(s => s.id === id)?.label ?? id).join(", ");
+      const services = allServices(await getServiceCatalog());
+      const labels = (details.services as string[]).map(id => services.find(s => s.id === id)?.label ?? id).join(", ");
       await connection.execute("UPDATE account_profiles SET city = ?, bio = ?, specialty = ? WHERE userId = ?", [place, String(details.bio), (String(details.specialty) || labels).slice(0, 160), context.user.id]);
     } else {
       await connection.execute("UPDATE account_profiles SET city = ? WHERE userId = ?", [place, context.user.id]);
@@ -347,8 +351,13 @@ router.put("/admin/content", wrap(async (req, res) => {
   const input = body(req, z.object({ values: z.record(z.string(), z.string().max(MAX_CONTENT_LENGTH)) }));
   const entries = Object.entries(input.values).filter(([key]) => contentKeys.has(key));
   if (!entries.length) throw new HttpError(400, "Nada para salvar");
-  for (const [key, value] of entries) {
+  for (const entry of entries) {
+    const [key, value] = entry;
     const field = contentFields.find(f => f.key === key)!;
+    if (field.type === "services" && value) {
+      try { entry[1] = JSON.stringify(normalizeServiceCatalog(JSON.parse(value))); }
+      catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Catálogo de serviços inválido"); }
+    }
     if (field.type === "url" && value && !isValidHttpUrl(value)) throw new HttpError(400, `${field.label}: link inválido`);
     if (field.type === "boolean" && !["true", "false"].includes(value)) throw new HttpError(400, `${field.label}: valor inválido`);
     if (field.type === "image" && value && !/^(\/api\/gastro\/media\/\d+|\/img\/[\w.-]+|https:\/\/\S+)$/.test(value)) throw new HttpError(400, `${field.label}: imagem inválida`);
