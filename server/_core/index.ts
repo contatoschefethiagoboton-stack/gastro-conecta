@@ -11,6 +11,7 @@ import { registerGastroRoutes } from "../gastro/routes";
 import { registerExtraRoutes } from "../gastro/extra";
 import { bootstrapDatabase, dbState } from "../gastro/bootstrap";
 import { registerSubscriptionRoutes, startBillingScheduler } from "../gastro/subscriptions";
+import { registerGrowthRoutes } from "../gastro/growth";
 import { registerPasswordRoutes } from "../gastro/password";
 
 async function startServer() {
@@ -33,6 +34,7 @@ async function startServer() {
   registerSubscriptionRoutes(app);
   registerPasswordRoutes(app);
   registerExtraRoutes(app);
+  registerGrowthRoutes(app);
   registerGastroRoutes(app);
   // tRPC API
   app.use(

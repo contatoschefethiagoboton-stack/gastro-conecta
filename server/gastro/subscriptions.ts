@@ -12,7 +12,9 @@ import { dbConfigured, execute, query, withTransaction } from "./db";
 import { dbState } from "./bootstrap";
 import { isOwner, requireAuth, type AuthContext } from "./auth";
 import { SUBSCRIPTION_PRICE_CENTS } from "./rules";
-import { cancelPreapproval, createPixPayment, createPreapproval, getAuthorizedPayment, getPayment, getPreapproval, mpConfigured, verifyWebhookSignature } from "./mercadopago";
+import { cancelPreapproval, createPixPayment, createPreapproval, getAuthorizedPayment, getPayment, getPreapproval, mpConfigured, mpWebhookSecret, refreshMpSettings, verifyWebhookSignature } from "./mercadopago";
+import { parsePaymentReference, paymentDescription, paymentReference, subscriberCode } from "@shared/payments";
+import { promotionWindowEnd, type Promotion } from "@shared/promotions";
 
 const router = Router();
 const HOUR = 60 * 60 * 1000;
@@ -56,16 +58,26 @@ export async function applyApprovedPayment(paymentRowId: number) {
     const [payments] = await connection.execute<any[]>("SELECT * FROM gc_subscription_payments WHERE id = ? LIMIT 1 FOR UPDATE", [paymentRowId]);
     const payment = payments[0];
     if (!payment || payment.status === "approved") return;
+    if (payment.purpose === "promotion") {
+      // Adicional de promoção: libera o fornecedor na promoção até o fim da temporada.
+      const [promos] = await connection.execute<any[]>("SELECT * FROM gc_promotions WHERE id = ? LIMIT 1", [payment.promotionId]);
+      const promo = promos[0];
+      const until = promo ? promotionWindowEnd({ id: promo.id, active: true, start: promo.startMd, end: promo.endMd } as Promotion) : null;
+      await connection.execute("UPDATE gc_subscription_payments SET status = 'approved', approvedAt = CURRENT_TIMESTAMP WHERE id = ?", [paymentRowId]);
+      await connection.execute("INSERT INTO gc_promotion_participants (promotionId, userId, status, source, paymentId, validUntil) VALUES (?, ?, 'active', 'paid', ?, ?) ON DUPLICATE KEY UPDATE status = 'active', source = 'paid', paymentId = VALUES(paymentId), validUntil = VALUES(validUntil)", [payment.promotionId, payment.userId, paymentRowId, until ?? new Date(Date.now() + 30 * 24 * HOUR)]);
+      await connection.execute("UPDATE gc_subscription_payments SET status = 'cancelled' WHERE userId = ? AND purpose = 'promotion' AND promotionId = ? AND status = 'pending' AND id <> ?", [payment.userId, payment.promotionId, paymentRowId]);
+      return;
+    }
     await connection.execute("INSERT INTO gc_provider_subscriptions (userId, priceCents) VALUES (?, ?) ON DUPLICATE KEY UPDATE userId = userId", [payment.userId, SUBSCRIPTION_PRICE_CENTS]);
     const [subs] = await connection.execute<any[]>("SELECT periodEnd FROM gc_provider_subscriptions WHERE userId = ? FOR UPDATE", [payment.userId]);
     const end = nextPeriodEnd(asDate(subs[0]?.periodEnd));
     await connection.execute("UPDATE gc_subscription_payments SET status = 'approved', approvedAt = CURRENT_TIMESTAMP WHERE id = ?", [paymentRowId]);
     await connection.execute("UPDATE gc_provider_subscriptions SET periodEnd = ?, autoFailed = 0, autoAttemptedFor = NULL, lastPaidAt = CURRENT_TIMESTAMP WHERE userId = ?", [end, payment.userId]);
     // Pagamentos Pix manuais pendentes do mesmo ciclo deixam de valer.
-    await connection.execute("UPDATE gc_subscription_payments SET status = 'cancelled' WHERE userId = ? AND status = 'pending' AND id <> ?", [payment.userId, paymentRowId]);
+    await connection.execute("UPDATE gc_subscription_payments SET status = 'cancelled' WHERE userId = ? AND purpose = 'subscription' AND status = 'pending' AND id <> ?", [payment.userId, paymentRowId]);
   });
-  const rows = await query<any[]>("SELECT userId, method, amountCents FROM gc_subscription_payments WHERE id = ?", [paymentRowId]);
-  if (rows[0]) await audit(Number(rows[0].userId), "subscription.paid", { paymentId: paymentRowId, method: rows[0].method, amountCents: Number(rows[0].amountCents) }, Number(rows[0].userId));
+  const rows = await query<any[]>("SELECT userId, method, amountCents, purpose, promotionId FROM gc_subscription_payments WHERE id = ?", [paymentRowId]);
+  if (rows[0]) await audit(Number(rows[0].userId), rows[0].purpose === "promotion" ? "promotion.paid" : "subscription.paid", { paymentId: paymentRowId, method: rows[0].method, amountCents: Number(rows[0].amountCents), ...(rows[0].promotionId ? { promotionId: Number(rows[0].promotionId) } : {}) }, Number(rows[0].userId));
 }
 
 const MP_FINAL_FAIL = new Set(["rejected", "cancelled", "refunded", "charged_back", "expired"]);
@@ -75,11 +87,11 @@ export async function syncMpPayment(mpPaymentId: string | number) {
   const payment = await getPayment(mpPaymentId);
   let rows = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE mpPaymentId = ? LIMIT 1", [String(payment.id)]);
   if (!rows[0]) {
-    // Cobrança gerada pelo Pix recorrente: external_reference "gcsub-auto:<userId>".
-    const match = /^gcsub(?:-auto)?:(\d+)/.exec(payment.external_reference ?? "");
-    if (!match) return;
-    const userId = Number(match[1]);
-    await execute("INSERT INTO gc_subscription_payments (userId, method, status, amountCents, mpPaymentId) VALUES (?, 'pix_auto', 'pending', ?, ?)", [userId, Math.round(Number(payment.transaction_amount ?? 0) * 100), String(payment.id)]);
+    // Cobrança gerada pelo Pix recorrente (referência GASTROCONECTA-ASSINATURA-AUTO-U<id>). Pagamentos de outras plataformas da mesma conta são ignorados.
+    const ref = parsePaymentReference(payment.external_reference);
+    if (!ref || ref.kind === "PROMOCAO") return;
+    const userId = ref.userId;
+    await execute("INSERT INTO gc_subscription_payments (userId, method, status, amountCents, mpPaymentId, reference) VALUES (?, 'pix_auto', 'pending', ?, ?, ?)", [userId, Math.round(Number(payment.transaction_amount ?? 0) * 100), String(payment.id), String(payment.external_reference ?? "").slice(0, 120)]);
     rows = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE mpPaymentId = ? LIMIT 1", [String(payment.id)]);
   }
   const row = rows[0];
@@ -89,13 +101,14 @@ export async function syncMpPayment(mpPaymentId: string | number) {
     await applyApprovedPayment(Number(row.id));
   } else if (MP_FINAL_FAIL.has(payment.status) && row.status === "pending") {
     await execute("UPDATE gc_subscription_payments SET status = ? WHERE id = ?", [payment.status === "expired" ? "expired" : "rejected", row.id]);
-    if (row.method === "pix_auto") await execute("UPDATE gc_provider_subscriptions SET autoFailed = 1 WHERE userId = ?", [row.userId]);
+    if (row.method === "pix_auto" && row.purpose !== "promotion") await execute("UPDATE gc_provider_subscriptions SET autoFailed = 1 WHERE userId = ?", [row.userId]);
   }
 }
 
 /** Rotina periódica: agenda/avalia a renovação automática e libera o Pix manual. */
 export async function runBillingCycle(now = new Date()) {
   if (!dbConfigured() || !dbState.ready) return;
+  await refreshMpSettings();
   const windowEnd = new Date(now.getTime() + 5 * 24 * HOUR);
   const due = await query<any[]>("SELECT * FROM gc_provider_subscriptions WHERE periodEnd IS NOT NULL AND periodEnd > ? AND periodEnd <= ?", [now, windowEnd]);
   for (const raw of due) {
@@ -132,12 +145,12 @@ export function startBillingScheduler() {
   timer.unref();
 }
 
-function publicOrigin(req: Request) {
+export function publicOrigin(req: Request) {
   const configured = process.env.GASTRO_PUBLIC_ORIGIN;
   if (configured && /^https:\/\//.test(configured)) return configured.replace(/\/+$/, "");
   return `${req.protocol}://${req.get("host")}`;
 }
-const webhookUrl = (req: Request) => {
+export const webhookUrl = (req: Request) => {
   const origin = publicOrigin(req);
   return /^https:\/\//.test(origin) ? `${origin}/api/gastro/webhooks/mercadopago` : undefined;
 };
@@ -156,8 +169,8 @@ function mapPayment(row: any) {
 export async function subscriptionSummary(userId: number) {
   const sub = await getSubscription(userId);
   const phase = subscriptionPhase({ periodEnd: sub?.periodEnd ?? null, autoFailed: Boolean(sub?.autoFailed) });
-  const pendingRows = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? AND method = 'pix_manual' AND status = 'pending' AND (expiresAt IS NULL OR expiresAt > CURRENT_TIMESTAMP) ORDER BY id DESC LIMIT 1", [userId]);
-  const history = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? ORDER BY id DESC LIMIT 24", [userId]);
+  const pendingRows = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? AND purpose = 'subscription' AND method = 'pix_manual' AND status = 'pending' AND (expiresAt IS NULL OR expiresAt > CURRENT_TIMESTAMP) ORDER BY id DESC LIMIT 1", [userId]);
+  const history = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? AND purpose = 'subscription' ORDER BY id DESC LIMIT 24", [userId]);
   const pending = pendingRows[0];
   return {
     priceCents: SUBSCRIPTION_PRICE_CENTS,
@@ -170,6 +183,7 @@ export async function subscriptionSummary(userId: number) {
     pendingPix: pending ? { id: Number(pending.id), qrCode: pending.qrCode ?? "", qrCodeBase64: pending.qrCodeBase64 ?? "", ticketUrl: pending.ticketUrl ?? "", expiresAt: pending.expiresAt ? new Date(pending.expiresAt).toISOString() : null } : null,
     history: history.map(mapPayment),
     paymentsConfigured: mpConfigured(),
+    subscriberCode: subscriberCode(userId),
   };
 }
 
@@ -178,7 +192,7 @@ export async function subscriptionSummary(userId: number) {
 router.post("/webhooks/mercadopago", wrap(async (req, res) => {
   const type = String(req.query.type ?? req.query.topic ?? req.body?.type ?? req.body?.topic ?? "");
   const dataId = String(req.query["data.id"] ?? req.body?.data?.id ?? req.query.id ?? "");
-  if (process.env.MP_WEBHOOK_SECRET && !verifyWebhookSignature({ signature: req.get("x-signature") ?? undefined, requestId: req.get("x-request-id") ?? undefined, dataId })) {
+  if (mpWebhookSecret() && !verifyWebhookSignature({ signature: req.get("x-signature") ?? undefined, requestId: req.get("x-request-id") ?? undefined, dataId })) {
     throw new HttpError(401, "Assinatura do webhook inválida");
   }
   res.status(200).json({ ok: true });
@@ -217,8 +231,10 @@ router.post("/subscription/pix", wrap(async (req, res) => {
   const expiresAt = new Date(Date.now() + 24 * HOUR);
   const result = await execute("INSERT INTO gc_subscription_payments (userId, method, status, amountCents, expiresAt) VALUES (?, 'pix_manual', 'pending', ?, ?)", [context.user.id, SUBSCRIPTION_PRICE_CENTS, expiresAt]);
   const rowId = Number(result.insertId);
+  const reference = paymentReference("ASSINATURA", context.user.id, rowId);
+  await execute("UPDATE gc_subscription_payments SET reference = ? WHERE id = ?", [reference, rowId]);
   try {
-    const payment = await createPixPayment({ amountCents: SUBSCRIPTION_PRICE_CENTS, description: "Assinatura mensal GastroConecta", payerEmail: context.user.email ?? "", externalReference: `gcsub:${context.user.id}:${rowId}`, expiresAt, notificationUrl: webhookUrl(req) });
+    const payment = await createPixPayment({ amountCents: SUBSCRIPTION_PRICE_CENTS, description: paymentDescription("ASSINATURA", context.user.id, context.user.name ?? ""), payerEmail: context.user.email ?? "", externalReference: reference, expiresAt, notificationUrl: webhookUrl(req), metadata: { assinante_id: context.user.id, codigo_assinante: subscriberCode(context.user.id), tipo: "assinatura" } });
     const data = payment.point_of_interaction?.transaction_data ?? {};
     await execute("UPDATE gc_subscription_payments SET mpPaymentId = ?, qrCode = ?, qrCodeBase64 = ?, ticketUrl = ? WHERE id = ?", [String(payment.id), data.qr_code ?? null, data.qr_code_base64 ?? null, (data.ticket_url ?? "").slice(0, 500) || null, rowId]);
   } catch (error) {
@@ -243,7 +259,7 @@ router.post("/subscription/auto", wrap(async (req, res) => {
   const sub = await getSubscription(context.user.id);
   const attemptAt = sub?.periodEnd ? renewalAttemptAt(sub.periodEnd) : null;
   const startDate = attemptAt && attemptAt.getTime() > Date.now() + 60_000 ? attemptAt : new Date(Date.now() + 5 * 60_000);
-  const pre = await createPreapproval({ amountCents: SUBSCRIPTION_PRICE_CENTS, reason: "Assinatura mensal GastroConecta (Pix automático)", payerEmail: context.user.email ?? "", externalReference: `gcsub-auto:${context.user.id}`, startDate, backUrl: `${publicOrigin(req)}/painel`, notificationUrl: webhookUrl(req) });
+  const pre = await createPreapproval({ amountCents: SUBSCRIPTION_PRICE_CENTS, reason: paymentDescription("ASSINATURA-AUTO", context.user.id, context.user.name ?? "").slice(0, 120), payerEmail: context.user.email ?? "", externalReference: paymentReference("ASSINATURA-AUTO", context.user.id), startDate, backUrl: `${publicOrigin(req)}/painel`, notificationUrl: webhookUrl(req) });
   await execute("UPDATE gc_provider_subscriptions SET mpPreapprovalId = ?, mpPreapprovalStatus = ? WHERE userId = ?", [pre.id, pre.status, context.user.id]);
   await audit(context.user.id, "subscription.auto_requested", { preapprovalId: pre.id }, context.user.id);
   res.status(201).json({ initPoint: pre.init_point ?? "" });

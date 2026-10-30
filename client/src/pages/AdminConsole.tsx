@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, X } from 'lucide-react';
+import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
@@ -13,9 +13,9 @@ import { demosFrom, type DemoProfessional, type Professional } from '@shared/cat
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
-type Section = 'overview' | 'users' | 'subscriptions' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
+type Section = 'overview' | 'users' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
 type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string };
-type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; runningNow?: boolean };
+type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
 type Benefit = { id: number; userId: number; userName?: string; userEmail?: string; kind: string; title: string; description: string; amountCents: number; percent: number; expiresAt: string | null; active: boolean; createdAt: string };
 type Media = { id: number; kind: string; filename: string; size: number; url: string; createdAt: string };
 
@@ -23,6 +23,7 @@ const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'users', label: 'Usuários e aprovações', icon: Users },
   { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard },
+  { id: 'payments', label: 'Pagamentos (Mercado Pago)', icon: Wallet },
   { id: 'contracts', label: 'Contratos (auditoria)', icon: FileSignature },
   { id: 'content', label: 'Textos do site', icon: PenLine },
   { id: 'media', label: 'Imagens', icon: ImageIcon },
@@ -68,6 +69,7 @@ export default function AdminConsole() {
           {section === 'overview' && <Overview go={go}/>}
           {section === 'users' && <UsersSection/>}
           {section === 'subscriptions' && <SubscriptionsSection/>}
+          {section === 'payments' && <PaymentsSection/>}
           {section === 'contracts' && <ContractsSection/>}
           {section === 'content' && <ContentSection/>}
           {section === 'media' && <MediaSection/>}
@@ -163,6 +165,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
         </div>
         {u.accountType === 'provider' && !data.profileComplete && <p className="adm-alert">Este profissional ainda não completou o cadastro obrigatório (logo, foto do rosto, fotos de trabalhos, documento e Pix). A aprovação fica bloqueada até lá.</p>}
         <ResetLink userId={u.id} disabled={u.role === 'admin'}/>
+        {u.accountType === 'provider' && <ProviderGrowth userId={u.id}/>}
         <div className="adm-section-title">Conta</div>
         <Field label="E-mail" value={u.email}/><Field label="Cidade" value={u.city}/><Field label="Criado em" value={new Date(u.createdAt).toLocaleString('pt-BR')}/>
         {d && <>
@@ -421,7 +424,7 @@ function MediaSection() {
   </div>;
 }
 
-const emptyPromo = { badge: '', title: '', text: '', cta: 'Quero saber mais', whatsappMessage: 'Olá! Vi a promoção no site e quero saber mais.', eventType: '', imageUrl: '', start: '01-01', end: '12-31', active: true, sortOrder: 0 };
+const emptyPromo = { badge: '', title: '', text: '', cta: 'Ver fornecedores', whatsappMessage: '', eventType: '', imageUrl: '', start: '01-01', end: '12-31', active: true, sortOrder: 0, providerFeeCents: 0 };
 
 function PromotionsSection() {
   const [list, setList] = useState<Promo[] | null>(null);
@@ -429,7 +432,7 @@ function PromotionsSection() {
   const [busy, setBusy] = useState(false);
   const load = () => api<{ promotions: Promo[] }>('/admin/promotions').then(r => setList(r.promotions)).catch(e => toast.error(errText(e)));
   useEffect(() => { void load(); }, []);
-  const toPayload = (p: typeof emptyPromo) => ({ ...p, eventType: p.eventType || null, imageUrl: p.imageUrl || null, sortOrder: Number(p.sortOrder) || 0 });
+  const toPayload = (p: typeof emptyPromo) => ({ ...p, eventType: p.eventType || null, imageUrl: p.imageUrl || null, sortOrder: Number(p.sortOrder) || 0, providerFeeCents: Math.max(0, Math.round(Number(p.providerFeeCents) || 0)) });
   const save = async () => {
     if (!editing) return;
     setBusy(true);
@@ -447,11 +450,11 @@ function PromotionsSection() {
   const md = (v: string) => v.split('-').reverse().join('/');
   return <div className="adm-stack">
     <Card title="Promoções da página inicial" action={<button type="button" className="ob-btn ob-btn-primary" onClick={() => setEditing({ ...emptyPromo })}><Plus size={16}/> Nova promoção</button>}>
-      <p className="adm-muted">Cada promoção aparece sozinha no período escolhido (todo ano). Promoções desligadas não aparecem.</p>
+      <p className="adm-muted">Cada promoção aparece sozinha no período escolhido (todo ano). Quando o cliente clica, vê os fornecedores participantes e escolhe com quem fechar. Fornecedores nível ALTO entram pagando o adicional que você define; VIPs entram sem pagar.</p>
       {!list ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhuma promoção cadastrada."/> :
         <div className="adm-list">{list.map(p => <div className="adm-row adm-row-static" key={p.id}>
           {p.imageUrl ? <img className="adm-row-thumb" src={p.imageUrl} alt=""/> : <span className="adm-row-thumb"><Megaphone size={18}/></span>}
-          <div className="adm-row-main"><strong>{p.title}</strong><span>{p.badge} · {md(p.start)} a {md(p.end)}</span></div>
+          <div className="adm-row-main"><strong>{p.title}</strong><span>{p.badge} · {md(p.start)} a {md(p.end)} · adicional do fornecedor {p.providerFeeCents ? brl(p.providerFeeCents) : 'grátis'}</span></div>
           <div className="adm-row-tags">{p.runningNow && <span className="adm-tag adm-ok">No ar agora</span>}<span className={`adm-tag ${p.active ? '' : 'adm-warn'}`}>{p.active ? 'Ligada' : 'Desligada'}</span></div>
           <div className="adm-row-actions"><button type="button" onClick={() => void toggle(p)}>{p.active ? 'Desligar' : 'Ligar'}</button><button type="button" onClick={() => setEditing({ ...emptyPromo, ...p, eventType: p.eventType ?? '', imageUrl: p.imageUrl ?? '' })}>Editar</button><button type="button" className="danger" onClick={() => void remove(p)} aria-label="Apagar"><Trash2 size={15}/></button></div>
         </div>)}</div>}
@@ -467,16 +470,132 @@ function PromotionsSection() {
           <label className="ob-field ob-wide"><span>Texto</span><textarea rows={3} value={editing.text} onChange={e => setEditing({ ...editing, text: e.target.value })}/></label>
           <label className="ob-field"><span>Texto do botão</span><input value={editing.cta} onChange={e => setEditing({ ...editing, cta: e.target.value })}/></label>
           <label className="ob-field"><span>Ocasião no orçamento</span><select value={editing.eventType} onChange={e => setEditing({ ...editing, eventType: e.target.value })}><option value="">Nenhuma</option>{EVENT_TYPES.map(t => <option key={t}>{t}</option>)}</select></label>
-          <label className="ob-field ob-wide"><span>Mensagem que chega no WhatsApp</span><textarea rows={2} value={editing.whatsappMessage} onChange={e => setEditing({ ...editing, whatsappMessage: e.target.value })}/></label>
+          <label className="ob-field"><span>Adicional para o fornecedor participar (R$)</span><input inputMode="decimal" value={String((editing.providerFeeCents ?? 0) / 100).replace('.', ',')} onChange={e => setEditing({ ...editing, providerFeeCents: Math.round((Number(e.target.value.replace(/\./g, '').replace(',', '.')) || 0) * 100) })} placeholder="0,00"/><small className="adm-muted">0 = sem custo. Esse valor aparece para o fornecedor no painel dele.</small></label>
           <label className="ob-field"><span>Começa em (dia/mês)</span><input type="text" inputMode="numeric" value={md(editing.start)} onChange={e => { const [d = '', m = ''] = e.target.value.split('/'); setEditing({ ...editing, start: `${m.padStart(2, '0').slice(0, 2)}-${d.padStart(2, '0').slice(0, 2)}` }); }} placeholder="01/11"/></label>
           <label className="ob-field"><span>Termina em (dia/mês)</span><input type="text" inputMode="numeric" value={md(editing.end)} onChange={e => { const [d = '', m = ''] = e.target.value.split('/'); setEditing({ ...editing, end: `${m.padStart(2, '0').slice(0, 2)}-${d.padStart(2, '0').slice(0, 2)}` }); }} placeholder="06/01"/></label>
           <label className="ob-field"><span>Ordem</span><input type="number" min={0} value={editing.sortOrder} onChange={e => setEditing({ ...editing, sortOrder: Number(e.target.value) })}/></label>
           <label className="adm-switch"><input type="checkbox" checked={editing.active} onChange={e => setEditing({ ...editing, active: e.target.checked })}/> Promoção ligada</label>
         </div>
         <button type="button" className="ob-btn ob-btn-primary adm-full" disabled={busy} onClick={() => void save()}>{busy ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar promoção</button>
+        {editing.id ? <PromoParticipants promotionId={editing.id}/> : <p className="adm-muted">Salve a promoção para incluir fornecedores.</p>}
       </div>
     </div></div>}
   </div>;
+}
+
+const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+type Participant = { userId: number; name: string; email: string; source: string; validUntil: string | null; code: string };
+const SOURCE_LABEL: Record<string, string> = { paid: 'Pagou o adicional', admin: 'Incluído por você (VIP)', vip: 'VIP', free: 'Sem custo' };
+
+/** Fornecedores de uma promoção: incluir (VIP, sem cobrança) ou remover. */
+function PromoParticipants({ promotionId }: { promotionId: number }) {
+  const [data, setData] = useState<{ participants: Participant[]; providers: Array<{ id: number; name: string; email: string; promoVip: boolean }> } | null>(null);
+  const [pick, setPick] = useState('');
+  const load = () => api<NonNullable<typeof data>>(`/admin/promotions/${promotionId}/participants`).then(setData).catch(e => toast.error(errText(e)));
+  useEffect(() => { void load(); }, [promotionId]);
+  const add = async () => { if (!pick) return; try { await api(`/admin/promotions/${promotionId}/participants`, { method: 'POST', body: JSON.stringify({ userId: Number(pick) }) }); setPick(''); toast.success('Fornecedor incluído na promoção.'); await load(); } catch (e) { toast.error(errText(e)); } };
+  const remove = async (p: Participant) => { if (!confirm(`Tirar ${p.name} desta promoção?`)) return; try { await api(`/admin/promotions/${promotionId}/participants/${p.userId}`, { method: 'DELETE' }); await load(); } catch (e) { toast.error(errText(e)); } };
+  if (!data) return <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div>;
+  const inList = new Set(data.participants.map(p => p.userId));
+  return <div className="adm-promo-participants">
+    <div className="adm-section-title">Fornecedores nesta promoção ({data.participants.length})</div>
+    {!data.participants.length ? <Empty text="Nenhum fornecedor participando ainda."/> : <div className="adm-list">{data.participants.map(p => <div className="adm-row adm-row-static" key={p.userId}>
+      <div className="adm-row-main"><strong>{p.name}</strong><span>{p.code} · {p.email}{p.validUntil ? ` · até ${new Date(p.validUntil).toLocaleDateString('pt-BR')}` : ''}</span></div>
+      <div className="adm-row-tags"><span className={`adm-tag ${p.source === 'paid' ? 'adm-ok' : 'adm-vip'}`}>{SOURCE_LABEL[p.source] ?? p.source}</span></div>
+      <div className="adm-row-actions"><button type="button" className="danger" onClick={() => void remove(p)} aria-label="Remover"><Trash2 size={15}/></button></div>
+    </div>)}</div>}
+    <div className="adm-svc-add"><select value={pick} onChange={e => setPick(e.target.value)} aria-label="Fornecedor"><option value="">Incluir fornecedor sem cobrança (VIP)…</option>{data.providers.filter(p => !inList.has(p.id)).map(p => <option key={p.id} value={p.id}>{p.name} — {p.email}{p.promoVip ? ' (VIP)' : ''}</option>)}</select><button type="button" className="ob-btn ob-btn-outline" disabled={!pick} onClick={() => void add()}><Plus size={16}/> Incluir</button></div>
+  </div>;
+}
+
+type Payment = { id: number; userId: number; code: string; name: string; email: string; kind: string; status: string; amountCents: number; mpPaymentId: string; reference: string; createdAt: string; approvedAt: string | null };
+type MpStatus = { accessToken: { configured: boolean; source: string; hint: string; test: boolean }; webhookSecret: { configured: boolean; source: string; hint: string }; descriptor: string; webhookUrl: string };
+const PAY_STATUS: Record<string, string> = { approved: 'Pago', pending: 'Aguardando', rejected: 'Recusado', expired: 'Expirado', cancelled: 'Cancelado' };
+
+/** Chaves do Mercado Pago e pagamentos recebidos pelo site (com a referência que aparece no extrato). */
+function PaymentsSection() {
+  const [status, setStatus] = useState<MpStatus | null>(null);
+  const [form, setForm] = useState({ accessToken: '', webhookSecret: '', descriptor: '' });
+  const [busy, setBusy] = useState('');
+  const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [filter, setFilter] = useState('');
+  useEffect(() => {
+    api<MpStatus>('/admin/payments/settings').then(r => { setStatus(r); setForm(f => ({ ...f, descriptor: r.descriptor })); }).catch(e => toast.error(errText(e)));
+    api<{ payments: Payment[] }>('/admin/payments').then(r => setPayments(r.payments)).catch(e => toast.error(errText(e)));
+  }, []);
+  const save = async (patch: Partial<typeof form>, label: string) => {
+    setBusy(label);
+    try { const r = await api<MpStatus>('/admin/payments/settings', { method: 'PUT', body: JSON.stringify(patch) }); setStatus(r); setForm({ accessToken: '', webhookSecret: '', descriptor: r.descriptor }); toast.success('Chaves salvas.'); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(''); }
+  };
+  const test = async () => {
+    setBusy('test');
+    try { const r = await api<{ account: { id: number; nickname: string; email: string } }>('/admin/payments/test', { method: 'POST' }); toast.success(`Conectado à conta ${r.account.nickname || r.account.email || r.account.id}.`); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(''); }
+  };
+  const copy = async (text: string) => { try { await navigator.clipboard.writeText(text); toast.success('Copiado.'); } catch { toast.error('Não foi possível copiar.'); } };
+  const q = filter.trim().toLowerCase();
+  const list = (payments ?? []).filter(p => !q || `${p.code} ${p.name} ${p.email} ${p.reference} ${p.mpPaymentId} ${p.kind}`.toLowerCase().includes(q));
+  const csv = () => {
+    const rows = [['Data', 'Código do assinante', 'Nome', 'E-mail', 'Tipo', 'Valor (R$)', 'Situação', 'ID no Mercado Pago', 'Referência externa'], ...list.map(p => [new Date(p.createdAt).toLocaleString('pt-BR'), p.code, p.name, p.email, p.kind, (p.amountCents / 100).toFixed(2).replace('.', ','), PAY_STATUS[p.status] ?? p.status, p.mpPaymentId, p.reference])];
+    const text = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = `pagamentos-gastroconecta-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+  const keyState = (k: { configured: boolean; source: string; hint: string }) => k.configured ? <span className="adm-tag adm-ok">Cadastrada {k.hint}{k.source === 'render' ? ' (variável do Render)' : ''}</span> : <span className="adm-tag adm-warn">Não cadastrada</span>;
+  return <div className="adm-stack">
+    <Card title="Chaves do Mercado Pago" action={status?.accessToken.configured ? <button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'test'} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="ob-spin" size={16}/> : <PlugZap size={16}/>} Testar conexão</button> : undefined}>
+      {!status ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : <div className="adm-content-fields">
+        <p className="adm-muted">Pegue as chaves em <strong>Mercado Pago → Seu negócio → Configurações → Suas integrações → Credenciais de produção</strong>. Por segurança, a chave salva nunca é mostrada de novo (só os 4 últimos caracteres).</p>
+        {status.accessToken.test && <p className="adm-alert">Você está usando uma chave de TESTE (TEST-…). Pagamentos reais só funcionam com a chave de produção (APP_USR-…).</p>}
+        <div className="adm-content-field"><div className="adm-content-label"><span>Access Token (produção)</span>{keyState(status.accessToken)}</div>
+          <div className="adm-svc-add"><input type="password" autoComplete="off" value={form.accessToken} placeholder="APP_USR-…" onChange={e => setForm({ ...form, accessToken: e.target.value })}/><button type="button" className="ob-btn ob-btn-primary" disabled={!form.accessToken || busy === 'token'} onClick={() => void save({ accessToken: form.accessToken.trim() }, 'token')}>{busy === 'token' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar</button>{status.accessToken.source === 'painel' && <button type="button" className="ob-btn ob-btn-danger" onClick={() => { if (confirm('Remover o Access Token salvo no painel?')) void save({ accessToken: '' }, 'token'); }}>Remover</button>}</div></div>
+        <div className="adm-content-field"><div className="adm-content-label"><span>Assinatura secreta do webhook</span>{keyState(status.webhookSecret)}</div>
+          <div className="adm-svc-add"><input type="password" autoComplete="off" value={form.webhookSecret} placeholder="Chave secreta das notificações" onChange={e => setForm({ ...form, webhookSecret: e.target.value })}/><button type="button" className="ob-btn ob-btn-primary" disabled={!form.webhookSecret || busy === 'secret'} onClick={() => void save({ webhookSecret: form.webhookSecret.trim() }, 'secret')}>{busy === 'secret' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar</button></div>
+          <small className="adm-muted">Em Suas integrações → Webhooks, cadastre a URL abaixo e marque os eventos “Pagamentos” e “Planos e assinaturas”. Depois copie a “assinatura secreta” para cá.</small>
+          <div className="adm-svc-add"><input readOnly value={status.webhookUrl} aria-label="URL do webhook"/><button type="button" className="ob-btn ob-btn-outline" onClick={() => void copy(status.webhookUrl)}><Copy size={16}/> Copiar URL</button></div></div>
+        <div className="adm-content-field"><div className="adm-content-label"><span>Nome na fatura do cartão (até 22 letras)</span></div>
+          <div className="adm-svc-add"><input value={form.descriptor} maxLength={22} onChange={e => setForm({ ...form, descriptor: e.target.value })}/><button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'desc'} onClick={() => void save({ descriptor: form.descriptor }, 'desc')}>Salvar</button></div></div>
+      </div>}
+    </Card>
+    <Card title="Como achar os pagamentos do site no extrato">
+      <p className="adm-muted">Toda cobrança do GastroConecta vai para o Mercado Pago com:</p>
+      <ul className="adm-help-list">
+        <li><strong>Referência externa</strong> começando com <code>GASTROCONECTA-</code>, por exemplo <code>GASTROCONECTA-ASSINATURA-U12-P45</code> (U12 = assinante nº 12; P45 = pagamento nº 45 desta lista) ou <code>GASTROCONECTA-PROMOCAO-U12-P46</code>.</li>
+        <li><strong>Descrição</strong> no formato <code>GastroConecta · Assinatura mensal · GC-00012 · Nome do profissional</code>.</li>
+        <li>No relatório do Mercado Pago (Relatórios → Vendas/Liberações), filtre ou procure por <code>GASTROCONECTA</code>: o que não tiver essa marca veio das suas outras plataformas.</li>
+      </ul>
+    </Card>
+    <Card title="Pagamentos recebidos pelo site" action={<button type="button" className="ob-btn ob-btn-outline" disabled={!list.length} onClick={csv}><Download size={16}/> Baixar planilha</button>}>
+      <label className="adm-search"><Search size={16}/><input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Buscar por código GC-, nome, e-mail, referência ou ID do Mercado Pago"/></label>
+      {!payments ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum pagamento encontrado."/> :
+        <div className="adm-list">{list.map(p => <div className="adm-row adm-row-static" key={p.id}>
+          <div className="adm-row-main"><strong>{p.code} · {p.name}</strong><span>{p.kind} · {new Date(p.createdAt).toLocaleString('pt-BR')}</span><span>{p.reference ? <>Ref.: <code>{p.reference}</code></> : 'Sem referência (pagamento antigo ou cortesia)'}{p.mpPaymentId ? ` · ID MP ${p.mpPaymentId}` : ''}</span></div>
+          <div className="adm-row-tags"><strong>{brl(p.amountCents)}</strong><span className={`adm-tag ${p.status === 'approved' ? 'adm-ok' : p.status === 'pending' ? '' : 'adm-warn'}`}>{PAY_STATUS[p.status] ?? p.status}</span></div>
+        </div>)}</div>}
+    </Card>
+  </div>;
+}
+
+/** Nível (BAIXO/MÉDIO/ALTO) e acesso VIP às promoções — o VIP só aparece para o admin. */
+function ProviderGrowth({ userId }: { userId: number }) {
+  const [data, setData] = useState<{ level: { level: string; label: string; automatic: string; override: string | null; average: number; count: number }; promoVip: boolean; subscriberCode: string; promotions: Array<{ id: number; title: string; source: string; validUntil: string | null }> } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api<NonNullable<typeof data>>(`/admin/users/${userId}/growth`).then(setData).catch(e => toast.error(errText(e)));
+  useEffect(() => { void load(); }, [userId]);
+  const patch = async (body: Record<string, unknown>) => { setBusy(true); try { await api(`/admin/users/${userId}/growth`, { method: 'PATCH', body: JSON.stringify(body) }); toast.success('Atualizado.'); await load(); } catch (e) { toast.error(errText(e)); } finally { setBusy(false); } };
+  if (!data) return null;
+  const names: Record<string, string> = { baixo: 'BAIXO', medio: 'MÉDIO', alto: 'ALTO' };
+  return <>
+    <div className="adm-section-title"><TrendingUp size={15}/> Nível e promoções</div>
+    <Field label="Código do assinante (aparece no Mercado Pago)" value={data.subscriberCode}/>
+    <Field label="Nível atual" value={<span className={`adm-tag adm-level-${data.level.level}`}>{data.level.label}</span>}/>
+    <Field label="Avaliações" value={data.level.count ? `média ${data.level.average.toLocaleString('pt-BR')} em ${data.level.count} avaliação(ões) · pelas regras seria ${names[data.level.automatic]}` : `sem avaliações · pelas regras seria ${names[data.level.automatic]}`}/>
+    <label className="ob-field"><span>Definir nível</span><select value={data.level.override ?? 'auto'} disabled={busy} onChange={e => void patch({ levelOverride: e.target.value })}><option value="auto">Automático (pelas avaliações)</option><option value="baixo">Fixar BAIXO</option><option value="medio">Fixar MÉDIO</option><option value="alto">Fixar ALTO</option></select></label>
+    <label className="adm-switch"><input type="checkbox" checked={data.promoVip} disabled={busy} onChange={e => void patch({ promoVip: e.target.checked })}/> <EyeOff size={14}/> Acesso VIP às promoções (entra sem pagar e sem precisar do nível ALTO). O profissional não vê que é VIP.</label>
+    {data.promotions.length > 0 && <Field label="Participando agora" value={data.promotions.map(p => p.title).join(', ')}/>}
+  </>;
 }
 
 function BenefitsSection() {

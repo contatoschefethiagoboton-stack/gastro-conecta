@@ -38,3 +38,10 @@
 - [x] Painel → Textos do site → "Serviços e capas": criar, renomear, reordenar e excluir categorias de serviço e suas profissões, com foto de capa, ícone e forma de cálculo do valor.
 - [x] Cadastro: profissional escolhe a profissão exata ao criar a conta (lista vem do painel).
 - [x] Preços removidos dos cards e perfis; o valor é sugerido pela plataforma a partir do pedido do cliente. O profissional ajusta (±5%/±10% ou valor livre) e o cliente compara as propostas (menor valor primeiro).
+
+## Pagamentos identificados, promoções com fornecedores e níveis
+
+- [x] Painel → Pagamentos (Mercado Pago): cadastrar Access Token e assinatura do webhook, testar conexão, nome na fatura; lista dos pagamentos do site com código do assinante (GC-00012) e referência GASTROCONECTA-… (planilha CSV).
+- [x] Promoções: cliente escolhe o fornecedor participante (sem WhatsApp da plataforma); fornecedor nível ALTO paga o adicional definido pelo admin via Pix; VIP (só o admin vê) entra sem pagar; admin inclui/remove fornecedores.
+- [x] Níveis BAIXO / MÉDIO / ALTO pelas avaliações, com regras, mensagens e benefícios editáveis (Textos do site → Níveis e promoções) e nível fixado pelo admin.
+- [ ] No Mercado Pago: cadastrar a URL do webhook (eventos Pagamentos e Planos e assinaturas) e colar a assinatura secreta no painel.

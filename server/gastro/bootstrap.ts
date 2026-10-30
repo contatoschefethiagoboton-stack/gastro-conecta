@@ -7,6 +7,7 @@ import { defaultPromotions } from "@shared/promotions";
 import { buildMysqlConfig, dbConfigured, ensureDatabaseExists, execute, getGastroPool, query, withTransaction } from "./db";
 import { getInternalFlag, setInternalFlag } from "./content";
 import { hashPassword, normalizeEmail, passwordIsStrong } from "./auth";
+import { refreshMpSettings } from "./mercadopago";
 
 export const dbState: { ready: boolean; error: string } = { ready: false, error: "" };
 
@@ -103,6 +104,7 @@ export async function bootstrapDatabase() {
     await migrate(drizzle(getGastroPool()), { migrationsFolder: folder });
     console.log("[GastroConecta] Banco de dados atualizado (migrações aplicadas).");
     await seedPromotions();
+    await refreshMpSettings();
     await adminFromEnv();
     if (!(await adminExists())) issueSetupCode();
     dbState.ready = true;

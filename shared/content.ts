@@ -356,6 +356,69 @@ export const contentFields: ContentField[] = [
   "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Cadastro gratuito para clientes e propostas personalizadas."
  },
  {
+  "key": "level.altoMinAverage",
+  "group": "Níveis e promoções",
+  "label": "Nível ALTO: média mínima das avaliações (1 a 5)",
+  "type": "text",
+  "default": "4.5"
+ },
+ {
+  "key": "level.altoMinReviews",
+  "group": "Níveis e promoções",
+  "label": "Nível ALTO: quantidade mínima de avaliações",
+  "type": "text",
+  "default": "5"
+ },
+ {
+  "key": "level.medioMinAverage",
+  "group": "Níveis e promoções",
+  "label": "Nível MÉDIO: média mínima das avaliações (1 a 5)",
+  "type": "text",
+  "default": "4"
+ },
+ {
+  "key": "level.medioMinReviews",
+  "group": "Níveis e promoções",
+  "label": "Nível MÉDIO: quantidade mínima de avaliações",
+  "type": "text",
+  "default": "2"
+ },
+ {
+  "key": "level.baixoText",
+  "group": "Níveis e promoções",
+  "label": "Mensagem do nível BAIXO",
+  "type": "textarea",
+  "default": "Nível BAIXO: ainda sem benefícios. Capriche no atendimento e peça avaliação aos clientes para subir de nível."
+ },
+ {
+  "key": "level.medioText",
+  "group": "Níveis e promoções",
+  "label": "Mensagem do nível MÉDIO",
+  "type": "textarea",
+  "default": "Nível MÉDIO: você está no caminho! Temos alguns benefícios para você."
+ },
+ {
+  "key": "level.medioBenefits",
+  "group": "Níveis e promoções",
+  "label": "Benefícios do nível MÉDIO (um por linha)",
+  "type": "textarea",
+  "default": "Dicas da equipe para aumentar suas avaliações\nPrioridade no suporte pelo WhatsApp"
+ },
+ {
+  "key": "level.altoText",
+  "group": "Níveis e promoções",
+  "label": "Mensagem do nível ALTO",
+  "type": "textarea",
+  "default": "Parabéns! Você é nível ALTO, com benefícios exclusivos no site."
+ },
+ {
+  "key": "level.altoBenefits",
+  "group": "Níveis e promoções",
+  "label": "Benefícios do nível ALTO (um por linha)",
+  "type": "textarea",
+  "default": "Pode participar das promoções da temporada na página inicial\nAparece para os clientes que clicam nas promoções\nPrioridade no suporte pelo WhatsApp"
+ },
+ {
   "key": "services.catalog",
   "group": "Serviços e capas",
   "label": "Serviços oferecidos (cards da página inicial, cadastro do profissional e pedidos de orçamento)",
