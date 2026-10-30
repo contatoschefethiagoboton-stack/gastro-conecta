@@ -398,3 +398,9 @@ img { max-width:100%; }
 @media(max-width:680px) { .support-root { right:14px; bottom:76px; } .support-menu { width:calc(100vw - 28px); } }
 .category-card.has-cover { display:grid; grid-template-columns:auto 1fr auto; align-items:center; padding:0 12px 14px !important; gap:10px !important; overflow:hidden; }
 .category-cover { grid-column:1 / -1; width:calc(100% + 24px); max-width:none; margin:0 -12px 2px; aspect-ratio:16/9; object-fit:cover; }
+
+/* Ações rápidas da administração na página do profissional */
+.admin-card-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 18px; padding:12px 14px; border:1px dashed #d9cfbf; border-radius:10px; background:#f6f3eb; font-size:13px; }
+.admin-card-actions span { display:inline-flex; align-items:center; gap:6px; font-weight:600; margin-right:auto; }
+.admin-card-actions button { display:inline-flex; align-items:center; gap:6px; min-height:38px; padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:#fff; font-weight:600; }
+.admin-card-actions button.danger { color:#b3261e; border-color:#f1c4bf; }
