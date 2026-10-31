@@ -1,4 +1,4 @@
-import { Award, Check, Copy, Lock, Loader2, Megaphone, RefreshCw, Sparkles, Star, TrendingUp } from "lucide-react";
+import { Award, Check, Copy, Gem, Lock, Loader2, Megaphone, RefreshCw, Sparkles, Star, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState, formatDate, formatMoney, LoadingState, post, SectionIntro, useAction, useApi } from "./common";
 
@@ -57,5 +57,30 @@ export function GrowthPanel() {
       </article>)}</div>}
       {g.eligible && !g.paymentsConfigured && g.promotions.some(p => p.feeCents > 0 && !p.joined) && <p className="dash-muted">O pagamento por Pix ainda não está disponível. Fale com a administração.</p>}
     </section>
+    <ExtraBenefits/>
   </div>;
+}
+
+type BenefitProduct = { id: number; title: string; description: string; priceCents: number; days: number; effect: string; pendingPix: Pix | null };
+
+/** Benefícios extras que o profissional compra à parte (ex.: destaque no catálogo). */
+function ExtraBenefits() {
+  const query = useApi<{ paymentsConfigured: boolean; products: BenefitProduct[] }>("benefit-products", "/provider/benefits");
+  const { busy, run } = useAction();
+  const products = query.data?.products ?? [];
+  if (!products.length) return null;
+  const copy = async (text: string) => { try { await navigator.clipboard.writeText(text); toast.success("Código Pix copiado."); } catch { toast.error("Não foi possível copiar."); } };
+  return <section className="dash-card">
+    <div className="dash-card-heading"><div><span className="dash-eyebrow"><Gem size={13}/> Benefícios extras</span><h3>Mais visibilidade quando você precisar</h3><p className="dash-muted">Vantagens opcionais, pagas à parte via Pix. A confirmação é automática.</p></div></div>
+    <div className="dash-record-list">{products.map(p => <article className="dash-record gr-promo" key={p.id}>
+      <div className="dash-record-main"><span className="dash-list-icon orange"><Gem size={17}/></span><div><h4>{p.title}</h4><p>{p.days} dia(s){p.effect === "featured" ? " · destaque no catálogo" : ""}</p>{p.description && <span>{p.description}</span>}</div></div>
+      <div className="dash-record-actions">{p.pendingPix ? <span className="dash-status dash-status-pending">Aguardando o Pix</span> : <><strong>{formatMoney(p.priceCents)}</strong><button type="button" className="dash-small-button" disabled={!query.data?.paymentsConfigured || busy === `buy-${p.id}`} onClick={() => void run(`buy-${p.id}`, () => post(`/provider/benefits/${p.id}/buy`), "Pix gerado. Pague para ativar o benefício.")}>{busy === `buy-${p.id}` ? <Loader2 className="dash-spinner" size={14}/> : <Sparkles size={14}/>} Quero este</button></>}</div>
+      {p.pendingPix?.qrCode && <div className="dash-pix gr-pix">
+        {p.pendingPix.qrCodeBase64 && <img src={`data:image/png;base64,${p.pendingPix.qrCodeBase64}`} alt="QR Code Pix" width={170} height={170}/>}
+        <div><p>Pague com o QR Code ou o Pix copia e cola.</p><code className="dash-pix-code">{p.pendingPix.qrCode}</code>
+          <div className="cp-actions"><button type="button" className="dash-small-button" onClick={() => void copy(p.pendingPix!.qrCode)}><Copy size={14}/> Copiar código</button><button type="button" className="dash-small-button" disabled={busy === "benefit-refresh"} onClick={() => void run("benefit-refresh", () => post("/provider/promotions/refresh"))}><RefreshCw size={14}/> Já paguei, verificar</button></div></div>
+      </div>}
+    </article>)}</div>
+    {!query.data?.paymentsConfigured && <p className="dash-muted">O pagamento por Pix ainda não está disponível. Fale com a administração.</p>}
+  </section>;
 }

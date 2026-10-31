@@ -8,6 +8,8 @@ import { buildMysqlConfig, dbConfigured, ensureDatabaseExists, execute, getGastr
 import { getInternalFlag, setInternalFlag } from "./content";
 import { hashPassword, normalizeEmail, passwordIsStrong } from "./auth";
 import { refreshMpSettings } from "./mercadopago";
+import { refreshNotifySettings } from "./notify";
+import { refreshPricing } from "./subscriptions";
 
 export const dbState: { ready: boolean; error: string } = { ready: false, error: "" };
 
@@ -105,6 +107,8 @@ export async function bootstrapDatabase() {
     console.log("[GastroConecta] Banco de dados atualizado (migrações aplicadas).");
     await seedPromotions();
     await refreshMpSettings();
+    await refreshNotifySettings();
+    await refreshPricing();
     await adminFromEnv();
     if (!(await adminExists())) issueSetupCode();
     dbState.ready = true;

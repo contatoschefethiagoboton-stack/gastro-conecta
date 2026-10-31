@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff } from 'lucide-react';
+import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
@@ -9,11 +9,13 @@ import { EVENT_TYPES } from '@shared/promotions';
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validators';
 import { serviceCatalogFrom, serviceLabel, REQUEST_CATEGORIES, SERVICE_ICONS, type ServiceCategory, type ServiceIcon } from '@shared/services';
 import { useSite } from '@/lib/site';
+import NotificationBell from '@/components/NotificationBell';
+import { NotificationsSection, MarketingSection, PricingCard, BenefitProductsCard } from './admin/EngageSections';
 import { demosFrom, type DemoProfessional, type Professional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
-type Section = 'overview' | 'users' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
+type Section = 'overview' | 'notifications' | 'marketing' | 'users' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
 type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
 type Benefit = { id: number; userId: number; userName?: string; userEmail?: string; kind: string; title: string; description: string; amountCents: number; percent: number; expiresAt: string | null; active: boolean; createdAt: string };
@@ -21,6 +23,8 @@ type Media = { id: number; kind: string; filename: string; size: number; url: st
 
 const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
+  { id: 'notifications', label: 'Notificações', icon: Bell },
+  { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp },
   { id: 'users', label: 'Usuários e aprovações', icon: Users },
   { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard },
   { id: 'payments', label: 'Pagamentos (Mercado Pago)', icon: Wallet },
@@ -47,7 +51,7 @@ function Empty({ text }: { text: string }) { return <p className="adm-empty">{te
 
 export default function AdminConsole() {
   const [me, setMe] = useState<{ name: string; role: string } | null | undefined>(undefined);
-  const [section, setSection] = useState<Section>('overview');
+  const [section, setSection] = useState<Section>(() => { const s = new URLSearchParams(window.location.search).get('secao'); return s && NAV.some(n => n.id === s) ? s as Section : 'overview'; });
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => { api<{ user: { name: string; role: string } | null }>('/me').then(r => setMe(r.user)).catch(() => setMe(null)); }, []);
   if (me === undefined) return <main className="adm-page"><div className="adm-center"><Loader2 className="ob-spin" size={22}/> Carregando…</div></main>;
@@ -64,10 +68,12 @@ export default function AdminConsole() {
         <div className="adm-sidebar-foot"><a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Ver o site</a><button type="button" onClick={logout}><LogOut size={15}/> Sair</button></div>
       </aside>
       <section className="adm-main">
-        <header className="adm-topbar"><button type="button" className="adm-menu" onClick={() => setNavOpen(true)} aria-label="Abrir menu"><Menu size={20}/></button><div><small>Administração /</small><strong>{current.label}</strong></div><span className="adm-who">{me.name}</span></header>
+        <header className="adm-topbar"><button type="button" className="adm-menu" onClick={() => setNavOpen(true)} aria-label="Abrir menu"><Menu size={20}/></button><div><small>Administração /</small><strong>{current.label}</strong></div><span className="adm-top-actions"><NotificationBell admin onNavigate={link => { const s = new URL(link, window.location.origin).searchParams.get('secao'); go(s && NAV.some(n => n.id === s) ? s as Section : 'notifications'); }}/><span className="adm-who">{me.name}</span></span></header>
         <div className="adm-content">
           {section === 'overview' && <Overview go={go}/>}
           {section === 'users' && <UsersSection/>}
+          {section === 'notifications' && <NotificationsSection/>}
+          {section === 'marketing' && <MarketingSection/>}
           {section === 'subscriptions' && <SubscriptionsSection/>}
           {section === 'payments' && <PaymentsSection/>}
           {section === 'contracts' && <ContractsSection/>}
@@ -545,6 +551,8 @@ function PaymentsSection() {
   };
   const keyState = (k: { configured: boolean; source: string; hint: string }) => k.configured ? <span className="adm-tag adm-ok">Cadastrada {k.hint}{k.source === 'render' ? ' (variável do Render)' : ''}</span> : <span className="adm-tag adm-warn">Não cadastrada</span>;
   return <div className="adm-stack">
+    <PricingCard/>
+    <BenefitProductsCard/>
     <Card title="Chaves do Mercado Pago" action={status?.accessToken.configured ? <button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'test'} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="ob-spin" size={16}/> : <PlugZap size={16}/>} Testar conexão</button> : undefined}>
       {!status ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : <div className="adm-content-fields">
         <p className="adm-muted">Pegue as chaves em <strong>Mercado Pago → Seu negócio → Configurações → Suas integrações → Credenciais de produção</strong>. Por segurança, a chave salva nunca é mostrada de novo (só os 4 últimos caracteres).</p>

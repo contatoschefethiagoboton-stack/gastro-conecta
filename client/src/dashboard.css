@@ -663,3 +663,10 @@
 .gr-promo-img { width: 52px; height: 52px; min-width: 52px; border-radius: 10px; object-fit: cover; }
 .gr-pix { width: 100%; }
 @media (max-width: 720px) { .gr-steps, .gr-benefits { grid-template-columns: minmax(0, 1fr); } }
+.account-field-help { font-size: 12px; color: #787a70; font-weight: 400; }
+.account-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: #4a4c44; cursor: pointer; }
+.account-check input { margin-top: 3px; width: 16px; height: 16px; accent-color: #df572f; }
+.dash-share { display: flex; flex-direction: column; gap: 12px; }
+.dash-share-link { display: block; background: #f6f3eb; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; overflow-wrap: anywhere; }
+.dash-topbar-actions { display: flex; align-items: center; gap: 10px; }
+.dash-money-card small { font-size: 12px; color: #787a70; }

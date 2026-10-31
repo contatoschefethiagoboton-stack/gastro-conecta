@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSite } from "@/lib/site";
+import { getAttribution } from "@/lib/attribution";
+import { formatPhone, isValidPhoneBR } from "@shared/validators";
 import "../dashboard.css";
 
 type AccountMode = "login" | "register" | "forgot";
@@ -50,6 +52,9 @@ export default function Account() {
   const [password, setPassword] = useState("");
   const [accountType, setAccountType] = useState<AccountType>(() => new URLSearchParams(window.location.search).get("cadastro") === "profissional" ? "provider" : "client");
   const [serviceId, setServiceId] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [notifyOptIn, setNotifyOptIn] = useState(false);
+  const linkExpired = new URLSearchParams(window.location.search).get("link") === "expirado";
   const { serviceCatalog } = useSite();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +95,10 @@ export default function Account() {
       setErrorMessage("Escolha uma senha que cumpra todos os requisitos de segurança.");
       return;
     }
+    if (mode === "register" && !isValidPhoneBR(whatsapp)) {
+      setErrorMessage("Informe um WhatsApp válido com DDD.");
+      return;
+    }
     if (mode === "register" && accountType === "provider" && !serviceId) {
       setErrorMessage("Escolha qual profissional você é.");
       return;
@@ -110,6 +119,9 @@ export default function Account() {
                 accountType,
                 city: city.trim(),
                 ...(accountType === "provider" ? { serviceId } : {}),
+                whatsapp,
+                notifyOptIn: accountType === "client" ? notifyOptIn : false,
+                attribution: getAttribution(),
               },
         ),
       });
@@ -164,6 +176,7 @@ export default function Account() {
             </button>
           </div>
 
+          {linkExpired && mode === "login" && <p className="account-next-step" role="status">O link de acesso expirou. Entre com seu e-mail e senha.</p>}
           {mode === "forgot" ? (
             <>
               <div className="account-heading">
@@ -242,6 +255,21 @@ export default function Account() {
                   </select>
                 </label>
               </div>
+            )}
+
+            {mode === "register" && (
+              <label className="account-field">
+                <span>WhatsApp (com DDD)</span>
+                <input type="tel" inputMode="tel" autoComplete="tel" required value={whatsapp} onChange={(event) => setWhatsapp(formatPhone(event.target.value))} placeholder="(19) 99999-9999" />
+                <small className="account-field-help">{accountType === "provider" ? "Você recebe os novos pedidos de orçamento por aqui." : "Você recebe as propostas e respostas por aqui, com um link que abre direto no site."}</small>
+              </label>
+            )}
+
+            {mode === "register" && accountType === "client" && (
+              <label className="account-check">
+                <input type="checkbox" checked={notifyOptIn} onChange={(event) => setNotifyOptIn(event.target.checked)} />
+                <span>Quero receber pelo WhatsApp quando entrarem novos profissionais na minha região.</span>
+              </label>
             )}
 
             {mode === "register" && accountType === "provider" && (

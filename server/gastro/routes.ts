@@ -10,6 +10,11 @@ import { ENV } from "../_core/env";
 import { execute, query, withTransaction } from "./db";
 import { loadProfessionals } from "./catalog";
 import { getServiceCatalog } from "./content";
+import { later, notifyAdmin, notifyUser } from "./notify";
+import { isChannel, isMedium } from "@shared/marketing";
+import { isValidPhoneBR, onlyDigits } from "@shared/validators";
+import { VISIBLE_SUBSCRIPTION_SQL } from "./subscriptions";
+import { PROVIDER_SCHEMA_VERSION } from "./profiles";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { clearGcSession, createGcSession, createLocalUser, gcCookieOptions, getUserByEmail, isOwner, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AccountType, type AuthContext } from "./auth";
 import { calculateIntentScore, isoDate } from "./rules";
@@ -128,7 +133,9 @@ router.get("/me", wrap(async (req, res) => {
   } });
 }));
 
-const registerSchema = z.object({ name: z.string().trim().min(2).max(160), email: emailSchema, password: passwordSchema, accountType: accountTypeSchema, city: z.string().trim().min(2).max(160), serviceId: z.string().trim().max(60).optional() });
+const registerSchema = z.object({ name: z.string().trim().min(2).max(160), email: emailSchema, password: passwordSchema, accountType: accountTypeSchema, city: z.string().trim().min(2).max(160), serviceId: z.string().trim().max(60).optional(),
+  whatsapp: z.string().trim().max(30).refine(isValidPhoneBR, "WhatsApp inválido (DDD + número)"), notifyOptIn: z.boolean().default(false),
+  attribution: z.object({ source: z.string().max(40), medium: z.string().max(40), campaign: z.string().max(120).optional(), ref: z.string().max(20).optional() }).partial().optional() });
 const loginSchema = z.object({ email: emailSchema, password: passwordSchema });
 
 router.post("/register", wrap(async (req, res) => {
@@ -143,6 +150,13 @@ router.post("/register", wrap(async (req, res) => {
     await execute("INSERT INTO gc_profile_details (userId, details, completedAt) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE details = VALUES(details)", [created.user.id, JSON.stringify({ kind: "provider", services: [service.id] })]);
     await execute("UPDATE account_profiles SET specialty = ? WHERE userId = ?", [service.label.slice(0, 160), created.user.id]);
   }
+  // WhatsApp para os avisos, consentimento de novidades e origem do cadastro (marketing).
+  const attribution = input.attribution ?? {};
+  const refMatch = /^GC-(\d{1,9})$/i.exec(attribution.ref ?? "");
+  const referredBy = refMatch && Number(refMatch[1]) !== created.user.id ? Number(refMatch[1]) : null;
+  await execute("UPDATE account_profiles SET whatsapp = ?, notifyOptIn = ?, signupSource = ?, signupMedium = ?, signupCampaign = ?, referredBy = ? WHERE userId = ?", [onlyDigits(input.whatsapp), input.notifyOptIn, isChannel(attribution.source) ? attribution.source : referredBy ? "indicacao" : "direto", isMedium(attribution.medium) ? attribution.medium : referredBy ? "indicacao" : "direto", attribution.campaign?.slice(0, 120) ?? null, referredBy, created.user.id]);
+  const kind = input.accountType === "provider" ? `profissional (${service?.label ?? "serviço"})` : "cliente";
+  later(() => notifyAdmin({ type: `signup.${input.accountType}`, title: input.accountType === "provider" ? "Novo profissional cadastrado" : "Novo cliente cadastrado", body: `${input.name} (${input.city}) criou uma conta de ${kind}.`, path: "/admin/painel?secao=users" }));
   const token = await createGcSession(created.user.id);
   res.cookie("gc_session", token, gcCookieOptions(req));
   res.status(201).json({ user: publicUser({ user: created.user, profile: created.profile, source: "gastro" }) });
@@ -290,8 +304,27 @@ router.post("/events", wrap(async (req, res) => {
   const result = await execute("INSERT INTO gastro_events (clientId, preferredProviderId, title, type, category, eventDate, eventTime, city, location, guests, budgetCents, description, stage, score, scope, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [context.user.id, preferredProviderId, input.title, input.type, input.category, input.date ?? null, input.time ?? null, input.city, input.location ?? null, input.guests, input.budgetCents, input.description ?? null, input.stage, score, input.scope ?? null, JSON.stringify(details)]);
   const rows = await query<any[]>("SELECT * FROM gastro_events WHERE id = ?", [result.insertId]);
-  res.status(201).json({ event: mapEvent(rows[0]) });
+  const created = rows[0];
+  later(() => notifyAdmin({ type: "event.created", title: "Novo pedido de orçamento", body: `${context.user.name ?? "Cliente"} pediu “${input.title}” em ${input.city} (${input.guests} pessoa(s)).`, path: "/admin/painel" }));
+  later(() => notifyMatchingProviders(created, catalog, preferredProviderId));
+  res.status(201).json({ event: mapEvent(created) });
 }));
+
+/** Avisa os profissionais compatíveis (radar) sobre um novo pedido, com link que abre o radar. */
+async function notifyMatchingProviders(event: any, catalog: Awaited<ReturnType<typeof getServiceCatalog>>, preferredProviderId: number | null) {
+  const providers = await query<any[]>(`SELECT u.id, d.details FROM users u JOIN account_profiles p ON p.userId = u.id JOIN gc_profile_details d ON d.userId = u.id AND d.completedAt IS NOT NULL
+    WHERE p.accountType = 'provider' AND p.status = 'active' AND ${VISIBLE_SUBSCRIPTION_SQL} ${preferredProviderId ? "AND u.id = ?" : ""} LIMIT 500`, preferredProviderId ? [preferredProviderId] : []);
+  const target = json(event.details);
+  let sent = 0;
+  for (const row of providers) {
+    const details = json(row.details);
+    if (details.schemaVersion !== PROVIDER_SCHEMA_VERSION) continue;
+    const services = Array.isArray(details.services) ? details.services : [];
+    if (!serviceMatchesRequest(services, (event.category ?? "event") as RequestCategory, catalog, target)) continue;
+    await notifyUser(Number(row.id), { type: "event.new", title: "Novo pedido de orçamento no seu radar", body: `“${event.title}” em ${event.city} · ${Number(event.guests)} pessoa(s). Envie sua proposta.`, path: "/painel?aba=radar" });
+    if (++sent >= 200) break;
+  }
+}
 
 router.post("/events/:id/cancel", wrap(async (req, res) => {
   const context = await auth(req);
@@ -384,7 +417,12 @@ router.post("/proposals", wrap(async (req, res) => {
   else id = Number((await execute("INSERT INTO gastro_proposals (amountCents, message, scope, costCents, paymentTerms, eventTime, breakdown, eventId, providerId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [...values, input.eventId, context.user.id])).insertId);
   await execute("DELETE FROM gc_event_dismissals WHERE eventId = ? AND userId = ?", [input.eventId, context.user.id]);
   const rows = await query<any[]>("SELECT p.*, u.name providerName, e.title eventTitle FROM gastro_proposals p JOIN users u ON u.id = p.providerId JOIN gastro_events e ON e.id = p.eventId WHERE p.id = ?", [id]);
-  res.status(201).json({ proposal: mapProposal(rows[0]) });
+  const proposal = rows[0];
+  const eventRow = (await query<any[]>("SELECT clientId, title FROM gastro_events WHERE id = ? LIMIT 1", [input.eventId]))[0];
+  const amount = (input.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (eventRow) later(() => notifyUser(Number(eventRow.clientId), { type: "proposal.new", title: "Você recebeu uma proposta", body: `${context.user.name ?? "Um profissional"} enviou uma proposta de ${amount} para “${eventRow.title}”. Toque no link para ver e responder.`, path: "/painel?aba=requests" }));
+  later(() => notifyAdmin({ type: "proposal.new", title: "Nova proposta enviada", body: `${context.user.name ?? "Profissional"} propôs ${amount} para “${eventRow?.title ?? "pedido"}”.` }));
+  res.status(201).json({ proposal: mapProposal(proposal) });
 }));
 
 router.post("/proposals/:id/withdraw", wrap(async (req, res) => {
@@ -440,6 +478,9 @@ router.post("/proposals/:id/accept", wrap(async (req, res) => {
     return { contractId, providerName: payload.provider.name, phone: providerData.details?.phone as string | undefined, title: String(event.title) };
   });
   await audit(context.user.id, "proposal.accepted", { proposalId, contractId: result.contractId }, context.user.id);
+  const providerId = Number((await query<any[]>("SELECT providerId FROM gastro_proposals WHERE id = ?", [proposalId]))[0]?.providerId ?? 0);
+  if (providerId) later(() => notifyUser(providerId, { type: "proposal.accepted", title: "Proposta aceita!", body: `${context.user.name ?? "O cliente"} aceitou sua proposta para “${result.title}”. O contrato foi gerado; combine os detalhes pelo WhatsApp.`, path: "/painel?aba=jobs" }));
+  later(() => notifyAdmin({ type: "proposal.accepted", title: "Serviço fechado", body: `${context.user.name ?? "Cliente"} fechou “${result.title}” com ${result.providerName}. Contrato nº ${result.contractId}.` }));
   res.json({ ok: true, contractId: result.contractId, whatsappUrl: waLink(result.phone, `Olá! Aceitei sua proposta no GastroConecta para "${result.title}". Vamos alinhar os detalhes?`) });
 }));
 
@@ -469,6 +510,8 @@ router.post("/reviews", wrap(async (req, res) => {
   if (input.targetId !== expected) throw new HttpError(403, "Vínculo de avaliação inválido");
   try { await execute("INSERT INTO gastro_reviews (eventId, reviewerId, targetId, rating, feedback) VALUES (?, ?, ?, ?, ?)", [input.eventId, context.user.id, input.targetId, input.rating, input.feedback]); }
   catch (error) { if (String(error).includes("Duplicate")) throw new HttpError(409, "Avaliação já registrada"); throw error; }
+  later(() => notifyAdmin({ type: "review.new", title: `Nova avaliação (${input.rating}★)`, body: `${context.user.name ?? "Usuário"} avaliou “${event.title}” com nota ${input.rating}: ${input.feedback.slice(0, 200)}` }));
+  later(() => notifyUser(input.targetId, { type: "review.new", title: `Você recebeu uma avaliação ${input.rating}★`, body: `Sobre “${event.title}”: ${input.feedback.slice(0, 200)}`, path: "/painel?aba=reviews", whatsapp: false }));
   res.status(201).json({ ok: true, growthPrompt: true });
 }));
 
@@ -586,7 +629,7 @@ router.get("/messages", wrap(async (req, res) => {
   res.json({ messages: rows.map(row => ({ id: Number(row.id), role: row.role, content: row.content, createdAt: new Date(row.createdAt).toISOString() })) });
 }));
 
-function resolveCopilotEndpoint(base: string) {
+export function resolveCopilotEndpoint(base: string) {
   const normalized = base.replace(/\/+$/, "");
   if (/\/v1\/chat\/completions$/i.test(normalized)) return normalized;
   if (/\/v1$/i.test(normalized)) return `${normalized}/chat/completions`;
@@ -664,7 +707,7 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
   const targetId = parse(idSchema, req.params.id);
   const input = body(req, adminUserSchema);
   if (targetId === context.user.id && input.status !== undefined && input.status !== "active") throw new HttpError(400, "O proprietário não pode deixar a própria conta inativa");
-  const target = await query<any[]>("SELECT u.id, p.accountType FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [targetId]);
+  const target = await query<any[]>("SELECT u.id, p.accountType, p.status FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [targetId]);
   if (!target[0]) throw new HttpError(404, "Usuário não encontrado");
   const { details, completedAt } = await loadDetails(targetId);
   if (input.status === "active" && target[0].accountType === "provider" && !providerDetailsComplete(details, completedAt)) throw new HttpError(400, "Este cadastro ainda está incompleto. A aprovação fica liberada quando o profissional enviar todos os dados obrigatórios (logo, foto do rosto, fotos dos serviços, documento e Pix).");
@@ -676,8 +719,20 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
     if (input.faceVerified !== undefined && details) await connection.execute("UPDATE gc_profile_details SET details = ? WHERE userId = ?", [JSON.stringify({ ...details, faceVerified: input.faceVerified, faceVerifiedAt: input.faceVerified ? new Date().toISOString() : null }), targetId]);
   });
   await audit(context.user.id, "admin.user_update", input, targetId);
+  if (input.status === "active" && target[0].accountType === "provider" && target[0].status !== "active") later(() => announceNewProvider(targetId));
   res.json({ ok: true });
 }));
+
+/** Profissional aprovado: avisa ele e os clientes que aceitaram receber novidades (mesma cidade primeiro). */
+async function announceNewProvider(providerId: number) {
+  const rows = await query<any[]>("SELECT u.name, p.city, p.specialty FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [providerId]);
+  const provider = rows[0];
+  if (!provider) return;
+  await notifyUser(providerId, { type: "account.approved", title: "Cadastro aprovado!", body: "Seu cadastro no GastroConecta foi aprovado. Ative a assinatura para aparecer no catálogo e receber pedidos.", path: "/painel?aba=subscription" });
+  const city = String(provider.city ?? "").split(/[-,]/)[0].trim();
+  const clients = await query<any[]>("SELECT userId FROM account_profiles WHERE accountType = 'client' AND status = 'active' AND notifyOptIn = 1 AND (? = '' OR city LIKE ?) LIMIT 300", [city, `%${city}%`]);
+  for (const client of clients) await notifyUser(Number(client.userId), { type: "provider.new", title: "Novo profissional na sua região", body: `${provider.name}${provider.specialty ? ` (${provider.specialty})` : ""} acabou de entrar no GastroConecta. Veja o perfil e peça um orçamento.`, path: `/profissionais/user-${providerId}` });
+}
 
 router.get("/admin/overview", wrap(async (req, res) => {
   await admin(req);
