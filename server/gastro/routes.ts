@@ -156,7 +156,7 @@ router.post("/register", wrap(async (req, res) => {
   const referredBy = refMatch && Number(refMatch[1]) !== created.user.id ? Number(refMatch[1]) : null;
   await execute("UPDATE account_profiles SET whatsapp = ?, notifyOptIn = ?, signupSource = ?, signupMedium = ?, signupCampaign = ?, referredBy = ? WHERE userId = ?", [onlyDigits(input.whatsapp), input.notifyOptIn, isChannel(attribution.source) ? attribution.source : referredBy ? "indicacao" : "direto", isMedium(attribution.medium) ? attribution.medium : referredBy ? "indicacao" : "direto", attribution.campaign?.slice(0, 120) ?? null, referredBy, created.user.id]);
   const kind = input.accountType === "provider" ? `profissional (${service?.label ?? "serviço"})` : "cliente";
-  later(() => notifyAdmin({ type: `signup.${input.accountType}`, title: input.accountType === "provider" ? "Novo profissional cadastrado" : "Novo cliente cadastrado", body: `${input.name} (${input.city}) criou uma conta de ${kind}.`, path: "/admin/painel?secao=users" }));
+  later(() => notifyAdmin({ type: `signup.${input.accountType}`, title: input.accountType === "provider" ? "Novo profissional cadastrado" : "Novo cliente cadastrado", body: `${input.name} (${input.city}) criou uma conta de ${kind}.`, path: `/admin/painel?secao=${input.accountType === "provider" ? "providers" : "clients"}` }));
   const token = await createGcSession(created.user.id);
   res.cookie("gc_session", token, gcCookieOptions(req));
   res.status(201).json({ user: publicUser({ user: created.user, profile: created.profile, source: "gastro" }) });
@@ -697,8 +697,11 @@ router.get("/integrations", wrap(async (_req, res) => {
 
 router.get("/admin/users", wrap(async (req, res) => {
   await admin(req);
-  const rows = await query<any[]>("SELECT u.*, p.accountType, p.status, p.city, p.bio, p.vip, p.discountPercent, p.featured, d.completedAt profileCompletedAt FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_profile_details d ON d.userId = u.id ORDER BY u.createdAt DESC");
-  res.json({ users: rows.map(mapUser) });
+  const rows = await query<any[]>(`SELECT u.*, p.accountType, p.status, p.city, p.bio, p.vip, p.discountPercent, p.featured, p.specialty, p.whatsapp, p.signupSource, p.subscriptionFree, d.completedAt profileCompletedAt,
+      (SELECT COUNT(*) FROM gastro_events e WHERE e.clientId = u.id) requestCount
+    FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_profile_details d ON d.userId = u.id ORDER BY u.createdAt DESC`);
+  // Clientes e fornecedores ficam em abas separadas no painel; o admin não entra na lista.
+  res.json({ users: rows.filter(row => row.role !== "admin").map(row => ({ ...mapUser(row), code: `GC-${String(Number(row.id)).padStart(5, "0")}`, specialty: row.specialty ?? "", whatsapp: row.whatsapp ?? "", source: row.signupSource ?? "", subscriptionFree: Boolean(row.subscriptionFree), requestCount: Number(row.requestCount ?? 0) })) });
 }));
 
 const adminUserSchema = z.object({ name: z.string().trim().min(2).max(160).optional(), status: z.enum(["active", "pending", "suspended", "blocked", "deleted"]).optional(), vip: z.boolean().optional(), discountPercent: z.number().int().min(0).max(100).optional(), featured: z.boolean().optional(), faceVerified: z.boolean().optional() }).strict();

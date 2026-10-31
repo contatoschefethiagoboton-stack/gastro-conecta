@@ -325,3 +325,16 @@
 .mk-price-actions select { min-height:36px; border:1px solid var(--ob-line); border-radius:8px; padding:4px 8px; background:#fff; font-size:12.5px; }
 .mk-form { margin-top:14px; padding-top:14px; border-top:1px solid var(--ob-line); display:flex; flex-direction:column; gap:12px; }
 @media (max-width: 900px) { .mk-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .mk-two, .adm-grid-3 { grid-template-columns:minmax(0,1fr); } .mk-links li { grid-template-columns:minmax(0,1fr); } }
+
+/* Clientes x fornecedores */
+.adm-kind-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.adm-kind-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:99px; font:600 14px 'Inter',sans-serif; }
+.adm-kind-badge.is-provider { background:#fdf1ec; color:#b4421d; }
+.adm-kind-badge.is-client { background:#e8f0fb; color:#2d5590; }
+.adm-kind-stats { display:flex; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--ob-muted); }
+.adm-kind-stats > * { background:#fff; border:1px solid var(--ob-line); border-radius:99px; padding:6px 12px; font:inherit; color:inherit; }
+.adm-kind-stats button { cursor:pointer; }
+.adm-kind-stats button.is-alert { border-color:#f1c4bf; color:#a2361c; background:#fbeae6; }
+.adm-row-provider { border-left:3px solid #f0b39b; padding-left:12px; }
+.adm-row-client { border-left:3px solid #a9c1e6; padding-left:12px; }
+.adm-row .adm-row-main span + span { font-size:12.5px; }
