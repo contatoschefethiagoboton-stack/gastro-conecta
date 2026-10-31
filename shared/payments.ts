@@ -6,8 +6,8 @@
 // Assim, no extrato/relatório do Mercado Pago, dá para filtrar por "GASTROCONECTA" e saber quem pagou.
 
 export const PLATFORM_TAG = 'GASTROCONECTA';
-export type PaymentKind = 'ASSINATURA' | 'ASSINATURA-AUTO' | 'PROMOCAO';
-export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = { ASSINATURA: 'Assinatura mensal', 'ASSINATURA-AUTO': 'Assinatura mensal (Pix automático)', PROMOCAO: 'Adicional de promoção' };
+export type PaymentKind = 'ASSINATURA' | 'ASSINATURA-AUTO' | 'PROMOCAO' | 'BENEFICIO';
+export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = { ASSINATURA: 'Assinatura mensal', 'ASSINATURA-AUTO': 'Assinatura mensal (Pix automático)', PROMOCAO: 'Adicional de promoção', BENEFICIO: 'Benefício extra' };
 
 /** Código do assinante mostrado no painel e na descrição do pagamento (ex.: GC-00012). */
 export const subscriberCode = (userId: number) => `GC-${String(Math.max(0, Math.floor(userId))).padStart(5, '0')}`;
@@ -21,7 +21,7 @@ export function paymentDescription(kind: PaymentKind, userId: number, name: stri
 /** Lê a referência (formato novo e o antigo "gcsub:<id>:<pagamento>" / "gcsub-auto:<id>"). */
 export function parsePaymentReference(ref: string | null | undefined): { kind: PaymentKind; userId: number; rowId?: number } | null {
   const value = String(ref ?? '');
-  const current = /^GASTROCONECTA-(ASSINATURA-AUTO|ASSINATURA|PROMOCAO)-U(\d+)(?:-P(\d+))?$/.exec(value);
+  const current = /^GASTROCONECTA-(ASSINATURA-AUTO|ASSINATURA|PROMOCAO|BENEFICIO)-U(\d+)(?:-P(\d+))?$/.exec(value);
   if (current) return { kind: current[1] as PaymentKind, userId: Number(current[2]), ...(current[3] ? { rowId: Number(current[3]) } : {}) };
   const legacy = /^gcsub(-auto)?:(\d+)(?::(\d+))?/.exec(value);
   if (legacy) return { kind: legacy[1] ? 'ASSINATURA-AUTO' : 'ASSINATURA', userId: Number(legacy[2]), ...(legacy[3] ? { rowId: Number(legacy[3]) } : {}) };

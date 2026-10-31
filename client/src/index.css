@@ -424,3 +424,17 @@ img { max-width:100%; }
 .promo-provider-meta { display:inline-flex; align-items:center; gap:4px; }
 .promo-provider-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 @media(max-width:680px) { .promo-provider-actions { flex-direction:row; align-items:center; width:100%; justify-content:space-between; } }
+
+/* Sino de avisos */
+.gc-bell { position:relative; }
+.gc-bell-button { position:relative; width:40px; height:40px; border-radius:99px; border:1px solid var(--border); background:#fff; display:grid; place-items:center; color:var(--ink); }
+.gc-bell-count { position:absolute; top:-4px; right:-4px; min-width:19px; height:19px; padding:0 5px; border-radius:99px; background:var(--paprika); color:#fff; font-size:10.5px; font-weight:700; display:grid; place-items:center; }
+.gc-bell-panel { position:absolute; right:0; top:48px; width:min(380px, calc(100vw - 24px)); max-height:70vh; overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 18px 40px #0002; z-index:80; }
+.gc-bell-panel header { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; background:#fff; }
+.gc-bell-panel header button { border:0; background:none; color:var(--paprika); font-size:12px; display:inline-flex; gap:4px; align-items:center; }
+.gc-bell-panel ul { list-style:none; margin:0; padding:0; }
+.gc-bell-panel li button { width:100%; text-align:left; border:0; border-bottom:1px solid #f1ede5; background:none; padding:11px 14px; display:flex; flex-direction:column; gap:2px; font-size:13px; color:var(--ink); }
+.gc-bell-panel li.is-new button { background:#fdf4ef; }
+.gc-bell-panel li button span { color:#5e6058; font-size:12.5px; line-height:1.4; }
+.gc-bell-panel li button small { color:var(--muted); font-size:11px; }
+.gc-bell-empty { padding:18px 14px; color:var(--muted); font-size:13px; }

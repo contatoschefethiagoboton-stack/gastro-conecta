@@ -11,6 +11,8 @@ import { ClientHome, ClientRequests } from "./dashboard/ClientPanels";
 import { FinancePanel, ProviderJobs, ProviderOverview, ProviderProposals, RadarPanel, SubscriptionBanner, SubscriptionPanel } from "./dashboard/ProviderPanels";
 import { CalculatorsPanel } from "./dashboard/CopilotTools";
 import { GrowthPanel } from "./dashboard/GrowthPanel";
+import { ShareCard } from "./dashboard/ShareCard";
+import NotificationBell from "@/components/NotificationBell";
 
 type Tab = { id: string; label: string; icon: typeof LayoutDashboard };
 
@@ -51,10 +53,10 @@ export default function Dashboard() {
   const signOut = () => { void api("/logout", { method: "POST" }).finally(() => { client.clear(); window.location.assign("/"); }); };
   const renderTab = (user: DashboardUser) => {
     switch (active.id) {
-      case "home": return <><GrowthPrompt user={user}/><ClientHome user={user} onTab={go}/><MyBenefits/></>;
+      case "home": return <><GrowthPrompt user={user}/><ClientHome user={user} onTab={go}/><ShareCard user={user}/><MyBenefits/></>;
       case "requests": return <ClientRequests user={user} onTab={go}/>;
       case "data": return <Onboarding mode="edit" onDone={() => void me.refetch()}/>;
-      case "overview": return <><GrowthPrompt user={user}/><ProviderOverview user={user} onTab={go}/><MyBenefits/></>;
+      case "overview": return <><GrowthPrompt user={user}/><ProviderOverview user={user} onTab={go}/><ShareCard user={user}/><MyBenefits/></>;
       case "radar": return <RadarPanel user={user}/>;
       case "proposals": return <ProviderProposals/>;
       case "jobs": return <ProviderJobs/>;
@@ -85,7 +87,7 @@ export default function Dashboard() {
         <div className="dash-sidebar-bottom"><div className="dash-safety-note"><ShieldCheck size={16}/><span>{isProvider ? "Sem comissão: 100% do valor negociado é seu." : "Conta de cliente 100% gratuita."}</span></div><button className="dash-signout" type="button" onClick={signOut}><LogOut size={16}/> Sair da conta</button></div>
       </aside>
       <section className="dash-main">
-        <header className="dash-topbar"><button className="dash-menu-button" type="button" onClick={() => setNavOpen(true)} aria-label="Abrir navegação"><Menu size={20}/></button><div><span className="dash-breadcrumb">Painel /</span><strong>{active.label}</strong></div><div className="dash-topbar-actions"><span className="dash-avatar dash-avatar-small">{initials(user.name)}</span></div></header>
+        <header className="dash-topbar"><button className="dash-menu-button" type="button" onClick={() => setNavOpen(true)} aria-label="Abrir navegação"><Menu size={20}/></button><div><span className="dash-breadcrumb">Painel /</span><strong>{active.label}</strong></div><div className="dash-topbar-actions"><NotificationBell onNavigate={link => { const url = new URL(link, window.location.origin); const aba = url.searchParams.get("aba"); if (url.pathname === "/painel" && aba) go(aba); else window.location.assign(link); }}/><span className="dash-avatar dash-avatar-small">{initials(user.name)}</span></div></header>
         <div className="dash-content">
           <div className="dash-heading-row"><div><span className="dash-kicker">{isProvider ? "Profissional" : "Cliente"}</span><h1>{active.label}</h1></div><span className="dash-city"><Building2 size={15}/> {user.city || "Cidade não informada"}</span></div>
           {isProvider && user.status === "pending" && <div className="dash-alert dash-alert-warning" role="status"><Clock3 size={17}/> Cadastro recebido e em análise pela administração. Depois da aprovação, ative a assinatura para aparecer no catálogo e enviar propostas.</div>}

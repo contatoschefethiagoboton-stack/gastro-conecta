@@ -17,6 +17,7 @@ import { clientContractDataComplete, loadDetails, PROVIDER_SCHEMA_VERSION, provi
 import { allServices, findService, normalizeServiceCatalog } from "@shared/services";
 import { normalizeDemos } from "@shared/catalog";
 import { subscriptionSummary } from "./subscriptions";
+import { later, notifyAdmin } from "./notify";
 
 const router = Router();
 const idSchema = z.coerce.number().int().positive();
@@ -227,7 +228,8 @@ router.put("/onboarding", wrap(async (req, res) => {
   requireDb();
   const context = await requireAuth(req);
   const type = context.profile.accountType;
-  const previous = (await loadDetails(context.user.id)).details;
+  const before = await loadDetails(context.user.id);
+  const previous = before.details;
   let details: Record<string, any>;
   let keepMedia: number[];
   if (type === "client") {
@@ -261,6 +263,7 @@ router.put("/onboarding", wrap(async (req, res) => {
   });
   await pruneProfileMedia(context.user.id, keepMedia);
   await audit(context.user.id, "profile.onboarding_saved", { accountType: type }, context.user.id);
+  if (type === "provider" && !before.completedAt) later(() => notifyAdmin({ type: "provider.profile_completed", title: "Cadastro de profissional para aprovar", body: `${context.user.name ?? "Profissional"} completou o cadastro (documentos, fotos e Pix). Confira e aprove em Usuários e aprovações.`, path: "/admin/painel?secao=users" }));
   const saved = await loadDetails(context.user.id);
   res.json({ ok: true, details: withMediaUrls(saved.details), completedAt: saved.completedAt, status: context.profile.status });
 }));

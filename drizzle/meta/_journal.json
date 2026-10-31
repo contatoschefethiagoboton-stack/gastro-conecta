@@ -57,6 +57,13 @@
       "when": 1792252560670,
       "tag": "0007_levels_promotions_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1792252560671,
+      "tag": "0008_notifications_marketing",
+      "breakpoints": true
     }
   ]
 }

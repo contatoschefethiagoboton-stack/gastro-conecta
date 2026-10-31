@@ -27,7 +27,7 @@ export async function createResetLink(req: Request, userId: number): Promise<str
 }
 
 /** Envia e-mail pelo Resend (RESEND_API_KEY + MAIL_FROM). Sem configuração, não envia. */
-async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM;
   if (!key || !from) return false;

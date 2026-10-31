@@ -162,7 +162,7 @@ router.post("/provider/promotions/:id/join", wrap(async (req, res) => {
 router.post("/provider/promotions/refresh", wrap(async (req, res) => {
   const context = await providerCtx(req);
   limit(`promo-refresh:${context.user.id}`, 30, HOUR);
-  const rows = await query<any[]>("SELECT mpPaymentId FROM gc_subscription_payments WHERE userId = ? AND purpose = 'promotion' AND status = 'pending' AND mpPaymentId IS NOT NULL ORDER BY id DESC LIMIT 5", [context.user.id]);
+  const rows = await query<any[]>("SELECT mpPaymentId FROM gc_subscription_payments WHERE userId = ? AND purpose IN ('promotion','benefit') AND status = 'pending' AND mpPaymentId IS NOT NULL ORDER BY id DESC LIMIT 5", [context.user.id]);
   for (const row of rows) await syncMpPayment(row.mpPaymentId);
   res.json({ ok: true });
 }));

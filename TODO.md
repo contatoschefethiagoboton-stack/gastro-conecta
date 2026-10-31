@@ -45,3 +45,11 @@
 - [x] Promoções: cliente escolhe o fornecedor participante (sem WhatsApp da plataforma); fornecedor nível ALTO paga o adicional definido pelo admin via Pix; VIP (só o admin vê) entra sem pagar; admin inclui/remove fornecedores.
 - [x] Níveis BAIXO / MÉDIO / ALTO pelas avaliações, com regras, mensagens e benefícios editáveis (Textos do site → Níveis e promoções) e nível fixado pelo admin.
 - [ ] No Mercado Pago: cadastrar a URL do webhook (eventos Pagamentos e Planos e assinaturas) e colar a assinatura secreta no painel.
+
+## Notificações, marketing e preços
+
+- [x] Notificações do admin (sino + seção Notificações, e-mail e WhatsApp): novos clientes/profissionais, cadastros para aprovar, pedidos, propostas, serviços fechados, avaliações e pagamentos.
+- [x] Clientes e profissionais avisados no painel e por WhatsApp com link de acesso automático (7 dias): proposta recebida, novo pedido no radar, proposta aceita, novo profissional na região (com consentimento).
+- [x] Marketing e crescimento: gráficos, origem (Google/Facebook/Instagram/WhatsApp/indicação; pago x orgânico), horários e dias, buscas, cidades sem profissionais, pontos críticos, sugestões automáticas e plano por IA; links marcados (UTM) e link de divulgação para profissionais e clientes.
+- [x] Pagamentos: valor da assinatura no painel, acesso grátis ou desconto por profissional, benefícios extras pagos (ex.: destaque no catálogo).
+- [ ] WhatsApp Business (Meta): número, modelo aprovado com 3 variáveis, token e ID do número no painel → Notificações. E-mail: RESEND_API_KEY e MAIL_FROM no Render.

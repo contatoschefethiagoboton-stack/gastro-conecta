@@ -9,7 +9,7 @@ import { categoryLabel, ContractButton, EmptyState, Field, formatDate, formatMon
 import { ProposalComposer } from "./CopilotTools";
 
 type ProviderEvents = { radar: EventItem[]; events: EventItem[]; closed: Array<{ id: number; title: string; city: string; date?: string; closedWith: string }> };
-type Summary = { priceCents: number; phase: keyof typeof PHASE_LABELS; label: string; visible: boolean; periodEnd: string | null; autoRenew: { authorized: boolean; status: string | null }; manualPixAvailable: boolean; pendingPix: { qrCode: string; qrCodeBase64: string; ticketUrl: string; expiresAt: string | null } | null; history: Array<{ id: number; method: string; status: string; amountCents: number; createdAt: string }>; paymentsConfigured: boolean };
+type Summary = { priceCents: number; basePriceCents?: number; discountPercent?: number; free?: boolean; phase: keyof typeof PHASE_LABELS; label: string; visible: boolean; periodEnd: string | null; autoRenew: { authorized: boolean; status: string | null }; manualPixAvailable: boolean; pendingPix: { qrCode: string; qrCodeBase64: string; ticketUrl: string; expiresAt: string | null } | null; history: Array<{ id: number; method: string; status: string; amountCents: number; createdAt: string }>; paymentsConfigured: boolean };
 type Finance = {
   expenses: Array<{ id: number; category: string; description: string; amountCents: number; spentOn: string; eventId?: number; fileUrl?: string }>;
   totals: { revenueCents: number; expensesCents: number; profitCents: number };
@@ -132,7 +132,7 @@ export function SubscriptionPanel() {
     <SectionIntro eyebrow="Assinatura mensal" title="Sem comissão. Valor fixo." text="Você recebe 100% do valor negociado com seus clientes. A assinatura mantém seu perfil visível no catálogo e libera o envio de propostas."/>
     {query.isLoading || !s ? <LoadingState/> : <>
       <div className="dash-card-grid dash-card-grid-three">
-        <section className="dash-money-card"><span>Mensalidade</span><strong>{formatMoney(s.priceCents)}</strong><CreditCard size={20}/></section>
+        <section className="dash-money-card"><span>Mensalidade</span><strong>{s.free ? "Cortesia" : formatMoney(s.priceCents)}</strong>{!s.free && Boolean(s.discountPercent) && s.basePriceCents ? <small>{s.discountPercent}% de desconto sobre {formatMoney(s.basePriceCents)}</small> : s.free ? <small>Acesso liberado pela administração</small> : null}<CreditCard size={20}/></section>
         <section className={`dash-money-card ${s.visible ? "outline" : "muted"}`}><span>Situação</span><strong className="dash-small-strong">{s.label}</strong>{s.visible ? <BadgeCheck size={20}/> : <EyeOff size={20}/>}</section>
         <section className="dash-money-card outline"><span>Vencimento</span><strong>{s.periodEnd ? formatDate(s.periodEnd) : "—"}</strong><CalendarDays size={20}/></section>
       </div>
