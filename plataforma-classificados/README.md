@@ -1,4 +1,4 @@
-# Plataforma de Classificados Adultos (+18)
+# Belíssima VIP — plataforma de classificados adultos (+18)
 
 Código-base de uma plataforma de classificados de **acompanhantes e massagistas** com:
 

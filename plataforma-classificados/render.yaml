@@ -1,20 +1,20 @@
 # Render Blueprint — coloque este arquivo na RAIZ do repositório dedicado da plataforma.
 # Render > New > Blueprint > selecione o repositório. Deploy automático a cada push na branch main.
 databases:
-  - name: classificados-db
+  - name: belissima-vip-db
     plan: basic-1gb            # PostGIS, pgcrypto, citext e unaccent são suportados (CREATE EXTENSION na migração)
     postgresMajorVersion: "16"
     ipAllowList: []            # só acesso pela rede privada do Render
 
 services:
   - type: keyvalue             # Redis gerenciado (cache, rate limit, filas BullMQ)
-    name: classificados-redis
+    name: belissima-vip-redis
     plan: starter
     maxmemoryPolicy: noeviction  # obrigatório para BullMQ
     ipAllowList: []
 
   - type: web
-    name: classificados-api
+    name: belissima-vip-api
     runtime: docker
     rootDir: apps/api
     dockerfilePath: ./Dockerfile
@@ -27,9 +27,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase: { name: classificados-db, property: connectionString }
+        fromDatabase: { name: belissima-vip-db, property: connectionString }
       - key: REDIS_URL
-        fromService: { type: keyvalue, name: classificados-redis, property: connectionString }
+        fromService: { type: keyvalue, name: belissima-vip-redis, property: connectionString }
       - key: JWT_SECRET
         generateValue: true
       - key: PII_ENCRYPTION_KEY       # openssl rand -hex 32 — guarde cópia offline: perder = perder os dados
@@ -78,7 +78,7 @@ services:
         sync: false
 
   - type: worker
-    name: classificados-worker
+    name: belissima-vip-worker
     runtime: docker
     rootDir: apps/api
     dockerfilePath: ./Dockerfile
@@ -87,7 +87,7 @@ services:
     envVars: *apiEnv
 
   - type: web
-    name: classificados-web
+    name: belissima-vip-web
     runtime: docker
     rootDir: apps/web
     dockerfilePath: ./Dockerfile

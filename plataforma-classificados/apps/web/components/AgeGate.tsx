@@ -4,6 +4,7 @@
  * Não exige cadastro (navegação livre), mas bloqueia a visualização até a declaração de maioridade.
  */
 import { useEffect, useState } from 'react';
+import Logo from './Logo';
 
 const KEY = 'age-confirmed-v1';
 
@@ -37,6 +38,7 @@ export default function AgeGate() {
     <div className="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
       <div className="panel">
         <div className="seal">18+</div>
+        <span className="logo" style={{ justifySelf: 'center', fontSize: 22 }}><Logo /></span>
         <h1 id="age-title">Conteúdo para adultos</h1>
         <p className="muted" style={{ margin: 0 }}>
           Este site contém nudez e conteúdo sexual explícito. Ao continuar, você declara ter 18 anos ou mais

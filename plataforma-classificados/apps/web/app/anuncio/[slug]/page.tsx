@@ -44,7 +44,7 @@ export default async function AnuncioPage({ params }: { params: { slug: string }
   const labels = new Map(Object.values(tax).flatMap((v) => (Array.isArray(v) ? v.map((o) => [o.value, o.label] as const) : [])));
   const L = (vs: string[]) => vs.map((v) => labels.get(v) ?? v);
   const wa = ad.whatsapp?.replace(/\D/g, '');
-  const waHref = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá ${ad.display_name}, vi seu perfil no Classi+18 e gostaria de mais informações.`)}` : null;
+  const waHref = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(`Olá ${ad.display_name}, vi seu perfil no Belíssima VIP e gostaria de mais informações.`)}` : null;
   const fromPrice = ad.prices.length ? Math.min(...ad.prices.map((p) => p.priceCents)) : null;
 
   const facts: [string, string[]][] = [
@@ -135,7 +135,7 @@ export default async function AnuncioPage({ params }: { params: { slug: string }
               </div>
             )}
             <p className="subtle" style={{ fontSize: 12, margin: 0 }}>
-              Nunca faça pagamento antecipado para desconhecidos. Diga que viu o perfil no Classi+18.
+              Nunca faça pagamento antecipado para desconhecidos. Diga que viu o perfil no Belíssima VIP.
             </p>
           </div>
 

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Logo from './Logo';
 import { api, session } from '@/lib/api';
 
 export default function LoginForm({ onLogin, title = 'Entrar' }: { onLogin: (token: string, role: string) => void; title?: string }) {
@@ -24,7 +25,7 @@ export default function LoginForm({ onLogin, title = 'Entrar' }: { onLogin: (tok
             setBusy(false);
           }
         }}>
-        <span className="logo-mark" style={{ width: 44, height: 44, borderRadius: 14 }}>18+</span>
+        <span className="logo"><Logo /></span>
         <h1 style={{ margin: 0, fontSize: 24, letterSpacing: '-0.02em' }}>{title}</h1>
         <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label>Senha<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
