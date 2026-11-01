@@ -1,6 +1,7 @@
 'use client';
 /** Vitrine de conteúdo exclusivo: compra rápida sem cadastro (e-mail + PIX). */
 import { useEffect, useRef, useState } from 'react';
+import { IconEye, IconLock } from './Icons';
 import VisualizadorPPV from './VisualizadorPPV';
 import { api, brl } from '@/lib/api';
 
@@ -10,12 +11,13 @@ interface Item {
 }
 interface Checkout { purchaseId: string; statusToken: string; pix?: { copyPaste: string; qrCodeBase64?: string; expiresAt: string } }
 
-function Comprar({ item }: { item: Item }) {
+function Comprar({ item, onCancel }: { item: Item; onCancel: () => void }) {
   const [email, setEmail] = useState('');
   const [adult, setAdult] = useState(false);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval>>();
 
   // Consulta o status a cada 3 s até o PIX compensar
@@ -34,18 +36,20 @@ function Comprar({ item }: { item: Item }) {
 
   if (checkout?.pix) {
     return (
-      <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'grid', gap: 10 }}>
         <strong>Pague com PIX para liberar</strong>
-        {checkout.pix.qrCodeBase64 && <img src={`data:image/png;base64,${checkout.pix.qrCodeBase64}`} alt="QR Code PIX" width={200} height={200} />}
+        {checkout.pix.qrCodeBase64 && <img src={`data:image/png;base64,${checkout.pix.qrCodeBase64}`} alt="QR Code PIX" width={200} height={200} style={{ borderRadius: 12, background: '#fff', padding: 8 }} />}
         <div className="pix">{checkout.pix.copyPaste}</div>
-        <button className="btn" onClick={() => navigator.clipboard?.writeText(checkout.pix!.copyPaste)}>Copiar código PIX</button>
-        <span className="muted">Aguardando pagamento… o link de acesso também será enviado para {email}.</span>
+        <button className="btn sm" onClick={() => { navigator.clipboard?.writeText(checkout.pix!.copyPaste); setCopied(true); }}>
+          {copied ? 'Copiado ✓' : 'Copiar código PIX'}
+        </button>
+        <span className="subtle" style={{ fontSize: 12 }}>Aguardando pagamento… o link também será enviado para {email}.</span>
       </div>
     );
   }
 
   return (
-    <form style={{ display: 'grid', gap: 8 }}
+    <form style={{ display: 'grid', gap: 10 }}
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -55,13 +59,16 @@ function Comprar({ item }: { item: Item }) {
           setError((err as Error).message);
         }
       }}>
-      <label>Seu e-mail (para receber o acesso)<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
-        <input type="checkbox" style={{ width: 'auto' }} checked={adult} onChange={(e) => setAdult(e.target.checked)} required />
+      <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail para receber o acesso" aria-label="E-mail" />
+      <label className="switch-row" style={{ fontSize: 13, justifyContent: 'flex-start' }}>
+        <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} required />
         Declaro ter 18 anos ou mais
       </label>
-      {error && <span style={{ color: 'var(--danger)' }}>{error}</span>}
-      <button className="btn primary" type="submit" disabled={!adult}>Comprar por {brl(item.price_cents)}</button>
+      {error && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</span>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn ghost sm" type="button" onClick={onCancel}>Voltar</button>
+        <button className="btn primary sm block" type="submit" disabled={!adult}>Pagar {brl(item.price_cents)} com PIX</button>
+      </div>
     </form>
   );
 }
@@ -76,17 +83,31 @@ export default function VitrinePPV({ adId }: { adId: string }) {
 
   if (!items.length) return null;
   return (
-    <section className="card" style={{ display: 'grid', gap: 12 }}>
-      <h2 style={{ margin: 0 }}>Conteúdo exclusivo</h2>
-      <div className="grid">
+    <section>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <h2 className="section-title">Conteúdo <span className="gradient-text">exclusivo</span></h2>
+        <span className="subtle" style={{ fontSize: 13 }}>Sem cadastro · pagamento por PIX</span>
+      </div>
+      <div className="ppv-grid">
         {items.map((it) => (
-          <div key={it.id} className="card" style={{ display: 'grid', gap: 8 }}>
-            {it.teaser_url ? <img src={it.teaser_url} alt="" style={{ borderRadius: 8 }} /> : <div style={{ aspectRatio: '1', background: 'var(--surface-2)', borderRadius: 8, display: 'grid', placeItems: 'center' }}>🔒 {it.kind === 'video' ? 'Vídeo' : 'Foto'}</div>}
-            <strong>{it.title}</strong>
-            <span className="muted">
-              {it.view_mode === 'single_view' ? 'Visualização única' : `${it.max_views} visualização(ões)`} · {it.view_window_seconds}s por abertura · abrir em até {it.access_valid_days} dias
-            </span>
-            {buying === it.id ? <Comprar item={it} /> : <button className="btn primary" onClick={() => setBuying(it.id)}>Desbloquear · {brl(it.price_cents)}</button>}
+          <div key={it.id} className="ppv-card">
+            <div className="ppv-cover">
+              {it.teaser_url && <img src={it.teaser_url} alt="" />}
+              <span className="lock"><IconLock /></span>
+              <span className="badge glass" style={{ position: 'absolute', top: 10, left: 10 }}>{it.kind === 'video' ? 'Vídeo' : 'Foto'}</span>
+            </div>
+            <div className="ppv-body">
+              <strong>{it.title}</strong>
+              <span className="subtle" style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <IconEye width={14} height={14} />
+                {it.view_mode === 'single_view' ? 'Visualização única' : (it.max_views === 1 ? '1 visualização' : `${it.max_views} visualizações`)} · {it.view_window_seconds}s
+              </span>
+              {buying === it.id ? (
+                <Comprar item={it} onCancel={() => setBuying(null)} />
+              ) : (
+                <button className="btn primary sm block" onClick={() => setBuying(it.id)}>Desbloquear · {brl(it.price_cents)}</button>
+              )}
+            </div>
           </div>
         ))}
       </div>

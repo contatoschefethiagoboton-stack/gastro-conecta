@@ -1,8 +1,7 @@
 'use client';
 /**
  * Aviso de conteúdo adulto exibido na primeira visita.
- * Não exige cadastro (navegação livre), mas registra a declaração de maioridade
- * no navegador e bloqueia a visualização até a confirmação.
+ * Não exige cadastro (navegação livre), mas bloqueia a visualização até a declaração de maioridade.
  */
 import { useEffect, useState } from 'react';
 
@@ -19,6 +18,10 @@ export default function AgeGate() {
     }
   }, []);
 
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : '';
+  }, [open]);
+
   if (!open) return null;
 
   const confirm = () => {
@@ -32,18 +35,19 @@ export default function AgeGate() {
 
   return (
     <div className="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
-      <div className="card">
-        <h1 id="age-title" style={{ margin: 0 }}>Conteúdo adulto</h1>
-        <p className="muted">
-          Este site contém imagens e vídeos de nudez e conteúdo sexual explícito, destinados exclusivamente a
-          maiores de 18 anos. Ao entrar você declara ter 18 anos ou mais e que esse conteúdo é legal no local onde está.
+      <div className="panel">
+        <div className="seal">18+</div>
+        <h1 id="age-title">Conteúdo para adultos</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          Este site contém nudez e conteúdo sexual explícito. Ao continuar, você declara ter 18 anos ou mais
+          e que esse conteúdo é legal no lugar onde você está.
         </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn primary" onClick={confirm}>Tenho 18 anos ou mais — entrar</button>
-          <a className="btn" href="https://www.google.com">Sair</a>
+        <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
+          <button className="btn primary lg block" onClick={confirm}>Tenho 18 anos ou mais — entrar</button>
+          <a className="btn ghost block" href="https://www.google.com">Sair</a>
         </div>
-        <p className="muted" style={{ fontSize: 12 }}>
-          Pais e responsáveis: este site possui o selo RTA e pode ser bloqueado por ferramentas de controle parental.
+        <p className="subtle" style={{ fontSize: 12, margin: 0 }}>
+          Site com selo RTA: pode ser bloqueado por ferramentas de controle parental.
         </p>
       </div>
     </div>

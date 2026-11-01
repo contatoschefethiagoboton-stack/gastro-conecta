@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { IconFlag } from './Icons';
 import { api } from '@/lib/api';
 
 const REASONS = [
@@ -17,24 +18,34 @@ export default function DenunciaBotao({ adId }: { adId: string }) {
   const [details, setDetails] = useState('');
   const [sent, setSent] = useState(false);
 
-  if (sent) return <p className="muted">Denúncia recebida. Nossa equipe vai analisar com prioridade.</p>;
-  if (!open) return <button className="btn danger" onClick={() => setOpen(true)} style={{ justifySelf: 'start' }}>Denunciar anúncio</button>;
+  if (sent) return <p className="muted" style={{ fontSize: 13 }}>Denúncia recebida. Nossa equipe vai analisar com prioridade.</p>;
+  if (!open) {
+    return (
+      <button className="btn ghost sm" onClick={() => setOpen(true)} style={{ justifySelf: 'start', color: 'var(--muted)' }}>
+        <IconFlag /> Denunciar este perfil
+      </button>
+    );
+  }
 
   return (
-    <form className="card" style={{ display: 'grid', gap: 8 }}
+    <form className="card" style={{ display: 'grid', gap: 12 }}
       onSubmit={async (e) => {
         e.preventDefault();
         await api(`/ads/${adId}/report`, { method: 'POST', body: JSON.stringify({ reason, details: details || undefined }) });
         setSent(true);
       }}>
+      <strong>Denunciar perfil</strong>
       <label>Motivo
         <select value={reason} onChange={(e) => setReason(e.target.value)}>
           {REASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </label>
       <label>Detalhes (opcional)<textarea rows={3} maxLength={2000} value={details} onChange={(e) => setDetails(e.target.value)} /></label>
-      <p className="muted" style={{ fontSize: 12 }}>Em caso de risco imediato, ligue 190. Denúncias de exploração sexual infantil: Disque 100.</p>
-      <button className="btn danger" type="submit">Enviar denúncia</button>
+      <p className="subtle" style={{ fontSize: 12, margin: 0 }}>Risco imediato: ligue 190. Exploração sexual infantil: Disque 100.</p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn ghost" type="button" onClick={() => setOpen(false)}>Cancelar</button>
+        <button className="btn danger" type="submit">Enviar denúncia</button>
+      </div>
     </form>
   );
 }
