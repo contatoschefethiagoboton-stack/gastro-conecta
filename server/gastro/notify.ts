@@ -86,10 +86,32 @@ export async function consumeMagicLink(token: string): Promise<{ userId: number;
 const digits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 const toWhatsapp = (value: unknown) => { const d = digits(value); if (d.length < 10) return ""; return d.startsWith("55") && d.length > 11 ? d : `55${d}`; };
 
+/** Traduz a recusa da Meta (WhatsApp Cloud API) para o que o admin precisa corrigir. */
+export function explainWhatsappError(code: number, message: string, to: string): string {
+  const m = message.toLowerCase();
+  if (code === 190 || /access token|session has expired|oauth/.test(m)) return "O token do WhatsApp expirou ou é inválido. Os tokens temporários da Meta duram só 24 horas: crie um token permanente (Configurações do negócio → Usuários do sistema → Gerar token, com a permissão whatsapp_business_messaging) e cole na seção Notificações.";
+  if (code === 131030 || /not in allowed list|recipient phone number not in allowed list/.test(m)) return `O número ${to} não está na lista de teste da Meta. Enquanto o app estiver em modo de teste, adicione esse número em WhatsApp → Configuração da API → "Para" (até 5 números) ou conclua a verificação do negócio para enviar a qualquer número.`;
+  if (code === 132001 || /template name does not exist|does not exist in the translation/.test(m)) return "A Meta não encontrou o modelo com esse nome e idioma. Confira o nome exato do modelo (letras minúsculas e _) e se o idioma é Português (BR) = pt_BR.";
+  if (code === 132000 || /number of parameters/.test(m)) return "O modelo aprovado não tem exatamente 3 variáveis ({{1}}, {{2}} e {{3}}). Crie o modelo com o texto: Olá! {{1}} / {{2}} / Acesse: {{3}}.";
+  if (code === 132015 || code === 132016 || /paused|disabled/.test(m)) return "O modelo de mensagem foi pausado ou desativado pela Meta. Crie outro modelo (categoria Utilidade) e atualize o nome aqui.";
+  if (code === 133010 || /not registered/.test(m)) return "O número de envio ainda não foi registrado na Meta. No WhatsApp Manager, conclua o registro do número (com o PIN de 6 dígitos).";
+  if (code === 131026 || /undeliverable/.test(m)) return `A mensagem não pôde ser entregue para ${to}: confira se esse número tem WhatsApp (WhatsApp da administração em Textos do site → Contato).`;
+  if (code === 100 && /phone_number_id|unsupported post request|does not exist/.test(m)) return "O ID do número de telefone está errado. Copie o “Identificação do número de telefone” em WhatsApp → Configuração da API (não é o número em si).";
+  if (code === 131047) return "Fora da janela de 24 horas: só modelos aprovados podem ser enviados. Confira se o modelo está aprovado.";
+  if (code === 131056 || code === 130429 || /rate limit/.test(m)) return "Limite de envios da Meta atingido. Aguarde alguns minutos.";
+  if (code === 131031 || /account has been locked|restricted/.test(m)) return "A conta do WhatsApp Business está bloqueada ou restrita. Veja os avisos no WhatsApp Manager.";
+  return `A Meta recusou o envio${code ? ` (código ${code})` : ""}: ${message || "sem detalhes"}.`;
+}
+
 /** Mensagem pelo modelo aprovado no WhatsApp Business ({{1}} título, {{2}} texto, {{3}} link). */
 export async function sendWhatsapp(phone: string, title: string, text: string, link: string): Promise<boolean> {
+  return (await sendWhatsappDetailed(phone, title, text, link)).ok;
+}
+
+export async function sendWhatsappDetailed(phone: string, title: string, text: string, link: string): Promise<{ ok: boolean; error?: string }> {
   const to = toWhatsapp(phone);
-  if (!to || !whatsappConfigured()) return false;
+  if (!whatsappConfigured()) return { ok: false, error: "WhatsApp Business ainda não configurado (token, ID do número e nome do modelo)." };
+  if (!to) return { ok: false, error: "O WhatsApp de destino está vazio ou inválido. Para o teste, confira o WhatsApp da administração em Textos do site → Contato (55 + DDD + número)." };
   const clean = (v: string, max: number) => v.replace(/[\n\t]+/g, " ").replace(/ {4,}/g, "   ").slice(0, max) || "-";
   try {
     const response = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(waPhoneId())}/messages`, {
@@ -101,10 +123,14 @@ export async function sendWhatsapp(phone: string, title: string, text: string, l
       }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) console.warn("[WhatsApp] envio recusado", response.status);
-    return response.ok;
+    if (response.ok) return { ok: true };
+    const data = await response.json().catch(() => ({})) as { error?: { code?: number; message?: string; error_data?: { details?: string } } };
+    const code = Number(data.error?.code ?? 0);
+    const message = [data.error?.message, data.error?.error_data?.details].filter(Boolean).join(" — ");
+    console.warn("[WhatsApp] envio recusado", response.status, code, message);
+    return { ok: false, error: explainWhatsappError(code, message, `+${to}`) };
   } catch {
-    return false;
+    return { ok: false, error: "Não foi possível falar com a Meta agora (rede ou tempo esgotado). Tente de novo em instantes." };
   }
 }
 
