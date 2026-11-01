@@ -9,7 +9,7 @@ import { paymentDescription, paymentReference, subscriberCode } from "@shared/pa
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query } from "./db";
 import { createGcSession, gcCookieOptions, isOwner, requireAuth, type AuthContext } from "./auth";
-import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySettings, sendWhatsappDetailed } from "./notify";
+import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySettings, sendWhatsappDetailed, templateSummary } from "./notify";
 import { sendMailDetailed } from "./password";
 import { getSiteContent } from "./content";
 import { copilotProvider, resolveCopilotEndpoint } from "./routes";
@@ -92,6 +92,7 @@ router.put("/admin/notifications/settings", wrap(async (req, res) => {
   const input = body(req, z.object({
     waToken: z.string().trim().max(600).optional(), waPhoneNumberId: z.string().trim().regex(/^\d{0,30}$/, "ID do número: só números").optional(),
     waTemplate: z.string().trim().regex(/^[a-z0-9_]{0,120}$/, "Nome do modelo: letras minúsculas, números e _").optional(),
+    waBusinessId: z.string().trim().regex(/^\d{0,30}$/, "ID da conta: só números").optional(),
     waParamNames: z.string().trim().max(200).refine(v => !v || v.split(/[,;\s]+/).filter(Boolean).length === 3, "Informe exatamente 3 nomes, separados por vírgula (ex.: titulo, texto, link)").optional(), waLang: z.string().trim().regex(/^[a-z]{2}(_[A-Z]{2})?$/, "Idioma inválido (ex.: pt_BR)").optional(),
     adminEmails: z.string().trim().max(400).optional(), adminEmailOn: z.boolean().optional(), adminWhatsappOn: z.boolean().optional(),
   }).strict());
@@ -106,6 +107,7 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   limit(`notify-test:${context.user.id}`, 10, HOUR);
   const content = await getSiteContent();
   const status = notifySettingsStatus();
+  const template = await templateSummary(true);
   const wa = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`);
   const whatsapp = wa.ok;
   // Diagnóstico: se o modelo foi recusado, testa o modelo padrão da Meta (hello_world) para separar
@@ -124,6 +126,7 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   res.json({
     whatsapp, email: mail.ok, emailTo: to,
     ...(mail.error ? { emailError: mail.error } : {}),
+    ...(template ? { template } : {}),
     ...(wa.error ? { whatsappError: diagnosis ? `${wa.error} ${diagnosis}` : wa.error } : {}),
   });
 }));

@@ -19,7 +19,7 @@ const Spinner = () => <div className="adm-center"><Loader2 className="ob-spin" s
 // ------------------------------------------------------------------ Notificações
 
 type Notice = { id: number; type: string; title: string; body: string; link: string; read: boolean; createdAt: string };
-type NotifyStatus = { whatsapp: { configured: boolean; token: string; phoneNumberId: string; template: string; lang: string; paramNames?: string }; email: { configured: boolean; adminEmails: string; on: boolean }; adminWhatsappOn: boolean; origin: string };
+type NotifyStatus = { whatsapp: { configured: boolean; token: string; phoneNumberId: string; template: string; lang: string; paramNames?: string; businessId?: string }; email: { configured: boolean; adminEmails: string; on: boolean }; adminWhatsappOn: boolean; origin: string };
 const TYPE_LABEL: Record<string, string> = {
   'signup.client': 'Novo cliente', 'signup.provider': 'Novo profissional', 'provider.profile_completed': 'Aprovar cadastro', 'event.created': 'Pedido de orçamento',
   'proposal.new': 'Proposta', 'proposal.accepted': 'Serviço fechado', 'payment.subscription': 'Assinatura paga', 'payment.promotion': 'Promoção paga', 'payment.benefit': 'Benefício pago', 'review.new': 'Avaliação',
@@ -28,14 +28,14 @@ const TYPE_LABEL: Record<string, string> = {
 export function NotificationsSection() {
   const [list, setList] = useState<Notice[] | null>(null);
   const [status, setStatus] = useState<NotifyStatus | null>(null);
-  const [form, setForm] = useState({ waToken: '', waPhoneNumberId: '', waTemplate: '', waLang: 'pt_BR', waParamNames: '', adminEmails: '' });
+  const [form, setForm] = useState({ waToken: '', waPhoneNumberId: '', waTemplate: '', waLang: 'pt_BR', waParamNames: '', waBusinessId: '', adminEmails: '' });
   const [busy, setBusy] = useState('');
   const [filter, setFilter] = useState('');
-  const [testResult, setTestResult] = useState<{ whatsapp: boolean; email: boolean; emailTo?: string; emailError?: string; whatsappError?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ whatsapp: boolean; email: boolean; emailTo?: string; emailError?: string; whatsappError?: string; template?: { name?: string; language?: string; status?: string; approved?: boolean; body?: string; variables?: string[]; format?: string; error?: string } } | null>(null);
   const load = () => api<{ notifications: Notice[] }>('/admin/notifications').then(r => setList(r.notifications)).catch(e => toast.error(errText(e)));
   useEffect(() => {
     void load();
-    api<NotifyStatus>('/admin/notifications/settings').then(r => { setStatus(r); setForm(f => ({ ...f, waPhoneNumberId: r.whatsapp.phoneNumberId, waTemplate: r.whatsapp.template, waLang: r.whatsapp.lang || 'pt_BR', waParamNames: r.whatsapp.paramNames ?? '', adminEmails: r.email.adminEmails })); }).catch(e => toast.error(errText(e)));
+    api<NotifyStatus>('/admin/notifications/settings').then(r => { setStatus(r); setForm(f => ({ ...f, waPhoneNumberId: r.whatsapp.phoneNumberId, waTemplate: r.whatsapp.template, waLang: r.whatsapp.lang || 'pt_BR', waParamNames: r.whatsapp.paramNames ?? '', waBusinessId: r.whatsapp.businessId ?? '', adminEmails: r.email.adminEmails })); }).catch(e => toast.error(errText(e)));
     void api('/admin/notifications/read', { method: 'POST' }).catch(() => undefined);
   }, []);
   const save = async (patch: Record<string, unknown>, label: string) => {
@@ -61,6 +61,7 @@ export function NotificationsSection() {
     <Card title="Como você e os usuários recebem os avisos" action={<button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'test'} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar teste para mim</button>}>
       {testResult && <ul className="mk-alerts adm-test-result">
         <li className={testResult.email ? 'mk-ok-box' : 'mk-alto'}>{testResult.email ? <Check size={17}/> : <AlertTriangle size={17}/>}<div><strong>E-mail: {testResult.email ? `enviado para ${testResult.emailTo}. Confira também a caixa de spam.` : 'não enviado'}</strong>{testResult.emailError && <span>{testResult.emailError}</span>}</div></li>
+        {testResult.template && <li className={testResult.template.error ? 'mk-alto' : testResult.template.approved ? 'mk-ok-box' : 'mk-medio'}>{testResult.template.error ? <AlertTriangle size={17}/> : <Check size={17}/>}<div>{testResult.template.error ? <><strong>Modelo na Meta: não encontrado</strong><span>{testResult.template.error}</span></> : <><strong>Modelo lido da Meta: “{testResult.template.name}” · {testResult.template.status} · idioma {testResult.template.language} · variáveis por {testResult.template.format}</strong><span>Texto: {testResult.template.body}</span><span>Variáveis encontradas: {testResult.template.variables?.length ? testResult.template.variables.map(v => `{{${v}}}`).join(', ') : 'nenhuma'}. O site preenche automaticamente no formato do modelo.</span></>}</div></li>}
         <li className={testResult.whatsapp ? 'mk-ok-box' : 'mk-medio'}>{testResult.whatsapp ? <Check size={17}/> : <AlertTriangle size={17}/>}<div><strong>WhatsApp: {testResult.whatsapp ? 'enviado' : 'não enviado'}</strong>{testResult.whatsappError && <span>{testResult.whatsappError}</span>}</div></li>
       </ul>}
       {!status ? <Spinner/> : <div className="adm-content-fields">
@@ -72,16 +73,17 @@ export function NotificationsSection() {
           <ol className="adm-help-list">
             <li>Em <strong>business.facebook.com → WhatsApp Manager</strong>, cadastre um número só para a plataforma.</li>
             <li>Crie um <strong>modelo de mensagem</strong> (categoria “Utilidade”, idioma Português (BR)) com o texto:<br/><code>{'Olá! {{1}}\n{{2}}\nAcesse: {{3}}'}</code></li>
-            <li>Depois de aprovado, copie o <strong>token permanente</strong>, o <strong>ID do número de telefone</strong> e o <strong>nome do modelo</strong> para cá.</li>
+            <li>Depois de aprovado, copie o <strong>token permanente</strong>, o <strong>ID do número de telefone</strong>, o <strong>ID da conta do WhatsApp Business</strong> (os dois ficam em WhatsApp → Configuração da API) e o <strong>nome do modelo</strong> para cá.</li>
           </ol>
           <div className="adm-grid-3">
             <label className="ob-field"><span>Token de acesso</span><input type="password" autoComplete="off" value={form.waToken} placeholder={status.whatsapp.token || 'EAAG…'} onChange={e => setForm({ ...form, waToken: e.target.value })}/></label>
             <label className="ob-field"><span>ID do número de telefone</span><input inputMode="numeric" value={form.waPhoneNumberId} onChange={e => setForm({ ...form, waPhoneNumberId: e.target.value.replace(/\D/g, '') })}/></label>
+            <label className="ob-field"><span>ID da conta do WhatsApp Business</span><input inputMode="numeric" value={form.waBusinessId} placeholder="Logo abaixo do ID do número" onChange={e => setForm({ ...form, waBusinessId: e.target.value.replace(/\D/g, '') })}/><small className="adm-muted">Com ele, o site lê o seu modelo na Meta e se ajusta sozinho.</small></label>
             <label className="ob-field"><span>Nome do modelo</span><input value={form.waTemplate} placeholder="aviso_gastroconecta" onChange={e => setForm({ ...form, waTemplate: e.target.value.toLowerCase() })}/></label>
             <label className="ob-field"><span>Idioma do modelo</span><select value={form.waLang} onChange={e => setForm({ ...form, waLang: e.target.value })}><option value="pt_BR">Português (BR) — pt_BR</option><option value="pt_PT">Português (PT) — pt_PT</option><option value="en_US">Inglês (EUA) — en_US</option><option value="es">Espanhol — es</option></select></label>
             <label className="ob-field ob-wide"><span>Nomes das variáveis (só se o modelo usa nomes em vez de {'{{1}}, {{2}}, {{3}}'})</span><input value={form.waParamNames} placeholder="Deixe em branco se o modelo usa {{1}}, {{2}}, {{3}} — ex.: titulo, texto, link" onChange={e => setForm({ ...form, waParamNames: e.target.value })}/></label>
           </div>
-          <div className="adm-svc-add"><button type="button" className="ob-btn ob-btn-primary" disabled={busy === 'wa'} onClick={() => void save({ ...(form.waToken ? { waToken: form.waToken.trim() } : {}), waPhoneNumberId: form.waPhoneNumberId, waTemplate: form.waTemplate.trim(), waLang: form.waLang, waParamNames: form.waParamNames.trim() }, 'wa')}>{busy === 'wa' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar WhatsApp</button></div>
+          <div className="adm-svc-add"><button type="button" className="ob-btn ob-btn-primary" disabled={busy === 'wa'} onClick={() => void save({ ...(form.waToken ? { waToken: form.waToken.trim() } : {}), waPhoneNumberId: form.waPhoneNumberId, waTemplate: form.waTemplate.trim(), waLang: form.waLang, waParamNames: form.waParamNames.trim(), waBusinessId: form.waBusinessId }, 'wa')}>{busy === 'wa' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar WhatsApp</button></div>
           <label className="adm-switch"><input type="checkbox" checked={status.adminWhatsappOn} onChange={e => void save({ adminWhatsappOn: e.target.checked }, 'waOn')}/> Também receber os avisos da administração no WhatsApp</label></div>
       </div>}
     </Card>

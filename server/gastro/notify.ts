@@ -11,14 +11,15 @@ import { dbConfigured, execute, query } from "./db";
 import { getInternalFlag, getSiteContent, setInternalFlag } from "./content";
 import { sendMail } from "./password";
 import { loadDetails } from "./profiles";
+import { buildTemplateComponents, pickTemplate, TEMPLATE_STATUS, type MetaTemplate } from "@shared/whatsapp";
 
 const DAY = 24 * 60 * 60 * 1000;
 const MAGIC_TTL_MS = 7 * DAY;
 
 // ------------------------------------------------------------------ configurações (painel → Notificações)
 
-type NotifySettings = { waToken: string; waPhoneNumberId: string; waTemplate: string; waLang: string; waParamNames: string; adminEmails: string; adminEmailOn: boolean; adminWhatsappOn: boolean };
-let settings: NotifySettings = { waToken: "", waPhoneNumberId: "", waTemplate: "", waLang: "pt_BR", waParamNames: "", adminEmails: "", adminEmailOn: true, adminWhatsappOn: true };
+type NotifySettings = { waToken: string; waPhoneNumberId: string; waTemplate: string; waLang: string; waParamNames: string; waBusinessId: string; adminEmails: string; adminEmailOn: boolean; adminWhatsappOn: boolean };
+let settings: NotifySettings = { waToken: "", waPhoneNumberId: "", waTemplate: "", waLang: "pt_BR", waParamNames: "", waBusinessId: "", adminEmails: "", adminEmailOn: true, adminWhatsappOn: true };
 let origin = process.env.GASTRO_PUBLIC_ORIGIN?.replace(/\/+$/, "") ?? "";
 
 export async function refreshNotifySettings() {
@@ -26,7 +27,7 @@ export async function refreshNotifySettings() {
   try {
     const get = async (key: string) => (await getInternalFlag(`notify.${key}`)) ?? "";
     settings = {
-      waToken: await get("waToken"), waPhoneNumberId: await get("waPhoneNumberId"), waTemplate: await get("waTemplate"), waLang: (await get("waLang")) || "pt_BR", waParamNames: await get("waParamNames"),
+      waToken: await get("waToken"), waPhoneNumberId: await get("waPhoneNumberId"), waTemplate: await get("waTemplate"), waLang: (await get("waLang")) || "pt_BR", waParamNames: await get("waParamNames"), waBusinessId: await get("waBusinessId"),
       adminEmails: await get("adminEmails"), adminEmailOn: (await get("adminEmailOn")) !== "false", adminWhatsappOn: (await get("adminWhatsappOn")) !== "false",
     };
     const saved = await getInternalFlag("publicOrigin");
@@ -36,17 +37,52 @@ export async function refreshNotifySettings() {
 
 export async function saveNotifySettings(input: Partial<Record<keyof NotifySettings, string>>) {
   for (const [key, value] of Object.entries(input)) if (value !== undefined) await setInternalFlag(`notify.${key}`, value);
+  templateCache = null;
   await refreshNotifySettings();
 }
 
 const waToken = () => settings.waToken || process.env.WHATSAPP_TOKEN || "";
 const waPhoneId = () => settings.waPhoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 const waTemplate = () => settings.waTemplate || process.env.WHATSAPP_TEMPLATE || "";
+const waBusinessId = () => settings.waBusinessId || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "";
+
+// ------------------------------------------------------------------ leitura do modelo na Meta
+
+let templateCache: { at: number; template: MetaTemplate | null; error?: string } | null = null;
+
+/** Lê o modelo aprovado na conta do WhatsApp Business (precisa do ID da conta). Guarda por 10 minutos. */
+export async function loadTemplate(force = false): Promise<{ template: MetaTemplate | null; error?: string }> {
+  if (!waBusinessId() || !waToken() || !waTemplate()) return { template: null };
+  if (!force && templateCache && Date.now() - templateCache.at < 10 * 60_000) return templateCache;
+  try {
+    const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(waBusinessId())}/message_templates?name=${encodeURIComponent(waTemplate())}&fields=name,language,status,category,components,parameter_format&limit=50`;
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${waToken()}` }, signal: AbortSignal.timeout(15_000) });
+    const data = await response.json().catch(() => ({})) as { data?: MetaTemplate[]; error?: { code?: number; message?: string } };
+    if (!response.ok) {
+      const error = data.error?.code === 100 ? "O ID da conta do WhatsApp Business está errado (copie a “Identificação da conta do WhatsApp Business” em WhatsApp → Configuração da API)." : `Não foi possível ler o modelo na Meta: ${data.error?.message ?? response.status}.`;
+      templateCache = { at: Date.now(), template: null, error };
+      return templateCache;
+    }
+    const template = pickTemplate(data.data ?? [], waTemplate(), settings.waLang || "pt_BR");
+    templateCache = { at: Date.now(), template, ...(template ? {} : { error: `A Meta não tem nenhum modelo chamado “${waTemplate()}” nesta conta. Confira o nome exato no WhatsApp Manager.` }) };
+    return templateCache;
+  } catch {
+    return { template: null, error: "Não foi possível falar com a Meta para ler o modelo." };
+  }
+}
+
+/** Resumo do modelo para o painel. */
+export async function templateSummary(force = false) {
+  const { template, error } = await loadTemplate(force);
+  if (!template) return error ? { error } : null;
+  const body = template.components.find(c => c.type.toUpperCase() === "BODY")?.text ?? "";
+  return { name: template.name, language: template.language, status: TEMPLATE_STATUS[template.status] ?? template.status, approved: template.status === "APPROVED", body, variables: [...body.matchAll(/{{\s*([^}]+?)\s*}}/g)].map(m => m[1]), format: template.parameter_format === "NAMED" ? "nome" : "número" };
+}
 export const whatsappConfigured = () => Boolean(waToken() && waPhoneId() && waTemplate());
 
 export function notifySettingsStatus() {
   return {
-    whatsapp: { configured: whatsappConfigured(), token: waToken() ? `••••${waToken().slice(-4)}` : "", phoneNumberId: waPhoneId(), template: waTemplate(), lang: settings.waLang, paramNames: settings.waParamNames },
+    whatsapp: { configured: whatsappConfigured(), token: waToken() ? `••••${waToken().slice(-4)}` : "", phoneNumberId: waPhoneId(), template: waTemplate(), lang: settings.waLang, paramNames: settings.waParamNames, businessId: waBusinessId() },
     email: { configured: Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM), adminEmails: settings.adminEmails, on: settings.adminEmailOn },
     adminWhatsappOn: settings.adminWhatsappOn,
     origin,
@@ -117,6 +153,19 @@ export async function sendWhatsappDetailed(phone: string, title: string, text: s
   if (!whatsappConfigured()) return { ok: false, error: "WhatsApp Business ainda não configurado (token, ID do número e nome do modelo)." };
   if (!to) return { ok: false, error: "O WhatsApp de destino está vazio ou inválido. Para o teste, confira o WhatsApp da administração em Textos do site → Contato (55 + DDD + número)." };
   const clean = (v: string, max: number) => v.replace(/[\n\t]+/g, " ").replace(/ {4,}/g, "   ").slice(0, max) || "-";
+  // Com o ID da conta, o site lê o modelo na Meta e monta exatamente o que ele pede.
+  let language = options.lang ?? (settings.waLang || "pt_BR");
+  let components: any[] | undefined = options.noParams ? undefined : [{ type: "body", parameters: [clean(title, 120), clean(text, 600), clean(link, 300)].map((value, i) => ({ type: "text", text: value, ...(paramNames() ? { parameter_name: paramNames()![i] } : {}) })) }];
+  if (!options.template && !options.noParams) {
+    const { template } = await loadTemplate();
+    if (template) {
+      if (template.status !== "APPROVED") return { ok: false, error: `O modelo “${template.name}” está como “${TEMPLATE_STATUS[template.status] ?? template.status}” na Meta. Ele só envia depois de aprovado.` };
+      const built = buildTemplateComponents(template, { title, text, link });
+      if (built.error) return { ok: false, error: built.error };
+      components = built.components;
+      language = template.language;
+    }
+  }
   try {
     const response = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(waPhoneId())}/messages`, {
       method: "POST",
@@ -124,8 +173,8 @@ export async function sendWhatsappDetailed(phone: string, title: string, text: s
       body: JSON.stringify({
         messaging_product: "whatsapp", to, type: "template",
         template: {
-          name: options.template ?? waTemplate(), language: { code: options.lang ?? (settings.waLang || "pt_BR") },
-          ...(options.noParams ? {} : { components: [{ type: "body", parameters: [clean(title, 120), clean(text, 600), clean(link, 300)].map((value, i) => ({ type: "text", text: value, ...(paramNames() ? { parameter_name: paramNames()![i] } : {}) })) }] }),
+          name: options.template ?? waTemplate(), language: { code: language },
+          ...(components && components.length ? { components } : {}),
         },
       }),
       signal: AbortSignal.timeout(15_000),
