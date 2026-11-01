@@ -263,7 +263,7 @@ router.put("/onboarding", wrap(async (req, res) => {
   });
   await pruneProfileMedia(context.user.id, keepMedia);
   await audit(context.user.id, "profile.onboarding_saved", { accountType: type }, context.user.id);
-  if (type === "provider" && !before.completedAt) later(() => notifyAdmin({ type: "provider.profile_completed", title: "Cadastro de profissional para aprovar", body: `${context.user.name ?? "Profissional"} completou o cadastro (documentos, fotos e Pix). Confira e aprove em Usuários e aprovações.`, path: "/admin/painel?secao=users" }));
+  if (type === "provider" && !before.completedAt) later(() => notifyAdmin({ type: "provider.profile_completed", title: "Cadastro de profissional para aprovar", body: `${context.user.name ?? "Profissional"} completou o cadastro (documentos, fotos e Pix). Confira e aprove em Usuários e aprovações.`, path: "/admin/painel?secao=providers" }));
   const saved = await loadDetails(context.user.id);
   res.json({ ok: true, details: withMediaUrls(saved.details), completedAt: saved.completedAt, status: context.profile.status });
 }));

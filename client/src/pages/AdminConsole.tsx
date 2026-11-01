@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2 } from 'lucide-react';
+import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2, BriefcaseBusiness } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
@@ -15,8 +15,8 @@ import { demosFrom, type DemoProfessional, type Professional } from '@shared/cat
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import '../admin.css';
 
-type Section = 'overview' | 'notifications' | 'marketing' | 'users' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
-type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string };
+type Section = 'overview' | 'notifications' | 'marketing' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
+type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string; code?: string; specialty?: string; whatsapp?: string; source?: string; subscriptionFree?: boolean; requestCount?: number };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
 type Benefit = { id: number; userId: number; userName?: string; userEmail?: string; kind: string; title: string; description: string; amountCents: number; percent: number; expiresAt: string | null; active: boolean; createdAt: string };
 type Media = { id: number; kind: string; filename: string; size: number; url: string; createdAt: string };
@@ -25,7 +25,8 @@ const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'notifications', label: 'Notificações', icon: Bell },
   { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp },
-  { id: 'users', label: 'Usuários e aprovações', icon: Users },
+  { id: 'providers', label: 'Fornecedores (profissionais)', icon: BriefcaseBusiness },
+  { id: 'clients', label: 'Clientes', icon: Users },
   { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard },
   { id: 'payments', label: 'Pagamentos (Mercado Pago)', icon: Wallet },
   { id: 'contracts', label: 'Contratos (auditoria)', icon: FileSignature },
@@ -51,7 +52,7 @@ function Empty({ text }: { text: string }) { return <p className="adm-empty">{te
 
 export default function AdminConsole() {
   const [me, setMe] = useState<{ name: string; role: string } | null | undefined>(undefined);
-  const [section, setSection] = useState<Section>(() => { const s = new URLSearchParams(window.location.search).get('secao'); return s && NAV.some(n => n.id === s) ? s as Section : 'overview'; });
+  const [section, setSection] = useState<Section>(() => { const s = new URLSearchParams(window.location.search).get('secao'); const sec = s === 'users' ? 'providers' : s; return sec && NAV.some(n => n.id === sec) ? sec as Section : 'overview'; });
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => { api<{ user: { name: string; role: string } | null }>('/me').then(r => setMe(r.user)).catch(() => setMe(null)); }, []);
   if (me === undefined) return <main className="adm-page"><div className="adm-center"><Loader2 className="ob-spin" size={22}/> Carregando…</div></main>;
@@ -71,7 +72,8 @@ export default function AdminConsole() {
         <header className="adm-topbar"><button type="button" className="adm-menu" onClick={() => setNavOpen(true)} aria-label="Abrir menu"><Menu size={20}/></button><div><small>Administração /</small><strong>{current.label}</strong></div><span className="adm-top-actions"><NotificationBell admin onNavigate={link => { const s = new URL(link, window.location.origin).searchParams.get('secao'); go(s && NAV.some(n => n.id === s) ? s as Section : 'notifications'); }}/><span className="adm-who">{me.name}</span></span></header>
         <div className="adm-content">
           {section === 'overview' && <Overview go={go}/>}
-          {section === 'users' && <UsersSection/>}
+          {section === 'providers' && <UsersSection key="providers" kind="provider"/>}
+          {section === 'clients' && <UsersSection key="clients" kind="client"/>}
           {section === 'notifications' && <NotificationsSection/>}
           {section === 'marketing' && <MarketingSection/>}
           {section === 'subscriptions' && <SubscriptionsSection/>}
@@ -95,8 +97,8 @@ function Overview({ go }: { go: (s: Section) => void }) {
   useEffect(() => { api<NonNullable<typeof data>>('/admin/overview').then(setData).catch(e => toast.error(errText(e))); }, []);
   return <div className="adm-stack">
     <div className="adm-stats">
-      <button type="button" onClick={() => go('users')}><span>Usuários</span><strong>{data?.users ?? '—'}</strong></button>
-      <button type="button" onClick={() => go('users')} className={data?.pending ? 'is-alert' : ''}><span>Cadastros em análise</span><strong>{data?.pending ?? '—'}</strong></button>
+      <button type="button" onClick={() => go('clients')}><span>Usuários</span><strong>{data?.users ?? '—'}</strong></button>
+      <button type="button" onClick={() => go('providers')} className={data?.pending ? 'is-alert' : ''}><span>Cadastros em análise</span><strong>{data?.pending ?? '—'}</strong></button>
       <div><span>Pedidos</span><strong>{data?.events ?? '—'}</strong></div>
       <button type="button" onClick={() => go('subscriptions')}><span>Assinaturas vigentes</span><strong>{data?.activeSubscriptions ?? '—'}</strong></button>
       <div><span>Receita de assinaturas (30 dias)</span><strong>{data ? money(data.subscriptionRevenue30dCents) : '—'}</strong></div>
@@ -104,7 +106,7 @@ function Overview({ go }: { go: (s: Section) => void }) {
     </div>
     <Card title="Atalhos">
       <div className="adm-shortcuts">
-        <button type="button" onClick={() => go('users')}><Users size={18}/> Aprovar cadastros</button>
+        <button type="button" onClick={() => go('providers')}><Users size={18}/> Aprovar cadastros</button>
         <button type="button" onClick={() => go('content')}><PenLine size={18}/> Editar textos e fotos</button>
         <button type="button" onClick={() => go('promotions')}><Megaphone size={18}/> Criar promoção</button>
         <button type="button" onClick={() => go('benefits')}><Gift size={18}/> Dar bônus a um usuário</button>
@@ -113,26 +115,34 @@ function Overview({ go }: { go: (s: Section) => void }) {
   </div>;
 }
 
-function UsersSection() {
+const SIGNUP_SOURCE_LABEL: Record<string, string> = { google: 'Google', facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube', whatsapp: 'WhatsApp', indicacao: 'Indicação', direto: 'Direto', outros: 'Outros sites' };
+
+/** Lista de clientes ou de fornecedores (abas separadas no menu). */
+function UsersSection({ kind }: { kind: 'client' | 'provider' }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [search, setSearch] = useState('');
-  const [type, setType] = useState('');
   const [status, setStatus] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
   const load = () => api<{ users: AdminUser[] }>('/admin/users').then(r => setUsers(r.users)).catch(e => toast.error(errText(e)));
   useEffect(() => { void load(); }, []);
-  const list = useMemo(() => (users ?? []).filter(u => (!type || u.accountType === type) && (!status || u.status === status) && (!search || `${u.name} ${u.email} ${u.city ?? ''}`.toLowerCase().includes(search.toLowerCase()))), [users, search, type, status]);
+  const provider = kind === 'provider';
+  const ofKind = useMemo(() => (users ?? []).filter(u => u.accountType === kind), [users, kind]);
+  const toApprove = ofKind.filter(u => u.status === 'pending' && u.profileComplete).length;
+  const list = useMemo(() => ofKind.filter(u => (!status || (status === 'to-approve' ? u.status === 'pending' && u.profileComplete : u.status === status)) && (!search || `${u.name} ${u.email} ${u.city ?? ''} ${u.code ?? ''} ${u.specialty ?? ''} ${u.whatsapp ?? ''}`.toLowerCase().includes(search.toLowerCase()))), [ofKind, search, status]);
   return <div className="adm-stack">
+    <div className="adm-kind-head">
+      <div className={`adm-kind-badge ${provider ? 'is-provider' : 'is-client'}`}>{provider ? <BriefcaseBusiness size={18}/> : <Users size={18}/>} {provider ? 'Fornecedores (profissionais)' : 'Clientes'}</div>
+      <div className="adm-kind-stats"><span><strong>{ofKind.length}</strong> no total</span><span><strong>{ofKind.filter(u => u.status === 'active').length}</strong> ativos</span>{provider && <button type="button" className={toApprove ? 'is-alert' : ''} onClick={() => setStatus('to-approve')}><strong>{toApprove}</strong> para aprovar</button>}</div>
+    </div>
     <div className="adm-filters">
-      <label className="adm-search"><Search size={16}/><input placeholder="Nome, e-mail ou cidade" value={search} onChange={e => setSearch(e.target.value)}/></label>
-      <select value={type} onChange={e => setType(e.target.value)} aria-label="Tipo"><option value="">Todos os tipos</option><option value="client">Clientes</option><option value="provider">Profissionais</option></select>
-      <select value={status} onChange={e => setStatus(e.target.value)} aria-label="Situação"><option value="">Todas as situações</option>{Object.entries(statusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      <label className="adm-search"><Search size={16}/><input placeholder={provider ? 'Nome, e-mail, cidade, profissão ou código GC-' : 'Nome, e-mail, cidade ou WhatsApp'} value={search} onChange={e => setSearch(e.target.value)}/></label>
+      <select value={status} onChange={e => setStatus(e.target.value)} aria-label="Situação"><option value="">Todas as situações</option>{provider && <option value="to-approve">Prontos para aprovar</option>}{Object.entries(statusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
     </div>
     <Card>
-      {!users ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum usuário encontrado."/> :
-        <div className="adm-list">{list.map(u => <button type="button" key={u.id} className="adm-row" onClick={() => setOpenId(u.id)}>
-          <div className="adm-row-main"><strong>{u.name || '(sem nome)'}</strong><span>{u.email}</span></div>
-          <div className="adm-row-tags"><span className="adm-tag">{typeLabel[u.accountType]}</span><span className={`adm-tag adm-st-${u.status}`}>{statusLabel[u.status] ?? u.status}</span>{u.accountType === 'provider' && <span className={`adm-tag ${u.profileComplete ? 'adm-ok' : 'adm-warn'}`}>{u.profileComplete ? 'Cadastro completo' : 'Cadastro incompleto'}</span>}{u.vip && <span className="adm-tag adm-vip">VIP</span>}{u.featured && <span className="adm-tag adm-vip">Destaque</span>}{u.role === 'admin' && <span className="adm-tag">Admin</span>}</div>
+      {!users ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text={provider ? 'Nenhum fornecedor encontrado.' : 'Nenhum cliente encontrado.'}/> :
+        <div className="adm-list">{list.map(u => <button type="button" key={u.id} className={`adm-row adm-row-${kind}`} onClick={() => setOpenId(u.id)}>
+          <div className="adm-row-main"><strong>{u.name || '(sem nome)'}</strong><span>{[provider ? u.code : null, provider ? u.specialty : null, u.city, u.email].filter(Boolean).join(' · ')}</span><span>{[u.whatsapp ? `WhatsApp ${formatPhone(u.whatsapp)}` : null, u.source ? `veio por ${SIGNUP_SOURCE_LABEL[u.source] ?? u.source}` : null, !provider && u.requestCount ? `${u.requestCount} pedido(s)` : null, u.createdAt ? `desde ${new Date(u.createdAt).toLocaleDateString('pt-BR')}` : null].filter(Boolean).join(' · ')}</span></div>
+          <div className="adm-row-tags"><span className={`adm-tag adm-st-${u.status}`}>{statusLabel[u.status] ?? u.status}</span>{provider && <span className={`adm-tag ${u.profileComplete ? 'adm-ok' : 'adm-warn'}`}>{u.profileComplete ? 'Cadastro completo' : 'Cadastro incompleto'}</span>}{provider && u.subscriptionFree && <span className="adm-tag adm-vip">Assinatura grátis</span>}{u.vip && <span className="adm-tag adm-vip">VIP</span>}{u.featured && <span className="adm-tag adm-vip">Destaque</span>}</div>
           <ChevronRight size={16}/>
         </button>)}</div>}
     </Card>
