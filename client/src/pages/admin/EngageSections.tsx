@@ -19,7 +19,7 @@ const Spinner = () => <div className="adm-center"><Loader2 className="ob-spin" s
 // ------------------------------------------------------------------ Notificações
 
 type Notice = { id: number; type: string; title: string; body: string; link: string; read: boolean; createdAt: string };
-type NotifyStatus = { whatsapp: { configured: boolean; token: string; phoneNumberId: string; template: string; lang: string }; email: { configured: boolean; adminEmails: string; on: boolean }; adminWhatsappOn: boolean; origin: string };
+type NotifyStatus = { whatsapp: { configured: boolean; token: string; phoneNumberId: string; template: string; lang: string; paramNames?: string }; email: { configured: boolean; adminEmails: string; on: boolean }; adminWhatsappOn: boolean; origin: string };
 const TYPE_LABEL: Record<string, string> = {
   'signup.client': 'Novo cliente', 'signup.provider': 'Novo profissional', 'provider.profile_completed': 'Aprovar cadastro', 'event.created': 'Pedido de orçamento',
   'proposal.new': 'Proposta', 'proposal.accepted': 'Serviço fechado', 'payment.subscription': 'Assinatura paga', 'payment.promotion': 'Promoção paga', 'payment.benefit': 'Benefício pago', 'review.new': 'Avaliação',
@@ -28,14 +28,14 @@ const TYPE_LABEL: Record<string, string> = {
 export function NotificationsSection() {
   const [list, setList] = useState<Notice[] | null>(null);
   const [status, setStatus] = useState<NotifyStatus | null>(null);
-  const [form, setForm] = useState({ waToken: '', waPhoneNumberId: '', waTemplate: '', waLang: 'pt_BR', adminEmails: '' });
+  const [form, setForm] = useState({ waToken: '', waPhoneNumberId: '', waTemplate: '', waLang: 'pt_BR', waParamNames: '', adminEmails: '' });
   const [busy, setBusy] = useState('');
   const [filter, setFilter] = useState('');
   const [testResult, setTestResult] = useState<{ whatsapp: boolean; email: boolean; emailTo?: string; emailError?: string; whatsappError?: string } | null>(null);
   const load = () => api<{ notifications: Notice[] }>('/admin/notifications').then(r => setList(r.notifications)).catch(e => toast.error(errText(e)));
   useEffect(() => {
     void load();
-    api<NotifyStatus>('/admin/notifications/settings').then(r => { setStatus(r); setForm(f => ({ ...f, waPhoneNumberId: r.whatsapp.phoneNumberId, waTemplate: r.whatsapp.template, waLang: r.whatsapp.lang || 'pt_BR', adminEmails: r.email.adminEmails })); }).catch(e => toast.error(errText(e)));
+    api<NotifyStatus>('/admin/notifications/settings').then(r => { setStatus(r); setForm(f => ({ ...f, waPhoneNumberId: r.whatsapp.phoneNumberId, waTemplate: r.whatsapp.template, waLang: r.whatsapp.lang || 'pt_BR', waParamNames: r.whatsapp.paramNames ?? '', adminEmails: r.email.adminEmails })); }).catch(e => toast.error(errText(e)));
     void api('/admin/notifications/read', { method: 'POST' }).catch(() => undefined);
   }, []);
   const save = async (patch: Record<string, unknown>, label: string) => {
@@ -78,8 +78,10 @@ export function NotificationsSection() {
             <label className="ob-field"><span>Token de acesso</span><input type="password" autoComplete="off" value={form.waToken} placeholder={status.whatsapp.token || 'EAAG…'} onChange={e => setForm({ ...form, waToken: e.target.value })}/></label>
             <label className="ob-field"><span>ID do número de telefone</span><input inputMode="numeric" value={form.waPhoneNumberId} onChange={e => setForm({ ...form, waPhoneNumberId: e.target.value.replace(/\D/g, '') })}/></label>
             <label className="ob-field"><span>Nome do modelo</span><input value={form.waTemplate} placeholder="aviso_gastroconecta" onChange={e => setForm({ ...form, waTemplate: e.target.value.toLowerCase() })}/></label>
+            <label className="ob-field"><span>Idioma do modelo</span><select value={form.waLang} onChange={e => setForm({ ...form, waLang: e.target.value })}><option value="pt_BR">Português (BR) — pt_BR</option><option value="pt_PT">Português (PT) — pt_PT</option><option value="en_US">Inglês (EUA) — en_US</option><option value="es">Espanhol — es</option></select></label>
+            <label className="ob-field ob-wide"><span>Nomes das variáveis (só se o modelo usa nomes em vez de {'{{1}}, {{2}}, {{3}}'})</span><input value={form.waParamNames} placeholder="Deixe em branco se o modelo usa {{1}}, {{2}}, {{3}} — ex.: titulo, texto, link" onChange={e => setForm({ ...form, waParamNames: e.target.value })}/></label>
           </div>
-          <div className="adm-svc-add"><button type="button" className="ob-btn ob-btn-primary" disabled={busy === 'wa'} onClick={() => void save({ ...(form.waToken ? { waToken: form.waToken.trim() } : {}), waPhoneNumberId: form.waPhoneNumberId, waTemplate: form.waTemplate.trim(), waLang: form.waLang }, 'wa')}>{busy === 'wa' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar WhatsApp</button></div>
+          <div className="adm-svc-add"><button type="button" className="ob-btn ob-btn-primary" disabled={busy === 'wa'} onClick={() => void save({ ...(form.waToken ? { waToken: form.waToken.trim() } : {}), waPhoneNumberId: form.waPhoneNumberId, waTemplate: form.waTemplate.trim(), waLang: form.waLang, waParamNames: form.waParamNames.trim() }, 'wa')}>{busy === 'wa' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar WhatsApp</button></div>
           <label className="adm-switch"><input type="checkbox" checked={status.adminWhatsappOn} onChange={e => void save({ adminWhatsappOn: e.target.checked }, 'waOn')}/> Também receber os avisos da administração no WhatsApp</label></div>
       </div>}
     </Card>

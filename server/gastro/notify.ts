@@ -17,8 +17,8 @@ const MAGIC_TTL_MS = 7 * DAY;
 
 // ------------------------------------------------------------------ configurações (painel → Notificações)
 
-type NotifySettings = { waToken: string; waPhoneNumberId: string; waTemplate: string; waLang: string; adminEmails: string; adminEmailOn: boolean; adminWhatsappOn: boolean };
-let settings: NotifySettings = { waToken: "", waPhoneNumberId: "", waTemplate: "", waLang: "pt_BR", adminEmails: "", adminEmailOn: true, adminWhatsappOn: true };
+type NotifySettings = { waToken: string; waPhoneNumberId: string; waTemplate: string; waLang: string; waParamNames: string; adminEmails: string; adminEmailOn: boolean; adminWhatsappOn: boolean };
+let settings: NotifySettings = { waToken: "", waPhoneNumberId: "", waTemplate: "", waLang: "pt_BR", waParamNames: "", adminEmails: "", adminEmailOn: true, adminWhatsappOn: true };
 let origin = process.env.GASTRO_PUBLIC_ORIGIN?.replace(/\/+$/, "") ?? "";
 
 export async function refreshNotifySettings() {
@@ -26,7 +26,7 @@ export async function refreshNotifySettings() {
   try {
     const get = async (key: string) => (await getInternalFlag(`notify.${key}`)) ?? "";
     settings = {
-      waToken: await get("waToken"), waPhoneNumberId: await get("waPhoneNumberId"), waTemplate: await get("waTemplate"), waLang: (await get("waLang")) || "pt_BR",
+      waToken: await get("waToken"), waPhoneNumberId: await get("waPhoneNumberId"), waTemplate: await get("waTemplate"), waLang: (await get("waLang")) || "pt_BR", waParamNames: await get("waParamNames"),
       adminEmails: await get("adminEmails"), adminEmailOn: (await get("adminEmailOn")) !== "false", adminWhatsappOn: (await get("adminWhatsappOn")) !== "false",
     };
     const saved = await getInternalFlag("publicOrigin");
@@ -46,7 +46,7 @@ export const whatsappConfigured = () => Boolean(waToken() && waPhoneId() && waTe
 
 export function notifySettingsStatus() {
   return {
-    whatsapp: { configured: whatsappConfigured(), token: waToken() ? `••••${waToken().slice(-4)}` : "", phoneNumberId: waPhoneId(), template: waTemplate(), lang: settings.waLang },
+    whatsapp: { configured: whatsappConfigured(), token: waToken() ? `••••${waToken().slice(-4)}` : "", phoneNumberId: waPhoneId(), template: waTemplate(), lang: settings.waLang, paramNames: settings.waParamNames },
     email: { configured: Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM), adminEmails: settings.adminEmails, on: settings.adminEmailOn },
     adminWhatsappOn: settings.adminWhatsappOn,
     origin,
@@ -96,6 +96,7 @@ export function explainWhatsappError(code: number, message: string, to: string):
   if (code === 132015 || code === 132016 || /paused|disabled/.test(m)) return "O modelo de mensagem foi pausado ou desativado pela Meta. Crie outro modelo (categoria Utilidade) e atualize o nome aqui.";
   if (code === 133010 || /not registered/.test(m)) return "O número de envio ainda não foi registrado na Meta. No WhatsApp Manager, conclua o registro do número (com o PIN de 6 dígitos).";
   if (code === 131026 || /undeliverable/.test(m)) return `A mensagem não pôde ser entregue para ${to}: confira se esse número tem WhatsApp (WhatsApp da administração em Textos do site → Contato).`;
+  if (code === 100 && /invalid parameter/.test(m) && !/phone_number_id|unsupported post request|does not exist/.test(m)) return "A Meta não aceitou os dados enviados para o modelo. O mais comum: o modelo foi criado com variáveis com NOME (ex.: {{titulo}}) em vez de NÚMERO ({{1}}, {{2}}, {{3}}); ou tem variável no cabeçalho ou em botão; ou o idioma não confere. Veja o diagnóstico abaixo.";
   if (code === 100 && /phone_number_id|unsupported post request|does not exist/.test(m)) return "O ID do número de telefone está errado. Copie o “Identificação do número de telefone” em WhatsApp → Configuração da API (não é o número em si).";
   if (code === 131047) return "Fora da janela de 24 horas: só modelos aprovados podem ser enviados. Confira se o modelo está aprovado.";
   if (code === 131056 || code === 130429 || /rate limit/.test(m)) return "Limite de envios da Meta atingido. Aguarde alguns minutos.";
@@ -108,7 +109,10 @@ export async function sendWhatsapp(phone: string, title: string, text: string, l
   return (await sendWhatsappDetailed(phone, title, text, link)).ok;
 }
 
-export async function sendWhatsappDetailed(phone: string, title: string, text: string, link: string): Promise<{ ok: boolean; error?: string }> {
+/** Nomes das 3 variáveis, quando o modelo usa variáveis com nome ({{titulo}}) em vez de número ({{1}}). */
+const paramNames = () => { const names = settings.waParamNames.split(/[,;\s]+/).map(n => n.trim().replace(/[{}]/g, "")).filter(Boolean); return names.length === 3 ? names : null; };
+
+export async function sendWhatsappDetailed(phone: string, title: string, text: string, link: string, options: { template?: string; lang?: string; noParams?: boolean } = {}): Promise<{ ok: boolean; error?: string; code?: number }> {
   const to = toWhatsapp(phone);
   if (!whatsappConfigured()) return { ok: false, error: "WhatsApp Business ainda não configurado (token, ID do número e nome do modelo)." };
   if (!to) return { ok: false, error: "O WhatsApp de destino está vazio ou inválido. Para o teste, confira o WhatsApp da administração em Textos do site → Contato (55 + DDD + número)." };
@@ -119,7 +123,10 @@ export async function sendWhatsappDetailed(phone: string, title: string, text: s
       headers: { Authorization: `Bearer ${waToken()}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         messaging_product: "whatsapp", to, type: "template",
-        template: { name: waTemplate(), language: { code: settings.waLang || "pt_BR" }, components: [{ type: "body", parameters: [{ type: "text", text: clean(title, 120) }, { type: "text", text: clean(text, 600) }, { type: "text", text: clean(link, 300) }] }] },
+        template: {
+          name: options.template ?? waTemplate(), language: { code: options.lang ?? (settings.waLang || "pt_BR") },
+          ...(options.noParams ? {} : { components: [{ type: "body", parameters: [clean(title, 120), clean(text, 600), clean(link, 300)].map((value, i) => ({ type: "text", text: value, ...(paramNames() ? { parameter_name: paramNames()![i] } : {}) })) }] }),
+        },
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -128,7 +135,7 @@ export async function sendWhatsappDetailed(phone: string, title: string, text: s
     const code = Number(data.error?.code ?? 0);
     const message = [data.error?.message, data.error?.error_data?.details].filter(Boolean).join(" — ");
     console.warn("[WhatsApp] envio recusado", response.status, code, message);
-    return { ok: false, error: explainWhatsappError(code, message, `+${to}`) };
+    return { ok: false, code, error: explainWhatsappError(code, message, `+${to}`) };
   } catch {
     return { ok: false, error: "Não foi possível falar com a Meta agora (rede ou tempo esgotado). Tente de novo em instantes." };
   }
