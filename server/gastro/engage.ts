@@ -9,7 +9,7 @@ import { paymentDescription, paymentReference, subscriberCode } from "@shared/pa
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query } from "./db";
 import { createGcSession, gcCookieOptions, isOwner, requireAuth, type AuthContext } from "./auth";
-import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySettings, sendWhatsapp, whatsappConfigured } from "./notify";
+import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySettings, sendWhatsappDetailed } from "./notify";
 import { sendMailDetailed } from "./password";
 import { getSiteContent } from "./content";
 import { copilotProvider, resolveCopilotEndpoint } from "./routes";
@@ -105,14 +105,15 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   limit(`notify-test:${context.user.id}`, 10, HOUR);
   const content = await getSiteContent();
   const status = notifySettingsStatus();
-  const whatsapp = whatsappConfigured() ? await sendWhatsapp(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`) : false;
+  const wa = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`);
+  const whatsapp = wa.ok;
   // Mesmo destino dos avisos reais: a lista da seção Notificações ou o e-mail de login do admin.
   const to = (status.email.adminEmails || context.user.email || "").split(/[,;\s]+/).find(e => /@/.test(e)) ?? "";
   const mail = to ? await sendMailDetailed(to, "[GastroConecta] Teste de notificação", "<p>Os avisos por e-mail do GastroConecta estão funcionando.</p>") : { ok: false, error: "Nenhum e-mail de destino: preencha o e-mail da administração nesta seção." };
   res.json({
     whatsapp, email: mail.ok, emailTo: to,
     ...(mail.error ? { emailError: mail.error } : {}),
-    ...(!whatsapp ? { whatsappError: whatsappConfigured() ? "A Meta recusou a mensagem. Confira se o modelo está aprovado, se o nome e o idioma conferem e se o token não expirou." : "WhatsApp Business ainda não configurado (token, ID do número e nome do modelo)." } : {}),
+    ...(wa.error ? { whatsappError: wa.error } : {}),
   });
 }));
 
