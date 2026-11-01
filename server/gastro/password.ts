@@ -26,17 +26,39 @@ export async function createResetLink(req: Request, userId: number): Promise<str
   return `${origin(req)}/redefinir-senha?token=${encodeURIComponent(token)}`;
 }
 
+/** Traduz a recusa do Resend para o que o admin precisa corrigir. */
+export function explainMailError(status: number, message: string, from: string): string {
+  const m = message.toLowerCase();
+  const domain = /@([^>\s]+)/.exec(from)?.[1] ?? "";
+  if (status === 401 || status === 403 && /api key/.test(m) || /api key is invalid|invalid api key|missing api key/.test(m)) return "A chave RESEND_API_KEY no Render está errada ou foi apagada. Gere uma nova em resend.com → API Keys e cole no Render.";
+  if (/only send testing emails to your own email/.test(m)) return `O Resend está em modo de teste: sem domínio verificado ele só entrega para o e-mail dono da conta Resend. Verifique seu domínio em resend.com → Domains e use um remetente desse domínio em MAIL_FROM (ex.: avisos@seudominio.com.br).`;
+  if (/domain is not verified|not verified|verify a domain/.test(m)) return /gmail|hotmail|outlook|yahoo|icloud|live\./.test(domain) ? `MAIL_FROM usa ${domain}, que não pode ser remetente no Resend. Use um domínio seu verificado (ex.: avisos@seudominio.com.br) ou, só para teste, onboarding@resend.dev.` : `O domínio ${domain || "do remetente"} ainda não foi verificado no Resend. Em resend.com → Domains, adicione os registros DNS indicados e aguarde ficar "Verified".`;
+  if (/invalid `from`|from field|invalid from/.test(m)) return `MAIL_FROM está em formato inválido ("${from}"). Use, por exemplo: GastroConecta <avisos@seudominio.com.br>.`;
+  if (/invalid `to`|to field/.test(m)) return "O e-mail de destino é inválido. Confira o e-mail da administração na seção Notificações.";
+  if (status === 429) return "Limite de envios do Resend atingido. Aguarde alguns minutos ou confira seu plano no Resend.";
+  return `O Resend recusou o envio (${status}): ${message || "sem detalhes"}.`;
+}
+
+/** Envia e-mail pelo Resend e devolve o motivo quando falha. */
+export async function sendMailDetailed(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+  const key = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.MAIL_FROM?.trim();
+  if (!key || !from) return { ok: false, error: "Faltam RESEND_API_KEY e/ou MAIL_FROM nas variáveis do Render (Environment). Depois de salvar, o Render reinicia o site." };
+  try {
+    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to, subject, html }), signal: AbortSignal.timeout(15_000) });
+    if (response.ok) return { ok: true };
+    const data = await response.json().catch(() => ({})) as { message?: string; error?: string };
+    const error = explainMailError(response.status, String(data.message ?? data.error ?? ""), from);
+    console.warn("[E-mail] Resend recusou:", response.status, data.message ?? "");
+    return { ok: false, error };
+  } catch {
+    return { ok: false, error: "Não foi possível falar com o Resend agora (rede ou tempo esgotado). Tente de novo em instantes." };
+  }
+}
+
 /** Envia e-mail pelo Resend (RESEND_API_KEY + MAIL_FROM). Sem configuração, não envia. */
 export async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.MAIL_FROM;
-  if (!key || !from) return false;
-  try {
-    const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to, subject, html }) });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  return (await sendMailDetailed(to, subject, html)).ok;
 }
 export const mailConfigured = () => Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 

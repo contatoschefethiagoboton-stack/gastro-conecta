@@ -10,7 +10,7 @@ import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "
 import { dbConfigured, execute, query } from "./db";
 import { createGcSession, gcCookieOptions, isOwner, requireAuth, type AuthContext } from "./auth";
 import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySettings, sendWhatsapp, whatsappConfigured } from "./notify";
-import { sendMail } from "./password";
+import { sendMailDetailed } from "./password";
 import { getSiteContent } from "./content";
 import { copilotProvider, resolveCopilotEndpoint } from "./routes";
 import { priceFor, saveBasePrice, subscriptionBasePrice, webhookUrl } from "./subscriptions";
@@ -106,8 +106,14 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   const content = await getSiteContent();
   const status = notifySettingsStatus();
   const whatsapp = whatsappConfigured() ? await sendWhatsapp(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`) : false;
-  const email = context.user.email ? await sendMail(context.user.email, "[GastroConecta] Teste de notificação", "<p>Os avisos por e-mail estão funcionando.</p>") : false;
-  res.json({ whatsapp, email });
+  // Mesmo destino dos avisos reais: a lista da seção Notificações ou o e-mail de login do admin.
+  const to = (status.email.adminEmails || context.user.email || "").split(/[,;\s]+/).find(e => /@/.test(e)) ?? "";
+  const mail = to ? await sendMailDetailed(to, "[GastroConecta] Teste de notificação", "<p>Os avisos por e-mail do GastroConecta estão funcionando.</p>") : { ok: false, error: "Nenhum e-mail de destino: preencha o e-mail da administração nesta seção." };
+  res.json({
+    whatsapp, email: mail.ok, emailTo: to,
+    ...(mail.error ? { emailError: mail.error } : {}),
+    ...(!whatsapp ? { whatsappError: whatsappConfigured() ? "A Meta recusou a mensagem. Confira se o modelo está aprovado, se o nome e o idioma conferem e se o token não expirou." : "WhatsApp Business ainda não configurado (token, ID do número e nome do modelo)." } : {}),
+  });
 }));
 
 // ------------------------------------------------------------------ rastreio (público, sem dados pessoais)

@@ -31,6 +31,7 @@ export function NotificationsSection() {
   const [form, setForm] = useState({ waToken: '', waPhoneNumberId: '', waTemplate: '', waLang: 'pt_BR', adminEmails: '' });
   const [busy, setBusy] = useState('');
   const [filter, setFilter] = useState('');
+  const [testResult, setTestResult] = useState<{ whatsapp: boolean; email: boolean; emailTo?: string; emailError?: string; whatsappError?: string } | null>(null);
   const load = () => api<{ notifications: Notice[] }>('/admin/notifications').then(r => setList(r.notifications)).catch(e => toast.error(errText(e)));
   useEffect(() => {
     void load();
@@ -44,7 +45,7 @@ export function NotificationsSection() {
   };
   const test = async () => {
     setBusy('test');
-    try { const r = await api<{ whatsapp: boolean; email: boolean }>('/admin/notifications/test', { method: 'POST' }); toast[r.whatsapp || r.email ? 'success' : 'error'](`WhatsApp: ${r.whatsapp ? 'enviado' : 'não enviado'} · E-mail: ${r.email ? 'enviado' : 'não enviado'}`); }
+    try { const r = await api<NonNullable<typeof testResult>>('/admin/notifications/test', { method: 'POST' }); setTestResult(r); toast[r.whatsapp || r.email ? 'success' : 'error'](`WhatsApp: ${r.whatsapp ? 'enviado' : 'não enviado'} · E-mail: ${r.email ? `enviado para ${r.emailTo}` : 'não enviado'}`); }
     catch (e) { toast.error(errText(e)); } finally { setBusy(''); }
   };
   const types = useMemo(() => [...new Set((list ?? []).map(n => n.type))], [list]);
@@ -58,8 +59,12 @@ export function NotificationsSection() {
       </div>)}</div>}
     </Card>
     <Card title="Como você e os usuários recebem os avisos" action={<button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'test'} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar teste para mim</button>}>
+      {testResult && <ul className="mk-alerts adm-test-result">
+        <li className={testResult.email ? 'mk-ok-box' : 'mk-alto'}>{testResult.email ? <Check size={17}/> : <AlertTriangle size={17}/>}<div><strong>E-mail: {testResult.email ? `enviado para ${testResult.emailTo}. Confira também a caixa de spam.` : 'não enviado'}</strong>{testResult.emailError && <span>{testResult.emailError}</span>}</div></li>
+        <li className={testResult.whatsapp ? 'mk-ok-box' : 'mk-medio'}>{testResult.whatsapp ? <Check size={17}/> : <AlertTriangle size={17}/>}<div><strong>WhatsApp: {testResult.whatsapp ? 'enviado' : 'não enviado'}</strong>{testResult.whatsappError && <span>{testResult.whatsappError}</span>}</div></li>
+      </ul>}
       {!status ? <Spinner/> : <div className="adm-content-fields">
-        <div className="adm-content-field"><div className="adm-content-label"><span>E-mail para a administração</span>{status.email.configured ? <span className="adm-tag adm-ok">Envio de e-mail ligado</span> : <span className="adm-tag adm-warn">Falta RESEND_API_KEY e MAIL_FROM no Render</span>}</div>
+        <div className="adm-content-field"><div className="adm-content-label"><span>E-mail para a administração</span>{status.email.configured ? <span className="adm-tag adm-ok">Chaves do e-mail cadastradas no Render</span> : <span className="adm-tag adm-warn">Falta RESEND_API_KEY e MAIL_FROM no Render</span>}</div>
           <div className="adm-svc-add"><input value={form.adminEmails} placeholder="seu@email.com (separe vários por vírgula)" onChange={e => setForm({ ...form, adminEmails: e.target.value })}/><button type="button" className="ob-btn ob-btn-outline" onClick={() => void save({ adminEmails: form.adminEmails }, 'emails')}>Salvar</button></div>
           <label className="adm-switch"><input type="checkbox" checked={status.email.on} onChange={e => void save({ adminEmailOn: e.target.checked }, 'emailOn')}/> Receber os avisos por e-mail</label></div>
         <div className="adm-content-field"><div className="adm-content-label"><span>WhatsApp (API oficial do WhatsApp Business)</span>{status.whatsapp.configured ? <span className="adm-tag adm-ok">Ligado {status.whatsapp.token}</span> : <span className="adm-tag adm-warn">Não configurado</span>}</div>

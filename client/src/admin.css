@@ -338,3 +338,5 @@
 .adm-row-provider { border-left:3px solid #f0b39b; padding-left:12px; }
 .adm-row-client { border-left:3px solid #a9c1e6; padding-left:12px; }
 .adm-row .adm-row-main span + span { font-size:12.5px; }
+.adm-test-result { margin-bottom:14px; }
+.mk-ok-box { background:#eef6f0; color:#23603a; }
