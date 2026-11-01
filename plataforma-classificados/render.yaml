@@ -1,0 +1,100 @@
+# Render Blueprint — coloque este arquivo na RAIZ do repositório dedicado da plataforma.
+# Render > New > Blueprint > selecione o repositório. Deploy automático a cada push na branch main.
+databases:
+  - name: classificados-db
+    plan: basic-1gb            # PostGIS, pgcrypto, citext e unaccent são suportados (CREATE EXTENSION na migração)
+    postgresMajorVersion: "16"
+    ipAllowList: []            # só acesso pela rede privada do Render
+
+services:
+  - type: keyvalue             # Redis gerenciado (cache, rate limit, filas BullMQ)
+    name: classificados-redis
+    plan: starter
+    maxmemoryPolicy: noeviction  # obrigatório para BullMQ
+    ipAllowList: []
+
+  - type: web
+    name: classificados-api
+    runtime: docker
+    rootDir: apps/api
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /health
+    preDeployCommand: node dist/db/migrate.js
+    autoDeploy: true
+    scaling: { minInstances: 2, maxInstances: 6, targetCPUPercent: 70 }
+    envVars: &apiEnv
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: classificados-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: classificados-redis, property: connectionString }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PII_ENCRYPTION_KEY       # openssl rand -hex 32 — guarde cópia offline: perder = perder os dados
+        sync: false
+      - key: PII_BLIND_INDEX_KEY
+        sync: false
+      - key: PPV_TOKEN_SECRET
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: WEB_PUBLIC_URL
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_PRIVATE
+        sync: false
+      - key: S3_BUCKET_PUBLIC
+        sync: false
+      - key: PUBLIC_MEDIA_BASE_URL
+        sync: false
+      - key: KYC_PROVIDER
+        value: http
+      - key: KYC_API_URL
+        sync: false
+      - key: KYC_API_KEY
+        sync: false
+      - key: SAFETY_SCANNER
+        value: http
+      - key: SAFETY_API_URL
+        sync: false
+      - key: SAFETY_API_KEY
+        sync: false
+      - key: PAYMENT_GATEWAY
+        value: http
+      - key: PAYMENT_API_URL
+        sync: false
+      - key: PAYMENT_API_KEY
+        sync: false
+      - key: PAYMENT_WEBHOOK_SECRET
+        sync: false
+
+  - type: worker
+    name: classificados-worker
+    runtime: docker
+    rootDir: apps/api
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node dist/worker.js
+    plan: starter
+    envVars: *apiEnv
+
+  - type: web
+    name: classificados-web
+    runtime: docker
+    rootDir: apps/web
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_API_URL     # ex.: https://api.seudominio.com (usado no build)
+        sync: false
+      - key: NEXT_PUBLIC_TILE_URL
+        sync: false
