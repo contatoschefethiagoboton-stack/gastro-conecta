@@ -113,8 +113,9 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   let diagnosis = "";
   if (!wa.ok && wa.code === 100) {
     const hello = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "", "", "", { template: "hello_world", lang: "en_US", noParams: true });
-    diagnosis = hello.ok
-      ? "Diagnóstico: o modelo de teste da Meta (hello_world) CHEGOU no seu WhatsApp, então token, ID do número e destino estão certos. O problema está no seu modelo. Solução: no WhatsApp Manager, crie um modelo novo (categoria Utilidade, Português (BR)) escolhendo variáveis do tipo NÚMERO, sem variável no cabeçalho nem nos botões, com o texto “Olá! {{1}} / {{2}} / Acesse: {{3}}”. Se preferir manter o modelo atual com variáveis de nome, informe os 3 nomes no campo “Nomes das variáveis”."
+    // 131058 = número real de produção (hello_world só sai de números de teste): token e ID do número estão certos.
+    diagnosis = hello.ok || hello.code === 131058
+      ? "Diagnóstico: a Meta aceitou o token e o ID do número (seu número é de produção), então o problema está só no seu modelo. Solução: no WhatsApp Manager, crie um modelo novo (categoria Utilidade, Português (BR)) escolhendo variáveis do tipo NÚMERO, sem variável no cabeçalho nem nos botões, com o texto “Olá! {{1}} / {{2}} / Acesse: {{3}}”. Se preferir manter o modelo atual com variáveis de nome, informe os 3 nomes no campo “Nomes das variáveis”."
       : `Diagnóstico: o modelo de teste da Meta (hello_world) também falhou: ${hello.error ?? "sem detalhes"} Confira o token e o ID do número.`;
   }
   // Mesmo destino dos avisos reais: a lista da seção Notificações ou o e-mail de login do admin.
