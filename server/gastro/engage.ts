@@ -91,7 +91,8 @@ router.put("/admin/notifications/settings", wrap(async (req, res) => {
   const context = await adminCtx(req);
   const input = body(req, z.object({
     waToken: z.string().trim().max(600).optional(), waPhoneNumberId: z.string().trim().regex(/^\d{0,30}$/, "ID do número: só números").optional(),
-    waTemplate: z.string().trim().regex(/^[a-z0-9_]{0,120}$/, "Nome do modelo: letras minúsculas, números e _").optional(), waLang: z.string().trim().regex(/^[a-z]{2}(_[A-Z]{2})?$/, "Idioma inválido (ex.: pt_BR)").optional(),
+    waTemplate: z.string().trim().regex(/^[a-z0-9_]{0,120}$/, "Nome do modelo: letras minúsculas, números e _").optional(),
+    waParamNames: z.string().trim().max(200).refine(v => !v || v.split(/[,;\s]+/).filter(Boolean).length === 3, "Informe exatamente 3 nomes, separados por vírgula (ex.: titulo, texto, link)").optional(), waLang: z.string().trim().regex(/^[a-z]{2}(_[A-Z]{2})?$/, "Idioma inválido (ex.: pt_BR)").optional(),
     adminEmails: z.string().trim().max(400).optional(), adminEmailOn: z.boolean().optional(), adminWhatsappOn: z.boolean().optional(),
   }).strict());
   const { adminEmailOn, adminWhatsappOn, ...text } = input;
@@ -107,13 +108,22 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   const status = notifySettingsStatus();
   const wa = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`);
   const whatsapp = wa.ok;
+  // Diagnóstico: se o modelo foi recusado, testa o modelo padrão da Meta (hello_world) para separar
+  // problema de token/número de problema no modelo.
+  let diagnosis = "";
+  if (!wa.ok && wa.code === 100) {
+    const hello = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "", "", "", { template: "hello_world", lang: "en_US", noParams: true });
+    diagnosis = hello.ok
+      ? "Diagnóstico: o modelo de teste da Meta (hello_world) CHEGOU no seu WhatsApp, então token, ID do número e destino estão certos. O problema está no seu modelo. Solução: no WhatsApp Manager, crie um modelo novo (categoria Utilidade, Português (BR)) escolhendo variáveis do tipo NÚMERO, sem variável no cabeçalho nem nos botões, com o texto “Olá! {{1}} / {{2}} / Acesse: {{3}}”. Se preferir manter o modelo atual com variáveis de nome, informe os 3 nomes no campo “Nomes das variáveis”."
+      : `Diagnóstico: o modelo de teste da Meta (hello_world) também falhou: ${hello.error ?? "sem detalhes"} Confira o token e o ID do número.`;
+  }
   // Mesmo destino dos avisos reais: a lista da seção Notificações ou o e-mail de login do admin.
   const to = (status.email.adminEmails || context.user.email || "").split(/[,;\s]+/).find(e => /@/.test(e)) ?? "";
   const mail = to ? await sendMailDetailed(to, "[GastroConecta] Teste de notificação", "<p>Os avisos por e-mail do GastroConecta estão funcionando.</p>") : { ok: false, error: "Nenhum e-mail de destino: preencha o e-mail da administração nesta seção." };
   res.json({
     whatsapp, email: mail.ok, emailTo: to,
     ...(mail.error ? { emailError: mail.error } : {}),
-    ...(wa.error ? { whatsappError: wa.error } : {}),
+    ...(wa.error ? { whatsappError: diagnosis ? `${wa.error} ${diagnosis}` : wa.error } : {}),
   });
 }));
 
