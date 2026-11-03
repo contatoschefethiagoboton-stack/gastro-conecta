@@ -186,7 +186,10 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
   const [sendList, setSendList] = useState(true);
   const [listNote, setListNote] = useState("");
   const site = useSite();
+  // Valor da lista cobrado do cliente (sugestão do painel; o profissional muda ou dá como cortesia).
   const listPriceCents = shoppingListPriceCents(site.content["price.shoppingList"]);
+  const [listFeeCents, setListFeeCents] = useState<number | null>(null);
+  const [listCourtesy, setListCourtesy] = useState(false);
   const setScope = (next: ContractScope) => {
     setScopeState(next);
     // Marmitas: só mão de obra zera ingredientes e embalagens; completo volta aos valores padrão.
@@ -217,13 +220,16 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
   const listItems: ShoppingItem[] = category === "event" ? eventCalc.items.map(it => ({ name: it.name, quantity: it.quantity, unit: it.unit })) : mealList;
   const validList = listItems.filter(it => it.name.trim().length >= 2 && it.quantity > 0);
   const amountCents = parseCents(amountText) ?? suggestedCents;
+  const withList = laborOnly && sendList && validList.length > 0;
+  const listCharge = withList && !listCourtesy ? (listFeeCents ?? listPriceCents) : 0;
+  const totalCents = amountCents + listCharge;
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (amountCents <= 0) { toast.error("Informe o valor da proposta."); return; }
-    const shoppingList = laborOnly && sendList && validList.length ? { items: validList, ...(listNote.trim() ? { note: listNote.trim() } : {}) } : undefined;
+    const shoppingList = withList ? { items: validList, ...(listNote.trim() ? { note: listNote.trim() } : {}), feeCents: listCharge, courtesy: listCharge === 0 } : undefined;
     const breakdown = { category, scope, margin, discount, extraCents, ...(category === "event" ? { eventCalc } : category === "mealPrep" ? { meal } : { area }), ...(shoppingList ? { shoppingList } : {}) };
-    const ok = await run("send-proposal", () => post<{ shoppingListPayment?: unknown }>("/proposals", { eventId: event.id, amountCents, costCents, message, paymentTerms: terms, scope: hasScope ? scope : "labor", ...(time ? { eventTime: time } : {}), breakdown }), shoppingList && listPriceCents > 0 ? `Proposta enviada. Pague o Pix de ${formatMoney(listPriceCents)} em Minhas propostas para liberar a lista ao cliente.` : "Proposta enviada ao cliente.");
+    const ok = await run("send-proposal", () => post("/proposals", { eventId: event.id, amountCents: totalCents, costCents, message, paymentTerms: terms, scope: hasScope ? scope : "labor", ...(time ? { eventTime: time } : {}), breakdown }), "Proposta enviada ao cliente.");
     if (ok) onClose();
   };
 
@@ -236,8 +242,12 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
     {category === "mealPrep" && <MealPrepCalculator value={laborOnly ? { ...meal, ...LABOR_ONLY_MEAL } : meal} onChange={setMeal} laborOnly={laborOnly}/>}
     {laborOnly && <div className="cp-block cp-shopping">
       {category === "mealPrep" && <><h4 className="cp-title"><ClipboardList size={16}/> Lista de compras para o cliente</h4><ShoppingListEditor items={mealList} onChange={setMealList}/></>}
-      <label className="cp-check"><input type="checkbox" checked={sendList} onChange={e => setSendList(e.target.checked)}/> Enviar a lista de compras ao cliente em PDF ({validList.length} {validList.length === 1 ? "item" : "itens"}){listPriceCents > 0 ? ` · custa ${formatMoney(listPriceCents)} via Pix` : " · grátis"}</label>
-      {sendList && listPriceCents > 0 && <p className="cp-labor-note"><Info size={14}/><span>Gerar a lista de compras custa <strong>{formatMoney(listPriceCents)}</strong>, pagos por Pix depois de enviar a proposta (em Minhas propostas). O cliente recebe a lista assim que o pagamento é confirmado.</span></p>}
+      <label className="cp-check"><input type="checkbox" checked={sendList} onChange={e => setSendList(e.target.checked)}/> Enviar a lista de compras ao cliente em PDF ({validList.length} {validList.length === 1 ? "item" : "itens"})</label>
+      {sendList && <div className="cp-row cp-list-fee">
+        <label className="dash-field"><span>Valor da lista cobrado do cliente (R$)</span><MoneyInput cents={listCourtesy ? 0 : listFeeCents ?? listPriceCents} label="Valor da lista de compras" onChange={c => { setListFeeCents(c); if (c > 0) setListCourtesy(false); }}/></label>
+        <label className="cp-check"><input type="checkbox" checked={listCourtesy} onChange={e => setListCourtesy(e.target.checked)}/> Dar a lista como cortesia (não cobrar)</label>
+      </div>}
+      {sendList && <p className="cp-labor-note"><Info size={14}/><span>{listCharge > 0 ? <>O valor da lista (<strong>{formatMoney(listCharge)}</strong>) é somado ao total da proposta e aparece separado no contrato. Você recebe direto do cliente, sem passar pela plataforma.</> : <>A lista vai como <strong>cortesia</strong> e aparece assim no contrato.</>}</span></p>}
       {sendList && <><label className="dash-field"><span>Observações da lista (opcional)</span><textarea rows={2} value={listNote} onChange={e => setListNote(e.target.value)} placeholder="Ex.: comprar as carnes até 2 dias antes; prefira arroz agulhinha." maxLength={1000}/></label>
       <p className="cp-labor-note"><Info size={14}/><span>O cliente verá este aviso junto da lista: “{SHOPPING_LIST_NOTICE}”</span></p></>}
     </div>}
@@ -246,14 +256,15 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
       <label className="dash-field"><span>Outros custos (transporte, gás, aluguel…) R$</span><MoneyInput cents={extraCents} label="Outros custos" onChange={setExtraCents}/></label>
       {category === "event" && <label className="dash-field"><span>Margem desejada (%)</span><Num value={margin} label="Margem" onChange={setMargin}/></label>}
       <label className="dash-field"><span>Desconto (%)</span><Num value={discount} label="Desconto" onChange={v => setDiscount(Math.min(100, v))}/></label>
-      <label className="dash-field"><span>Valor da proposta (R$)</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">{platformCents > 0 ? `Sugestão da plataforma: ${formatMoney(platformCents)} · cálculo do Copilot: ${formatMoney(suggestedCents)}.` : `Sugestão do Copilot: ${formatMoney(suggestedCents)}. Você pode alterar.`}</small></label>
+      <label className="dash-field"><span>{withList ? "Valor do serviço (R$)" : "Valor da proposta (R$)"}</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">{platformCents > 0 ? `Sugestão da plataforma: ${formatMoney(platformCents)} · cálculo do Copilot: ${formatMoney(suggestedCents)}.` : `Sugestão do Copilot: ${formatMoney(suggestedCents)}. Você pode alterar.`}</small></label>
       <label className="dash-field"><span>Horário</span><input type="time" value={time} onChange={e => setTime(e.target.value)}/></label>
     </div>
     {platformCents > 0 && <PriceAdjuster platformCents={platformCents} amountCents={amountCents} copilotCents={suggestedCents} onChange={c => setAmountText(centsInput(c))}/>}
-    <ProfitBox priceCents={amountCents} costCents={costCents}/>
+    {withList && <div className="cp-total-line"><span>Serviço <b>{formatMoney(amountCents)}</b></span><span>Lista de compras <b>{listCharge > 0 ? formatMoney(listCharge) : "cortesia"}</b></span><span className="cp-highlight">Total para o cliente <b>{formatMoney(totalCents)}</b></span></div>}
+    <ProfitBox priceCents={totalCents} costCents={costCents}/>
     <label className="dash-field"><span>Condições de pagamento</span><input required value={terms} onChange={e => setTerms(e.target.value)} maxLength={600}/></label>
     <label className="dash-field"><span>Mensagem ao cliente</span><textarea required rows={4} value={message} onChange={e => setMessage(e.target.value)} placeholder="Cardápio, o que está incluso, equipe, diferenciais e disponibilidade." maxLength={5000}/></label>
-    <div className="cp-actions"><button type="button" className="dash-outline-button" onClick={onClose}>Cancelar</button><button className="dash-primary-button" type="submit" disabled={busy === "send-proposal"}>{busy === "send-proposal" ? <Loader2 className="dash-spinner" size={16}/> : <Send size={16}/>} Enviar proposta de {formatMoney(amountCents)}</button></div>
+    <div className="cp-actions"><button type="button" className="dash-outline-button" onClick={onClose}>Cancelar</button><button className="dash-primary-button" type="submit" disabled={busy === "send-proposal"}>{busy === "send-proposal" ? <Loader2 className="dash-spinner" size={16}/> : <Send size={16}/>} Enviar proposta de {formatMoney(totalCents)}</button></div>
   </form>;
 }
 

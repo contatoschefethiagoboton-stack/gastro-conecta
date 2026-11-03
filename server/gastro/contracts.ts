@@ -3,6 +3,7 @@ import { SCOPE_LABELS, type ContractScope } from "@shared/services";
 import { formatCEP, formatCNPJ, formatCPF, formatPhone } from "@shared/validators";
 import { buildPdf, type PdfBlock } from "./pdf";
 import { isoDate } from "./rules";
+import { normalizeShoppingList, shoppingListFeeLabel } from "@shared/shoppingList";
 
 export type Party = { name: string; document: string; documentLabel: string; address: string; email: string; phone: string };
 export type ContractPayload = {
@@ -15,6 +16,8 @@ export type ContractPayload = {
   event: { id: number; title: string; type: string; date: string; time: string; city: string; location: string; guests: number; description: string };
   scope: ContractScope;
   amountCents: number;
+  /** Composição do valor: serviço + lista de compras (valor cobrado ou cortesia). Contratos antigos não têm. */
+  values?: { serviceCents: number; shoppingList?: { feeCents: number; courtesy: boolean; items: number } };
   paymentTerms: string;
   proposalMessage: string;
 };
@@ -69,9 +72,20 @@ export function buildContractPayload(input: {
     },
     scope: input.proposal.scope === "full" ? "full" : "labor",
     amountCents: Number(input.proposal.amountCents),
+    values: contractValues(input.proposal),
     paymentTerms: input.proposal.paymentTerms || "Pagamento integral diretamente ao CONTRATADO, via Pix, até a data do serviço.",
     proposalMessage: input.proposal.message ?? "",
   };
+}
+
+/** Separa o total da proposta em serviço e lista de compras (tudo que é valor vai para o contrato). */
+function contractValues(proposal: any): ContractPayload["values"] {
+  let breakdown: any = proposal.breakdown;
+  if (typeof breakdown === "string") { try { breakdown = JSON.parse(breakdown); } catch { breakdown = null; } }
+  const list = normalizeShoppingList(breakdown?.shoppingList);
+  const total = Number(proposal.amountCents);
+  if (!list) return { serviceCents: total };
+  return { serviceCents: total - list.feeCents, shoppingList: { feeCents: list.feeCents, courtesy: list.courtesy, items: list.items.length } };
 }
 
 export function contractBlocks(c: ContractPayload): PdfBlock[] {
@@ -107,6 +121,13 @@ export function contractBlocks(c: ContractPayload): PdfBlock[] {
     { kind: "pair", label: "Horário", value: c.event.time || "a combinar entre as partes" },
     { kind: "pair", label: "Local", value: [c.event.location, c.event.city].filter(Boolean).join(" - ") },
     { kind: "heading", text: "CLÁUSULA 4 - VALOR E FORMA DE PAGAMENTO" },
+    ...(c.values ? [
+      { kind: "pair" as const, label: c.scope === "labor" ? "Serviço (mão de obra)" : "Serviço", value: money(c.values.serviceCents) },
+      ...(c.values.shoppingList ? [
+        { kind: "pair" as const, label: `Lista de compras (${c.values.shoppingList.items} itens)`, value: shoppingListFeeLabel(c.values.shoppingList) },
+        { kind: "text" as const, text: "A lista de compras é uma estimativa elaborada pelo CONTRATADO. O valor acima refere-se somente à elaboração da lista; os ingredientes e insumos nela indicados não estão incluídos e são adquiridos pelo CONTRATANTE." },
+      ] : []),
+    ] : []),
     { kind: "pair", label: "Valor total acordado", value: money(c.amountCents) },
     { kind: "pair", label: "Condições de pagamento", value: c.paymentTerms },
     { kind: "text", text: "O pagamento é feito diretamente ao CONTRATADO, na chave Pix ou conta indicada acima. A Eventos Conecta não retém comissão, não recebe valores em nome das partes e não é responsável pelo repasse." },

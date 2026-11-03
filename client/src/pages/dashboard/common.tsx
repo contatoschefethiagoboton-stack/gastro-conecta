@@ -22,7 +22,7 @@ export type EventItem = {
 export type Proposal = {
   id: number; eventId: number; providerId: number; amountCents: number; costCents: number; message: string; status: string; scope: "labor" | "full"; paymentTerms: string; eventTime?: string;
   createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean; hasShoppingList?: boolean; breakdown?: Record<string, any> | null;
-  shoppingList?: { paid: boolean; payment?: { id: number; status: string; amountCents: number; qrCode: string; qrCodeBase64: string; ticketUrl: string; expiresAt: string | null } };
+  shoppingListFee?: { feeCents: number; courtesy: boolean };
 };
 export type PendingReview = { eventId: number; title: string; completedAt: string; targets: Array<{ id: number; name: string }> };
 export type ReviewsResponse = { pending: PendingReview[]; overdue: number; average: number; count: number; reviews: Array<{ id: number; eventTitle: string; reviewerName: string; targetName: string; rating: number; feedback: string; createdAt: string; mine: boolean }> };

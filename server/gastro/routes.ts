@@ -22,11 +22,8 @@ import { assertSubscriptionActive, phaseFor, subscriptionSummary } from "./subsc
 import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLink } from "./profiles";
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
 import { buildPdf, type PdfBlock } from "./pdf";
-import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListPriceCents } from "@shared/shoppingList";
-import { createPixPayment, mpConfigured } from "./mercadopago";
-import { paymentDescription, paymentReference } from "@shared/payments";
-import { getSiteContent } from "./content";
-import { webhookUrl } from "./subscriptions";
+import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListFeeLabel } from "@shared/shoppingList";
+import { mpConfigured } from "./mercadopago";
 import { mailConfigured } from "./password";
 import { anonymizeAccount, hasPermission, loadStaff, requireStaff, staffCan, type StaffContext } from "./staff";
 
@@ -379,10 +376,7 @@ router.get("/proposals", wrap(async (req, res) => {
     const isProvider = Number(row.providerId) === me;
     const extra: Record<string, unknown> = {};
     if (isProvider && row.eventProviderId && Number(row.eventProviderId) !== me) extra.closedWith = row.winnerName ?? "outro profissional";
-    if (isProvider && normalizeShoppingList(json(row.breakdown)?.shoppingList)) {
-      const pay = row.shoppingListPaidAt ? null : (await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? AND purpose = 'shopping_list' AND proposalId = ? AND status = 'pending' AND expiresAt > CURRENT_TIMESTAMP ORDER BY id DESC LIMIT 1", [me, row.id]))[0];
-      extra.shoppingList = { paid: Boolean(row.shoppingListPaidAt), ...(pay ? { payment: listPaymentView(pay) } : {}) };
-    }
+
     if (row.status === "accepted") {
       const otherId = isProvider ? Number(row.clientId) : Number(row.providerId);
       const { details } = await loadDetails(otherId);
@@ -392,7 +386,8 @@ router.get("/proposals", wrap(async (req, res) => {
       const rating = await query<any[]>("SELECT AVG(rating) average, COUNT(*) total FROM gastro_reviews WHERE targetId = ?", [row.providerId]);
       extra.providerRating = { average: Number(rating[0]?.average ?? 0), count: Number(rating[0]?.total ?? 0) };
       // Lista de compras (só itens e quantidades) fica disponível ao cliente em PDF.
-      if (row.shoppingListPaidAt && normalizeShoppingList(json(row.breakdown)?.shoppingList)) extra.hasShoppingList = true;
+      const list = normalizeShoppingList(json(row.breakdown)?.shoppingList);
+      if (list) { extra.hasShoppingList = true; extra.shoppingListFee = { feeCents: list.feeCents, courtesy: list.courtesy }; }
       // Custo estimado é informação interna do profissional.
       row.costCents = 0; row.breakdown = null;
     }
@@ -426,77 +421,47 @@ router.post("/proposals", wrap(async (req, res) => {
     const list = input.scope === "labor" ? normalizeShoppingList(input.breakdown.shoppingList) : null;
     if (list) input.breakdown.shoppingList = list; else delete input.breakdown.shoppingList;
   }
+  // O valor da lista (se cobrado) já vem somado ao total da proposta.
+  const listFee = normalizeShoppingList(input.breakdown?.shoppingList)?.feeCents ?? 0;
+  if (listFee >= input.amountCents) throw new HttpError(400, "O valor da lista de compras precisa ser menor que o total da proposta.");
   const existing = await query<any[]>("SELECT id, status FROM gastro_proposals WHERE eventId = ? AND providerId = ? LIMIT 1", [input.eventId, context.user.id]);
   if (existing[0] && ["pending", "accepted"].includes(existing[0].status)) throw new HttpError(409, "Você já enviou uma proposta para este pedido");
-  // Lista de compras é paga pelo profissional (Pix); sem cobrança configurada, não dá para anexá-la.
-  const listFee = input.breakdown?.shoppingList ? shoppingListPriceCents((await getSiteContent())["price.shoppingList"]) : 0;
-  if (listFee > 0 && !mpConfigured()) throw new HttpError(400, "A cobrança da lista de compras ainda não está ativa na plataforma. Desmarque a lista para enviar a proposta.");
   const values = [input.amountCents, input.message, input.scope, input.costCents, input.paymentTerms, input.eventTime ?? null, input.breakdown ? JSON.stringify(input.breakdown) : null];
   let id: number;
   if (existing[0]) { await execute("UPDATE gastro_proposals SET amountCents = ?, message = ?, scope = ?, costCents = ?, paymentTerms = ?, eventTime = ?, breakdown = ?, status = 'pending', createdAt = CURRENT_TIMESTAMP WHERE id = ?", [...values, existing[0].id]); id = Number(existing[0].id); }
   else id = Number((await execute("INSERT INTO gastro_proposals (amountCents, message, scope, costCents, paymentTerms, eventTime, breakdown, eventId, providerId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [...values, input.eventId, context.user.id])).insertId);
   await execute("DELETE FROM gc_event_dismissals WHERE eventId = ? AND userId = ?", [input.eventId, context.user.id]);
-  let listPayment: Awaited<ReturnType<typeof createListPayment>> | null = null;
-  if (input.breakdown?.shoppingList) {
-    if (listFee === 0) await execute("UPDATE gastro_proposals SET shoppingListPaidAt = COALESCE(shoppingListPaidAt, CURRENT_TIMESTAMP) WHERE id = ?", [id]);
-    else listPayment = await createListPayment(req, context, id, listFee).catch(() => null);
-  }
   const rows = await query<any[]>("SELECT p.*, u.name providerName, e.title eventTitle FROM gastro_proposals p JOIN users u ON u.id = p.providerId JOIN gastro_events e ON e.id = p.eventId WHERE p.id = ?", [id]);
   const proposal = rows[0];
   const eventRow = (await query<any[]>("SELECT clientId, title FROM gastro_events WHERE id = ? LIMIT 1", [input.eventId]))[0];
   const amount = (input.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   if (eventRow) later(() => notifyUser(Number(eventRow.clientId), { type: "proposal.new", title: "Você recebeu uma proposta", body: `${context.user.name ?? "Um profissional"} enviou uma proposta de ${amount} para “${eventRow.title}”. Toque no link para ver e responder.`, path: "/painel?aba=requests" }));
   later(() => notifyAdmin({ type: "proposal.new", title: "Nova proposta enviada", body: `${context.user.name ?? "Profissional"} propôs ${amount} para “${eventRow?.title ?? "pedido"}”.` }));
-  res.status(201).json({ proposal: mapProposal(proposal), ...(listPayment ? { shoppingListPayment: listPayment } : {}) });
-}));
-
-/** Pix da lista de compras de uma proposta (R$ 50 por padrão, valor definido no painel). */
-async function createListPayment(req: Request, context: AuthContext, proposalId: number, fee: number) {
-  const me = context.user.id;
-  const pending = await query<any[]>("SELECT * FROM gc_subscription_payments WHERE userId = ? AND purpose = 'shopping_list' AND proposalId = ? AND status = 'pending' AND expiresAt > CURRENT_TIMESTAMP ORDER BY id DESC LIMIT 1", [me, proposalId]);
-  if (pending[0]?.qrCode) return listPaymentView(pending[0]);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
-  const result = await execute("INSERT INTO gc_subscription_payments (userId, method, status, amountCents, expiresAt, purpose, proposalId) VALUES (?, 'pix_list', 'pending', ?, ?, 'shopping_list', ?)", [me, fee, expiresAt, proposalId]);
-  const rowId = Number(result.insertId);
-  const reference = paymentReference("LISTA", me, rowId);
-  await execute("UPDATE gc_subscription_payments SET reference = ? WHERE id = ?", [reference, rowId]);
-  try {
-    const payment = await createPixPayment({ amountCents: fee, description: paymentDescription("LISTA", me, context.user.name ?? "", `proposta ${proposalId}`), payerEmail: context.user.email ?? "", externalReference: reference, expiresAt, notificationUrl: webhookUrl(req) });
-    const data = payment.point_of_interaction?.transaction_data ?? {};
-    await execute("UPDATE gc_subscription_payments SET mpPaymentId = ?, qrCode = ?, qrCodeBase64 = ?, ticketUrl = ? WHERE id = ?", [String(payment.id), data.qr_code ?? null, data.qr_code_base64 ?? null, (data.ticket_url ?? "").slice(0, 500) || null, rowId]);
-  } catch (error) {
-    await execute("DELETE FROM gc_subscription_payments WHERE id = ?", [rowId]);
-    throw error;
-  }
-  return listPaymentView((await query<any[]>("SELECT * FROM gc_subscription_payments WHERE id = ?", [rowId]))[0]);
-}
-
-const listPaymentView = (row: any) => ({ id: Number(row.id), status: String(row.status), amountCents: Number(row.amountCents), qrCode: row.qrCode ?? "", qrCodeBase64: row.qrCodeBase64 ?? "", ticketUrl: row.ticketUrl ?? "", expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null });
-
-router.post("/proposals/:id/shopping-list/pay", wrap(async (req, res) => {
-  const context = await auth(req);
-  const id = parse(idSchema, req.params.id);
-  limit(`list-pay:${context.user.id}`, 20, 60 * 60_000, "Muitas tentativas; aguarde um pouco");
-  const rows = await query<any[]>("SELECT id, breakdown, shoppingListPaidAt FROM gastro_proposals WHERE id = ? AND providerId = ? LIMIT 1", [id, context.user.id]);
-  if (!rows[0] || !normalizeShoppingList(json(rows[0].breakdown)?.shoppingList)) throw new HttpError(404, "Proposta sem lista de compras");
-  if (rows[0].shoppingListPaidAt) { res.json({ paid: true }); return; }
-  const fee = shoppingListPriceCents((await getSiteContent())["price.shoppingList"]);
-  if (fee === 0) { await execute("UPDATE gastro_proposals SET shoppingListPaidAt = CURRENT_TIMESTAMP WHERE id = ?", [id]); res.json({ paid: true }); return; }
-  if (!mpConfigured()) throw new HttpError(503, "A cobrança via Pix ainda não está configurada na plataforma.");
-  res.json({ paid: false, payment: await createListPayment(req, context, id, fee) });
+  res.status(201).json({ proposal: mapProposal(proposal) });
 }));
 
 /** O profissional ajusta a proposta enquanto o cliente ainda não respondeu (valor, mensagem, condições e horário). */
 router.patch("/proposals/:id", wrap(async (req, res) => {
   const context = await auth(req);
   const id = parse(idSchema, req.params.id);
-  const input = body(req, z.object({ amountCents: z.number().int().positive().max(2_000_000_000).optional(), message: z.string().trim().min(2).max(5000).optional(), paymentTerms: z.string().trim().min(5, "Informe as condições de pagamento").max(600).optional(), eventTime: timeSchema.nullable().optional() }).strict());
+  const input = body(req, z.object({ amountCents: z.number().int().positive().max(2_000_000_000).optional(), message: z.string().trim().min(2).max(5000).optional(), paymentTerms: z.string().trim().min(5, "Informe as condições de pagamento").max(600).optional(), eventTime: timeSchema.nullable().optional(),
+    shoppingListFeeCents: z.number().int().min(0).max(100_000_000).optional(), shoppingListCourtesy: z.boolean().optional() }).strict());
   const rows = await query<any[]>("SELECT p.*, e.clientId, e.title eventTitle FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId WHERE p.id = ? AND p.providerId = ? LIMIT 1", [id, context.user.id]);
   const row = rows[0];
   if (!row) throw new HttpError(404, "Proposta não encontrada");
   if (row.status !== "pending") throw new HttpError(409, "Só dá para editar propostas que o cliente ainda não respondeu.");
   const updates: string[] = [], values: unknown[] = [];
   for (const key of ["amountCents", "message", "paymentTerms", "eventTime"] as const) if (input[key] !== undefined) { updates.push(`${key} = ?`); values.push(input[key]); }
+  // Valor da lista de compras (ou cortesia): fica no detalhamento e entra no contrato.
+  const breakdown = json(row.breakdown) ?? {};
+  const list = normalizeShoppingList(breakdown.shoppingList);
+  if (list && (input.shoppingListFeeCents !== undefined || input.shoppingListCourtesy !== undefined)) {
+    const courtesy = input.shoppingListCourtesy ?? list.courtesy;
+    breakdown.shoppingList = { ...list, courtesy, feeCents: courtesy ? 0 : input.shoppingListFeeCents ?? list.feeCents };
+    updates.push("breakdown = ?"); values.push(JSON.stringify(breakdown));
+  }
+  const total = input.amountCents ?? Number(row.amountCents);
+  if (list && (normalizeShoppingList(breakdown.shoppingList)?.feeCents ?? 0) >= total) throw new HttpError(400, "O valor da lista de compras precisa ser menor que o total da proposta.");
   if (!updates.length) throw new HttpError(400, "Nada para alterar");
   await execute(`UPDATE gastro_proposals SET ${updates.join(", ")} WHERE id = ?`, [...values, id]);
   await audit(context.user.id, "proposal.edited", { before: { amountCents: Number(row.amountCents), paymentTerms: row.paymentTerms, eventTime: row.eventTime ?? null }, after: input }, id);
@@ -636,12 +601,10 @@ router.get("/contracts/:id/pdf", wrap(async (req, res) => {
 router.get("/proposals/:id/shopping-list/pdf", wrap(async (req, res) => {
   const context = await auth(req);
   const proposalId = parse(idSchema, req.params.id);
-  const rows = await query<any[]>("SELECT p.id, p.providerId, p.breakdown, p.scope, p.shoppingListPaidAt, e.clientId, e.title, e.eventDate, e.city, e.guests, pu.name providerName FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId JOIN users pu ON pu.id = p.providerId WHERE p.id = ? LIMIT 1", [proposalId]);
+  const rows = await query<any[]>("SELECT p.id, p.providerId, p.breakdown, p.scope, p.amountCents, e.clientId, e.title, e.eventDate, e.city, e.guests, pu.name providerName FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId JOIN users pu ON pu.id = p.providerId WHERE p.id = ? LIMIT 1", [proposalId]);
   const row = rows[0];
   const allowed = row && (Number(row.providerId) === context.user.id || Number(row.clientId) === context.user.id || (await staffCan(context, "contracts.view")));
-  const isStaffReader = row && Number(row.providerId) !== context.user.id && Number(row.clientId) !== context.user.id;
-  // A lista só fica disponível depois que o profissional paga (a equipe com acesso a contratos sempre vê).
-  const list = allowed && (row.shoppingListPaidAt || isStaffReader) ? normalizeShoppingList(json(row.breakdown)?.shoppingList) : null;
+  const list = allowed ? normalizeShoppingList(json(row.breakdown)?.shoppingList) : null;
   if (!row || !allowed || !list) throw new HttpError(404, "Lista de compras não encontrada");
   const date = row.eventDate ? new Date(row.eventDate).toISOString().slice(0, 10).split("-").reverse().join("/") : "a definir";
   const blocks: PdfBlock[] = [
@@ -651,6 +614,7 @@ router.get("/proposals/:id/shopping-list/pdf", wrap(async (req, res) => {
     { kind: "pair", label: "Cidade", value: String(row.city ?? "") },
     { kind: "pair", label: "Convidados", value: String(row.guests) },
     { kind: "pair", label: "Profissional", value: String(row.providerName) },
+    { kind: "pair", label: "Valor da lista de compras", value: `${shoppingListFeeLabel(list)}${list.feeCents > 0 ? " (já incluído no total da proposta)" : ""}` },
     { kind: "space" },
     { kind: "heading", text: "Aviso importante" },
     { kind: "text", text: SHOPPING_LIST_NOTICE },

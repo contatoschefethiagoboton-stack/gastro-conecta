@@ -372,7 +372,7 @@ export const contentFields: ContentField[] = [
  {
   "key": "price.shoppingList",
   "group": "Níveis e promoções",
-  "label": "Preço que o profissional paga para gerar a lista de compras (R$; 0 = grátis)",
+  "label": "Valor sugerido da lista de compras, cobrado pelo profissional do cliente dentro do orçamento (R$). O profissional pode mudar ou dar como cortesia",
   "type": "text",
   "default": "50"
  },

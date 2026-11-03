@@ -686,3 +686,8 @@
 .dash-danger-button { color: #a33b33 !important; border-color: #e9b8b1 !important; }
 .dash-primary-button.dash-danger-button { background: #b93832 !important; color: #fff !important; border-color: #b93832 !important; }
 .dash-primary-button.dash-danger-button:disabled { opacity: .5; }
+.cp-list-fee { align-items: flex-end; flex-wrap: wrap; gap: 14px; }
+.cp-list-fee .dash-field { max-width: 260px; }
+.cp-total-line { display: flex; flex-wrap: wrap; gap: 10px; }
+.cp-total-line span { border: 1px solid #ece6da; border-radius: 10px; padding: 10px 14px; font-size: 13px; display: flex; gap: 8px; background: #fff; }
+.cp-total-line .cp-highlight { border-color: var(--gc-orange, #df572f); background: #fdf1ea; }

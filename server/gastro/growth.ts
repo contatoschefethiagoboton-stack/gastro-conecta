@@ -161,7 +161,7 @@ router.post("/provider/promotions/:id/join", wrap(async (req, res) => {
 router.post("/provider/promotions/refresh", wrap(async (req, res) => {
   const context = await providerCtx(req);
   limit(`promo-refresh:${context.user.id}`, 30, HOUR);
-  const rows = await query<any[]>("SELECT mpPaymentId FROM gc_subscription_payments WHERE userId = ? AND purpose IN ('promotion','benefit','shopping_list') AND status = 'pending' AND mpPaymentId IS NOT NULL ORDER BY id DESC LIMIT 5", [context.user.id]);
+  const rows = await query<any[]>("SELECT mpPaymentId FROM gc_subscription_payments WHERE userId = ? AND purpose IN ('promotion','benefit') AND status = 'pending' AND mpPaymentId IS NOT NULL ORDER BY id DESC LIMIT 5", [context.user.id]);
   for (const row of rows) await syncMpPayment(row.mpPaymentId);
   res.json({ ok: true });
 }));
@@ -264,7 +264,7 @@ router.get("/admin/payments", wrap(async (req, res) => {
     LEFT JOIN gc_promotions pr ON pr.id = sp.promotionId ORDER BY sp.id DESC LIMIT 1000`);
   res.json({
     payments: rows.map(row => {
-      const kind = row.purpose === "promotion" ? "PROMOCAO" : row.purpose === "benefit" ? "BENEFICIO" : row.purpose === "shopping_list" ? "LISTA" : row.method === "pix_auto" ? "ASSINATURA-AUTO" : "ASSINATURA";
+      const kind = row.purpose === "promotion" ? "PROMOCAO" : row.purpose === "benefit" ? "BENEFICIO" : row.method === "pix_auto" ? "ASSINATURA-AUTO" : "ASSINATURA";
       return {
         id: Number(row.id), userId: Number(row.userId), code: subscriberCode(Number(row.userId)), name: row.name ?? "", email: row.email ?? "",
         kind: row.method === "admin_grant" ? "Cortesia do admin" : `${PAYMENT_KIND_LABELS[kind as keyof typeof PAYMENT_KIND_LABELS]}${row.promotionTitle ? ` — ${row.promotionTitle}` : ""}`,
