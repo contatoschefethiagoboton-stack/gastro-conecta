@@ -201,6 +201,81 @@ add('whatsapp/02-profissional.png', 1080, 1080, 'paprika on-paprika', `
   </div>
   <div style="position:relative;margin-top:auto;padding:0 70px 64px"><div class="cta white" style="padding:26px 34px;font-size:30px"><span>Cadastre-se grátis <b>→</b></span><span style="font-weight:500">${SITE}</span></div></div>`);
 
+// ---------- NOVIDADES (só mão de obra, lista de compras, contrato com todos os valores, proposta editável) ----------
+const contratoMock = (px) => `<div style="background:#fff;color:var(--ink);border-radius:${px}px;padding:${px * 1.4}px ${px * 1.6}px;box-shadow:0 30px 60px rgba(0,0,0,.25)">
+  <div style="display:flex;justify-content:space-between;align-items:center"><span class="dm" style="font-weight:700;font-size:${px * 1.15}px">Contrato de prestação de serviços</span><span style="color:var(--p)">${icon('FileText', px * 1.6, 2)}</span></div>
+  <p class="muted" style="font-size:${px * .7}px;margin-top:${px * .3}px;letter-spacing:.12em;text-transform:uppercase;font-weight:700">Cláusula 4 · Valor e forma de pagamento</p>
+  ${[['Serviço (mão de obra)', 'R$ 1.800,00'], ['Lista de compras (12 itens)', 'R$ 50,00'], ['Valor total acordado', 'R$ 1.850,00']].map(([k, v], i) => `<div style="display:flex;justify-content:space-between;gap:20px;padding:${px * .7}px 0;border-top:${i ? '1.5px solid #eee8dc' : '0'};font-size:${px}px;${i === 2 ? 'font-weight:800;color:var(--p)' : ''}"><span>${k}</span><b>${v}</b></div>`).join('')}
+  <p class="muted" style="font-size:${px * .62}px;margin-top:${px * .4}px">Exemplo ilustrativo</p></div>`;
+
+add('feed/06-cliente-so-mao-de-obra.png', 1080, 1350, 'sand', `
+  <div style="padding:80px 80px 0;display:flex;justify-content:space-between;align-items:center">${logo(44)}<span class="badge" style="background:#fbe7df;color:var(--p2);font-size:24px;padding:14px 24px">Novidade</span></div>
+  <div style="padding:70px 80px 0">
+    <div class="eyebrow" style="font-size:24px">Só mão de obra</div>
+    <h1 style="font-size:84px;line-height:1;margin-top:20px;font-weight:700">Você compra os ingredientes. <span class="hl">O chef cozinha.</span></h1>
+    <p class="muted" style="font-size:30px;line-height:1.45;margin-top:28px">Peça só a mão de obra e pague apenas pelo serviço.</p>
+  </div>
+  <div style="padding:56px 80px 0;display:flex;flex-direction:column;gap:30px">
+    ${[['ClipboardList', 'Escolha “só mão de obra” no pedido', 'Chef, cozinheiro, garçom ou barman sem insumos no preço.'], ['FileText', 'Receba a lista de compras em PDF', 'Itens e quantidades calculados pelo profissional para o seu número de convidados.'], ['Check', 'Compre do seu jeito', 'Escolha as marcas e o mercado. A lista pode vir de cortesia ou com valor combinado na proposta.']].map(([ic, t, d]) => `
+      <div class="feat" style="gap:28px"><span class="ic" style="width:92px;height:92px">${icon(ic, 44, 1.9)}</span><div><h3 style="font-size:36px;font-weight:700">${t}</h3><p class="muted" style="font-size:26px;line-height:1.4;margin-top:6px">${d}</p></div></div>`).join('')}
+  </div>
+  <div style="margin-top:auto;padding:0 80px 76px"><div class="cta solid" style="padding:30px 40px;font-size:32px"><span>Peça orçamento grátis</span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+add('feed/07-cliente-contrato-transparente.png', 1080, 1350, 'dark', `
+  <div style="padding:80px 80px 0">${logo(44)}</div>
+  <div style="padding:70px 80px 0">
+    <div class="eyebrow" style="font-size:24px">Transparência</div>
+    <h1 style="font-size:92px;line-height:.98;margin-top:22px;font-weight:700">Tudo no contrato.<br/><span class="hl">Sem surpresa.</span></h1>
+    <p class="muted" style="font-size:30px;line-height:1.45;margin-top:28px">Cada valor aparece separado no contrato em PDF, gerado assim que você aceita a proposta.</p>
+  </div>
+  <div style="padding:60px 80px 0">${contratoMock(34)}</div>
+  <div style="margin-top:auto;padding:0 80px 76px"><div class="cta solid" style="padding:30px 40px;font-size:32px"><span>Contrate com segurança</span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+add('feed/08-profissional-lista-de-compras.png', 1080, 1350, 'paprika on-paprika', `
+  <div class="dots" style="width:620px;height:620px;right:-240px;top:-220px;background:#fff;opacity:.08"></div>
+  <div style="position:relative;padding:80px 80px 0;display:flex;justify-content:space-between;align-items:center">${logo(44)}<span class="eyebrow" style="font-size:22px">Para profissionais</span></div>
+  <div style="position:relative;padding:90px 80px 0">
+    <h1 style="font-size:90px;line-height:.98;font-weight:800">A lista de compras do cliente agora vale dinheiro.</h1>
+    <p style="font-size:34px;line-height:1.45;margin-top:34px;color:#fff3ee">Cobre pela lista dentro do orçamento ou ofereça de cortesia. Você decide.</p>
+  </div>
+  <div style="position:relative;padding:50px 80px 0;display:flex;flex-direction:column;gap:22px">
+    ${['A calculadora monta itens e quantidades por convidado', 'O valor da lista entra no total da proposta', 'Serviço, lista e total aparecem separados no contrato', 'Você recebe direto do cliente, sem comissão'].map(t => `<div style="display:flex;gap:18px;align-items:center;font-size:31px;font-weight:600"><span style="display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.18)">${icon('Check', 30, 2.6)}</span>${t}</div>`).join('')}
+  </div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 80px"><div class="cta white" style="padding:30px 40px;font-size:32px"><span>Cadastre-se <b>→</b></span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+add('stories/04-profissional-novidades.png', 1080, 1920, 'cream', `
+  <div style="padding:250px 80px 0">${logo(52)}</div>
+  <div style="padding:90px 80px 0">
+    <span class="badge" style="background:#fbe7df;color:var(--p2);font-size:28px;padding:14px 26px">Novidades</span>
+    <h1 style="font-size:100px;line-height:1;font-weight:800;margin-top:34px">Mais controle sobre <span class="hl">o seu orçamento.</span></h1>
+  </div>
+  <div style="padding:70px 80px 0;display:flex;flex-direction:column;gap:40px">
+    ${[['PenLine', 'Edite a proposta', 'Achou caro ou barato? Ajuste o valor enquanto o cliente decide.'], ['ClipboardList', 'Lista de compras', 'Cobre pela lista no orçamento ou dê de cortesia.'], ['FileText', 'Tudo no contrato', 'Serviço, lista e total separados, automático.']].map(([ic, t, d]) => `
+      <div class="feat" style="gap:30px"><span class="ic" style="width:120px;height:120px;border-radius:30px">${icon(ic, 58, 1.9)}</span><div><h3 style="font-size:46px;font-weight:700">${t}</h3><p class="muted" style="font-size:32px;line-height:1.4;margin-top:8px">${d}</p></div></div>`).join('')}
+  </div>
+  <div style="margin-top:auto;padding:0 80px 340px"><div class="cta solid" style="padding:36px 44px;font-size:38px;justify-content:center">Zero comissão · ${SITE}</div></div>`);
+
+add('stories/05-cliente-so-mao-de-obra.png', 1080, 1920, 'dark', `
+  <div class="hero" style="height:900px"></div>
+  <div style="position:relative;padding:250px 80px 0">${logo(52)}</div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 340px">
+    <div class="eyebrow" style="font-size:28px">Só mão de obra</div>
+    <h1 style="font-size:104px;line-height:.98;margin-top:26px;font-weight:700">Você compra.<br/><span class="hl">O chef cozinha.</span></h1>
+    <p class="muted" style="font-size:38px;line-height:1.4;margin-top:30px">Receba a lista de compras em PDF com as quantidades certas para os seus convidados.</p>
+    <div style="margin-top:50px">${contratoMock(30)}</div>
+    <div class="cta solid" style="margin-top:50px;padding:36px 44px;font-size:38px;justify-content:center">${SITE}</div>
+  </div>`);
+
+add('whatsapp/03-profissional-novidades.png', 1080, 1080, 'cream', `
+  <div style="padding:64px 70px 0;display:flex;justify-content:space-between;align-items:center">${logo(42)}<span class="badge" style="background:#fbe7df;color:var(--p2);font-size:22px;padding:12px 22px">Novidades</span></div>
+  <div style="padding:50px 70px 0">
+    <h1 style="font-size:70px;line-height:1;font-weight:800">Profissional de eventos: <span class="hl">mais renda, mais controle.</span></h1>
+  </div>
+  <div style="padding:40px 70px 0;display:flex;flex-direction:column;gap:22px">
+    ${[['ClipboardList', 'Cobre pela lista de compras ou dê de cortesia'], ['PenLine', 'Edite a proposta enquanto o cliente decide'], ['FileText', 'Contrato automático com todos os valores'], ['Wallet', 'Zero comissão: 100% do valor é seu']].map(([ic, t]) => `<div class="feat" style="gap:22px;align-items:center"><span class="ic" style="width:70px;height:70px;border-radius:18px">${icon(ic, 34, 1.9)}</span><h3 style="font-size:32px;font-weight:600">${t}</h3></div>`).join('')}
+  </div>
+  <div style="margin-top:auto;padding:0 70px 64px"><div class="cta solid" style="padding:26px 34px;font-size:30px"><span>Cadastre-se grátis</span><span style="font-weight:500">${SITE}</span></div></div>`);
+
 // FACEBOOK — capa da página (1640x624; o centro aparece no celular)
 add('facebook/capa-pagina.png', 1640, 624, 'dark', `
   <div class="hero" style="inset:0 0 0 auto;width:760px;height:624px"></div>
@@ -230,6 +305,13 @@ const videos = {
     cena('sand', `<div class="eyebrow" style="font-size:30px">Passo 1</div><h1 style="font-size:104px;line-height:1;font-weight:700;margin-top:24px">Conte o seu evento.</h1><div class="eyebrow" style="font-size:30px;margin-top:70px">Passo 2</div><h1 style="font-size:104px;line-height:1;font-weight:700;margin-top:24px"><span class="hl">Receba propostas</span> da sua região.</h1>`),
     cena('paprika on-paprika', `<h1 style="font-size:118px;line-height:.98;font-weight:800">Fechou? Contrato em PDF e WhatsApp do profissional.</h1><p style="font-size:44px;margin-top:44px;color:#fff3ee">Grátis para quem contrata.</p>`),
     cena('dark', `${logo(70)}<h1 style="font-size:96px;line-height:1;font-weight:700;margin-top:60px">Peça seu orçamento</h1><div class="cta solid" style="margin-top:50px;padding:40px 46px;font-size:46px;justify-content:center">${SITE}</div><p class="muted" style="font-size:34px;margin-top:30px">${REGIAO}</p>`),
+  ],
+  'reels-tiktok/video-lista-de-compras.mp4': [
+    cena('dark', `<div style="margin-top:auto">${logo(48)}<h1 style="font-size:124px;line-height:.98;font-weight:800;margin-top:40px">Chef, você ainda faz a lista de compras <span class="hl">de graça?</span></h1></div>`, true),
+    cena('cream', `<span class="feat"><span class="ic" style="width:150px;height:150px;border-radius:36px">${icon('Calculator', 76, 1.8)}</span></span><h1 style="font-size:100px;line-height:1;font-weight:700;margin-top:50px">A calculadora monta a lista com as <span class="hl">quantidades certas.</span></h1>`),
+    cena('paprika on-paprika', `<h1 style="font-size:116px;line-height:.98;font-weight:800">Cobre pela lista no orçamento…</h1><p style="font-size:64px;font-weight:700;margin-top:50px;color:#ffe1d4">…ou dê de cortesia.</p>`),
+    cena('dark', `<h1 style="font-size:96px;line-height:1;font-weight:700;margin-bottom:60px">Tudo aparece <span class="hl">no contrato.</span></h1>${contratoMock(36)}`),
+    cena('dark', `${logo(70)}<h1 style="font-size:96px;line-height:1;font-weight:700;margin-top:60px">Zero comissão. Cadastre-se</h1><div class="cta solid" style="margin-top:50px;padding:40px 46px;font-size:46px;justify-content:center">${SITE}</div><p class="muted" style="font-size:34px;margin-top:30px">CPF ou CNPJ · ${REGIAO}</p>`),
   ],
   'reels-tiktok/video-profissional.mp4': [
     cena('dark', `<div style="margin-top:auto">${logo(48)}<h1 style="font-size:140px;line-height:.95;font-weight:800;margin-top:40px">Trabalha com <span class="hl">eventos?</span></h1></div>`, true),
