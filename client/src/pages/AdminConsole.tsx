@@ -10,7 +10,8 @@ import { formatCEP, formatCNPJ, formatCPF, formatPhone } from '@shared/validator
 import { serviceCatalogFrom, serviceLabel, REQUEST_CATEGORIES, SERVICE_ICONS, type ServiceCategory, type ServiceIcon } from '@shared/services';
 import { useSite } from '@/lib/site';
 import NotificationBell from '@/components/NotificationBell';
-import { NotificationsSection, MarketingSection, PricingCard, BenefitProductsCard } from './admin/EngageSections';
+import { NotificationsSection, MarketingSection, PricingCard, BenefitProductsCard, TrialCard } from './admin/EngageSections';
+import { TRIAL_UNITS, type TrialUnit } from '@shared/subscription';
 import { demosFrom, type DemoProfessional, type Professional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import { canManageRole, isFullAccess, PERMISSIONS, ROLE_DEFAULTS, STAFF_ROLE_LABELS, type Permission, type StaffRole } from '@shared/staff';
@@ -603,6 +604,7 @@ function PaymentsSection() {
   };
   const keyState = (k: { configured: boolean; source: string; hint: string }) => k.configured ? <span className="adm-tag adm-ok">Cadastrada {k.hint}{k.source === 'render' ? ' (variável do Render)' : ''}</span> : <span className="adm-tag adm-warn">Não cadastrada</span>;
   return <div className="adm-stack">
+    <TrialCard/>
     <PricingCard/>
     <BenefitProductsCard/>
     <Card title="Chaves do Mercado Pago" action={status?.accessToken.configured ? <button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'test'} onClick={() => void test()}>{busy === 'test' ? <Loader2 className="ob-spin" size={16}/> : <PlugZap size={16}/>} Testar conexão</button> : undefined}>
@@ -710,16 +712,25 @@ function SubscriptionBox({ userId, summary, onChanged }: { userId: number; summa
   </>;
 }
 
-type SubRow = { userId: number; name: string; email: string; accountStatus: string; phase: string; label: string; periodEnd: string | null; autoRenew: string | null; lastPaidAt: string | null };
+type SubRow = { userId: number; name: string; email: string; accountStatus: string; phase: string; label: string; periodEnd: string | null; autoRenew: string | null; lastPaidAt: string | null; trialUntil: string | null; trialActive: boolean };
 function SubscriptionsSection() {
   const [data, setData] = useState<{ priceCents: number; paymentsConfigured: boolean; subscriptions: SubRow[] } | null>(null);
   const [phase, setPhase] = useState('');
-  useEffect(() => { api<NonNullable<typeof data>>('/admin/subscriptions').then(setData).catch(e => toast.error(errText(e))); }, []);
+  const [trialFor, setTrialFor] = useState<{ userId: number; amount: string; unit: TrialUnit } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api<NonNullable<typeof data>>('/admin/subscriptions').then(setData).catch(e => toast.error(errText(e)));
+  useEffect(() => { void load(); }, []);
+  const giveTrial = async () => {
+    if (!trialFor) return;
+    setBusy(true);
+    try { const r = await api<{ trialUntil: string | null }>(`/admin/subscriptions/${trialFor.userId}/trial`, { method: 'POST', body: JSON.stringify({ amount: Math.max(1, Math.floor(Number(trialFor.amount) || 1)), unit: trialFor.unit }) }); toast.success(r.trialUntil ? `Teste liberado até ${new Date(r.trialUntil).toLocaleDateString('pt-BR')}.` : 'Teste liberado.'); setTrialFor(null); await load(); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
   const list = (data?.subscriptions ?? []).filter(s => !phase || s.phase === phase);
   return <div className="adm-stack">
     {data && !data.paymentsConfigured && <p className="adm-alert">Mercado Pago não configurado: defina MP_ACCESS_TOKEN e MP_WEBHOOK_SECRET no Render. Até lá, libere assinaturas manualmente no cadastro de cada profissional.</p>}
     <div className="adm-filters"><select value={phase} onChange={e => setPhase(e.target.value)} aria-label="Situação"><option value="">Todas as situações</option><option value="active">Em dia</option><option value="renewal">Em renovação</option><option value="manual">Aguardando Pix manual</option><option value="blocked">Vencidas (ocultos)</option><option value="inactive">Nunca ativadas</option></select>{data && <span className="adm-muted">Mensalidade: {money(data.priceCents)}</span>}</div>
-    <Card>{!data ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum profissional nesta situação."/> : <div className="adm-list">{list.map(s => <div className="adm-row" key={s.userId}><div className="adm-row-main"><strong>{s.name || s.email}</strong><span>{s.email} · vence {s.periodEnd ? new Date(s.periodEnd).toLocaleDateString('pt-BR') : '—'}{s.lastPaidAt ? ` · último pagamento ${new Date(s.lastPaidAt).toLocaleDateString('pt-BR')}` : ''}</span></div><div className="adm-row-tags"><span className={`adm-tag ${s.phase === 'active' || s.phase === 'renewal' ? 'adm-ok' : 'adm-warn'}`}>{s.label}</span>{s.autoRenew === 'authorized' && <span className="adm-tag">Pix automático</span>}<span className={`adm-tag adm-st-${s.accountStatus}`}>{statusLabel[s.accountStatus] ?? s.accountStatus}</span></div></div>)}</div>}</Card>
+    <Card>{!data ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !list.length ? <Empty text="Nenhum profissional nesta situação."/> : <div className="adm-list">{list.map(s => <div className="adm-row" key={s.userId}><div className="adm-row-main"><strong>{s.name || s.email}</strong><span>{s.email} · vence {s.periodEnd ? new Date(s.periodEnd).toLocaleDateString('pt-BR') : '—'}{s.lastPaidAt ? ` · último pagamento ${new Date(s.lastPaidAt).toLocaleDateString('pt-BR')}` : ''}</span></div><div className="adm-row-tags"><span className={`adm-tag ${s.phase === 'active' || s.phase === 'renewal' ? 'adm-ok' : 'adm-warn'}`}>{s.label}</span>{s.autoRenew === 'authorized' && <span className="adm-tag">Pix automático</span>}{s.trialActive && s.trialUntil && <span className="adm-tag adm-vip">Teste até {new Date(s.trialUntil).toLocaleDateString('pt-BR')}</span>}<button type="button" className="adm-tag adm-tag-btn" onClick={() => setTrialFor(trialFor?.userId === s.userId ? null : { userId: s.userId, amount: '7', unit: 'days' })}>Dar período de teste</button><span className={`adm-tag adm-st-${s.accountStatus}`}>{statusLabel[s.accountStatus] ?? s.accountStatus}</span></div>{trialFor?.userId === s.userId && <div className="adm-trial-row adm-trial-inline"><label className="adm-content-field"><span className="adm-content-label">Duração</span><input type="number" min={1} max={365} value={trialFor.amount} onChange={e => setTrialFor({ ...trialFor, amount: e.target.value })}/></label><label className="adm-content-field"><span className="adm-content-label">Unidade</span><select value={trialFor.unit} onChange={e => setTrialFor({ ...trialFor, unit: e.target.value as TrialUnit })}>{TRIAL_UNITS.map(u => <option key={u.id} value={u.id}>{u.many}</option>)}</select></label><button type="button" className="ob-btn ob-btn-primary" disabled={busy} onClick={() => void giveTrial()}>Liberar teste</button><button type="button" className="ob-btn ob-btn-outline" onClick={() => setTrialFor(null)}>Cancelar</button></div>}</div>)}</div>}</Card>
   </div>;
 }
 

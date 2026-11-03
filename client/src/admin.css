@@ -378,3 +378,9 @@
 div.adm-ok, div.adm-warn { display:flex; gap:8px; align-items:flex-start; border-radius:9px; padding:10px 12px; font-size:13px; line-height:1.5; }
 div.adm-warn code { display:inline-block; margin-top:4px; padding:4px 8px; background:#fff; border-radius:6px; font-size:14px; letter-spacing:.04em; user-select:all; }
 div.adm-ok svg, div.adm-warn svg { flex-shrink:0; margin-top:2px; }
+.adm-trial-row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.adm-trial-row .adm-content-field { flex:0 1 160px; }
+.adm-trial-row input, .adm-trial-row select { min-height:44px; padding:10px 12px; border:1px solid var(--ob-line); border-radius:9px; font:14px 'Inter',sans-serif; background:#fff; width:100%; }
+.adm-trial-inline { flex-basis:100%; margin-top:10px; }
+.adm-row:has(.adm-trial-inline) { flex-wrap:wrap; }
+.adm-tag-btn { cursor:pointer; border:1px dashed var(--ob-orange); color:var(--ob-orange); background:#fff; font:inherit; }

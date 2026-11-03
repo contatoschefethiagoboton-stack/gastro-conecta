@@ -6,7 +6,7 @@
 import { Router, type Express, type Request } from "express";
 import { z } from "zod";
 import { HttpError } from "@shared/_core/errors";
-import { nextPeriodEnd, PHASE_LABELS, renewalAttemptAt, subscriptionPhase, subscriptionVisible, type SubscriptionPhase } from "@shared/subscription";
+import { nextPeriodEnd, normalizeTrial, PHASE_LABELS, renewalAttemptAt, subscriptionPhase, subscriptionVisible, TRIAL_OFF, trialEnd, trialLabel, type SubscriptionPhase, type TrialSettings } from "@shared/subscription";
 import { assertOrigin, body, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query, withTransaction } from "./db";
 import { dbState } from "./bootstrap";
@@ -45,6 +45,51 @@ export async function refreshPricing() {
 export async function saveBasePrice(cents: number) {
   await setInternalFlag("subscription.priceCents", String(cents));
   basePriceCents = cents;
+}
+
+// ------------------------------------------------------------------ período de teste (painel → Pagamentos)
+
+let trialSettings: TrialSettings = TRIAL_OFF;
+export const currentTrial = () => trialSettings;
+export async function refreshTrial() {
+  if (!dbConfigured()) return;
+  try { trialSettings = normalizeTrial(await getInternalFlag("trial.amount"), await getInternalFlag("trial.unit")); } catch { /* mantém o atual */ }
+}
+export async function saveTrial(t: TrialSettings) {
+  const clean = normalizeTrial(t.amount, t.unit);
+  await setInternalFlag("trial.amount", String(clean.amount));
+  await setInternalFlag("trial.unit", clean.unit);
+  trialSettings = clean;
+  return clean;
+}
+
+/**
+ * Libera o período de teste: o profissional fica visível e pode enviar propostas sem pagar
+ * até o fim do prazo. Depois disso, o bloqueio é automático até ele pagar.
+ * Sem "force", só vale uma vez por profissional e não encurta uma assinatura já paga.
+ */
+export async function grantTrial(userId: number, actorId: number, settings: TrialSettings = trialSettings, force = false): Promise<Date | null> {
+  const t = normalizeTrial(settings.amount, settings.unit);
+  if (t.amount <= 0) return null;
+  await ensureRow(userId);
+  const sub = await getSubscription(userId);
+  if (!force && (sub as any)?.trialGrantedAt) return null;
+  const end = trialEnd(new Date(), t);
+  const current = sub?.periodEnd && sub.periodEnd > new Date() ? sub.periodEnd : null;
+  if (!force && current && current >= end) return null;
+  const periodEnd = current && current > end ? current : end;
+  await execute("UPDATE gc_provider_subscriptions SET periodEnd = ?, trialUntil = ?, trialGrantedAt = CURRENT_TIMESTAMP, trialWarnedAt = NULL, trialEndedAt = NULL, autoFailed = 0, autoAttemptedFor = NULL WHERE userId = ?", [periodEnd, end, userId]);
+  await audit(actorId, "subscription.trial_granted", { duration: trialLabel(t), until: end.toISOString(), manual: force }, userId);
+  later(() => notifyUser(userId, { type: "subscription.trial", title: "Período de teste liberado!", body: `Você tem ${trialLabel(t)} grátis para receber pedidos e enviar propostas (até ${end.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}). Depois disso, pague a assinatura via Pix para continuar visível.`, path: "/painel?aba=subscription" }));
+  return end;
+}
+
+/** Período de teste em andamento (ainda não pagou nenhuma mensalidade depois de ganhar o teste). */
+export function trialActive(sub: any, now = new Date()): boolean {
+  const until = asDate(sub?.trialUntil);
+  if (!until || until <= now) return false;
+  const paid = asDate(sub?.lastPaidAt), granted = asDate(sub?.trialGrantedAt);
+  return !paid || (granted !== null && paid < granted);
 }
 
 /** Valor que este profissional paga: grátis (cortesia do admin) ou com desconto individual. */
@@ -161,11 +206,33 @@ export async function syncMpPayment(mpPaymentId: string | number) {
   }
 }
 
+/** Avisa quem está no fim do teste (3 dias antes) e quando o teste acaba e o perfil é bloqueado. */
+async function runTrialNotices(now: Date) {
+  const soon = new Date(now.getTime() + 3 * 24 * HOUR);
+  const ending = await query<any[]>("SELECT * FROM gc_provider_subscriptions WHERE trialUntil IS NOT NULL AND trialWarnedAt IS NULL AND trialUntil > ? AND trialUntil <= ?", [now, soon]);
+  for (const sub of ending) {
+    await execute("UPDATE gc_provider_subscriptions SET trialWarnedAt = CURRENT_TIMESTAMP WHERE userId = ?", [sub.userId]);
+    if (!trialActive(sub, now)) continue;
+    const date = new Date(sub.trialUntil).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    await notifyUser(Number(sub.userId), { type: "subscription.trial_ending", title: "Seu período de teste está acabando", body: `O teste grátis termina em ${date}. Pague a assinatura via Pix para continuar aparecendo no catálogo e enviando propostas.`, path: "/painel?aba=subscription" });
+  }
+  const ended = await query<any[]>("SELECT * FROM gc_provider_subscriptions WHERE trialUntil IS NOT NULL AND trialEndedAt IS NULL AND trialUntil <= ?", [now]);
+  for (const sub of ended) {
+    await execute("UPDATE gc_provider_subscriptions SET trialEndedAt = CURRENT_TIMESTAMP WHERE userId = ?", [sub.userId]);
+    const periodEnd = asDate(sub.periodEnd);
+    if (periodEnd && periodEnd > now) continue; // já pagou: segue normalmente
+    await audit(Number(sub.userId), "subscription.trial_ended", { trialUntil: new Date(sub.trialUntil).toISOString() }, Number(sub.userId));
+    await notifyUser(Number(sub.userId), { type: "subscription.trial_ended", title: "Período de teste encerrado", body: "Seu perfil foi ocultado e o envio de propostas está bloqueado. Pague a assinatura via Pix para voltar na hora.", path: "/painel?aba=subscription" });
+  }
+}
+
 /** Rotina periódica: agenda/avalia a renovação automática e libera o Pix manual. */
 export async function runBillingCycle(now = new Date()) {
   if (!dbConfigured() || !dbState.ready) return;
   await refreshMpSettings();
   await refreshPricing();
+  await refreshTrial();
+  await runTrialNotices(now);
   // Destaque comprado como benefício extra: sai do destaque quando vence.
   await execute("UPDATE account_profiles SET featured = 0, featuredUntil = NULL WHERE featuredUntil IS NOT NULL AND featuredUntil < CURRENT_TIMESTAMP");
   const windowEnd = new Date(now.getTime() + 5 * 24 * HOUR);
@@ -238,11 +305,13 @@ export async function subscriptionSummary(userId: number) {
     discountPercent: price.discountPercent,
     free: price.free,
     phase,
-    label: PHASE_LABELS[phase],
+    label: trialActive(sub) && subscriptionVisible(phase) ? `Período de teste grátis até ${new Date((sub as any).trialUntil).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : PHASE_LABELS[phase],
     visible: subscriptionVisible(phase),
     periodEnd: sub?.periodEnd?.toISOString() ?? null,
     autoRenew: { authorized: sub?.mpPreapprovalStatus === "authorized", status: sub?.mpPreapprovalStatus ?? null },
-    manualPixAvailable: !price.free && (phase === "inactive" || phase === "manual" || phase === "blocked"),
+    // No período de teste, o profissional já pode pagar; o mês pago começa quando o teste acaba.
+    manualPixAvailable: !price.free && (phase === "inactive" || phase === "manual" || phase === "blocked" || trialActive(sub)),
+    trial: (sub as any)?.trialUntil ? { until: new Date((sub as any).trialUntil).toISOString(), active: trialActive(sub) } : null,
     pendingPix: pending ? { id: Number(pending.id), qrCode: pending.qrCode ?? "", qrCodeBase64: pending.qrCodeBase64 ?? "", ticketUrl: pending.ticketUrl ?? "", expiresAt: pending.expiresAt ? new Date(pending.expiresAt).toISOString() : null } : null,
     history: history.map(mapPayment),
     paymentsConfigured: mpConfigured(),
@@ -348,13 +417,14 @@ async function adminCtx(req: Request): Promise<StaffContext> {
 
 router.get("/admin/subscriptions", wrap(async (req, res) => {
   await adminCtx(req);
-  const rows = await query<any[]>("SELECT u.id, u.name, u.email, p.status accountStatus, s.periodEnd, s.autoFailed, s.mpPreapprovalStatus, s.lastPaidAt FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_provider_subscriptions s ON s.userId = u.id WHERE p.accountType = 'provider' AND p.status <> 'deleted' ORDER BY s.periodEnd IS NULL, s.periodEnd ASC LIMIT 1000");
+  const rows = await query<any[]>("SELECT u.id, u.name, u.email, p.status accountStatus, s.periodEnd, s.autoFailed, s.mpPreapprovalStatus, s.lastPaidAt, s.trialUntil, s.trialGrantedAt FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_provider_subscriptions s ON s.userId = u.id WHERE p.accountType = 'provider' AND p.status <> 'deleted' ORDER BY s.periodEnd IS NULL, s.periodEnd ASC LIMIT 1000");
   res.json({
     priceCents: basePriceCents,
     paymentsConfigured: mpConfigured(),
     subscriptions: rows.map(row => {
       const phase = subscriptionPhase({ periodEnd: asDate(row.periodEnd), autoFailed: Boolean(row.autoFailed) });
-      return { userId: Number(row.id), name: row.name ?? "", email: row.email ?? "", accountStatus: row.accountStatus, phase, label: PHASE_LABELS[phase], periodEnd: row.periodEnd ? new Date(row.periodEnd).toISOString() : null, autoRenew: row.mpPreapprovalStatus ?? null, lastPaidAt: row.lastPaidAt ? new Date(row.lastPaidAt).toISOString() : null };
+      const inTrial = trialActive(row) && subscriptionVisible(phase);
+      return { trialUntil: row.trialUntil ? new Date(row.trialUntil).toISOString() : null, trialActive: inTrial, userId: Number(row.id), name: row.name ?? "", email: row.email ?? "", accountStatus: row.accountStatus, phase, label: inTrial ? "Em período de teste" : PHASE_LABELS[phase], periodEnd: row.periodEnd ? new Date(row.periodEnd).toISOString() : null, autoRenew: row.mpPreapprovalStatus ?? null, lastPaidAt: row.lastPaidAt ? new Date(row.lastPaidAt).toISOString() : null };
     }),
   });
 }));
@@ -373,6 +443,17 @@ router.post("/admin/subscriptions/:userId/grant", wrap(async (req, res) => {
   await execute("INSERT INTO gc_subscription_payments (userId, method, status, amountCents, approvedAt) VALUES (?, 'admin_grant', 'approved', 0, CURRENT_TIMESTAMP)", [userId]);
   await audit(context.user.id, "admin.subscription_grant", { months: input.months, note: input.note, periodEnd: end?.toISOString() }, userId);
   res.json({ ok: true, periodEnd: end?.toISOString() ?? null });
+}));
+
+/** O dono libera (ou estende) um período de teste para um profissional específico. */
+router.post("/admin/subscriptions/:userId/trial", wrap(async (req, res) => {
+  const context = await adminCtx(req);
+  const userId = parse(z.coerce.number().int().positive(), req.params.userId);
+  const input = body(req, z.object({ amount: z.number().int().min(1).max(365), unit: z.enum(["days", "weeks", "months"]) }));
+  const target = await query<any[]>("SELECT userId FROM account_profiles WHERE userId = ? AND accountType = 'provider' AND status <> 'deleted' LIMIT 1", [userId]);
+  if (!target[0]) throw new HttpError(404, "Profissional não encontrado");
+  const until = await grantTrial(userId, context.user.id, normalizeTrial(input.amount, input.unit), true);
+  res.json({ ok: true, trialUntil: until?.toISOString() ?? null });
 }));
 
 router.use(errorHandler);

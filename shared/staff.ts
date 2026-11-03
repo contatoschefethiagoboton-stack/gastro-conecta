@@ -84,7 +84,7 @@ export function permissionForRequest(method: string, path: string): Permission |
     [/^\/admin\/users(\/\d+)?$/, r => (r ? 'users.view' : 'users.edit')],
     [/^\/admin\/subscriptions(\/.*)?$/, r => (r ? 'subscriptions.view' : 'subscriptions.manage')],
     [/^\/admin\/payments$/, 'payments.view'],
-    [/^\/admin\/payments\/(settings|test|pricing)$/, 'payments.manage'],
+    [/^\/admin\/payments\/(settings|test|pricing|trial)$/, 'payments.manage'],
     [/^\/admin\/contracts$/, 'contracts.view'],
     [/^\/admin\/(content(\/reset)?|service-draft|media)$/, 'content.edit'],
     [/^\/admin\/promotions(\/.*)?$/, 'promotions.manage'],

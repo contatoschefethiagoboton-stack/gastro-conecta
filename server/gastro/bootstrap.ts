@@ -9,7 +9,7 @@ import { getInternalFlag, setInternalFlag } from "./content";
 import { hashPassword, normalizeEmail, passwordIsStrong } from "./auth";
 import { refreshMpSettings } from "./mercadopago";
 import { refreshNotifySettings } from "./notify";
-import { refreshPricing } from "./subscriptions";
+import { refreshPricing, refreshTrial } from "./subscriptions";
 import { claimOwnership, ensureOwner } from "./staff";
 
 export const dbState: { ready: boolean; error: string } = { ready: false, error: "" };
@@ -125,6 +125,7 @@ export async function bootstrapDatabase() {
     await refreshMpSettings();
     await refreshNotifySettings();
     await refreshPricing();
+    await refreshTrial();
     await adminFromEnv();
     if (!(await adminExists())) issueSetupCode();
     dbState.ready = true;

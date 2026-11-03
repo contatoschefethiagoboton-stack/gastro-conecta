@@ -13,7 +13,7 @@ import { consumeMagicLink, notifySettingsStatus, rememberOrigin, saveNotifySetti
 import { sendMailDetailed } from "./password";
 import { getSiteContent } from "./content";
 import { copilotProvider, resolveCopilotEndpoint } from "./routes";
-import { priceFor, saveBasePrice, subscriptionBasePrice, webhookUrl } from "./subscriptions";
+import { currentTrial, saveTrial, priceFor, saveBasePrice, subscriptionBasePrice, webhookUrl } from "./subscriptions";
 import { createPixPayment, mpConfigured } from "./mercadopago";
 import { requireStaff, type StaffContext } from "./staff";
 
@@ -325,6 +325,19 @@ router.put("/admin/payments/pricing", wrap(async (req, res) => {
   await saveBasePrice(input.priceCents);
   await audit(context.user.id, "admin.subscription_price", input);
   res.json({ priceCents: subscriptionBasePrice() });
+}));
+
+router.get("/admin/payments/trial", wrap(async (req, res) => {
+  await adminCtx(req);
+  res.json({ trial: currentTrial() });
+}));
+
+router.put("/admin/payments/trial", wrap(async (req, res) => {
+  const context = await adminCtx(req);
+  const input = body(req, z.object({ amount: z.number().int().min(0).max(365), unit: z.enum(["days", "weeks", "months"]) }));
+  const trial = await saveTrial(input);
+  await audit(context.user.id, "admin.trial_settings", trial);
+  res.json({ trial });
 }));
 
 router.patch("/admin/users/:id/subscription-pricing", wrap(async (req, res) => {
