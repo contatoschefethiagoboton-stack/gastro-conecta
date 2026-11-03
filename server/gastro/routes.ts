@@ -18,7 +18,7 @@ import { PROVIDER_SCHEMA_VERSION } from "./profiles";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { clearGcSession, createGcSession, createLocalUser, gcCookieOptions, getUserByEmail, isOwner, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AccountType, type AuthContext } from "./auth";
 import { calculateIntentScore, isoDate } from "./rules";
-import { assertSubscriptionActive, phaseFor, subscriptionSummary } from "./subscriptions";
+import { assertSubscriptionActive, grantTrial, phaseFor, subscriptionSummary } from "./subscriptions";
 import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLink } from "./profiles";
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
 import { buildPdf, type PdfBlock } from "./pdf";
@@ -806,7 +806,11 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
     if (input.faceVerified !== undefined && details) await connection.execute("UPDATE gc_profile_details SET details = ? WHERE userId = ?", [JSON.stringify({ ...details, faceVerified: input.faceVerified, faceVerifiedAt: input.faceVerified ? new Date().toISOString() : null }), targetId]);
   });
   await audit(context.user.id, "admin.user_update", input, targetId);
-  if (input.status === "active" && target[0].accountType === "provider" && target[0].status !== "active") later(() => announceNewProvider(targetId));
+  if (input.status === "active" && target[0].accountType === "provider" && target[0].status !== "active") {
+    // Aprovado: libera o período de teste definido pelo dono (uma vez por profissional).
+    await grantTrial(targetId, context.user.id).catch(() => null);
+    later(() => announceNewProvider(targetId));
+  }
   res.json({ ok: true });
 }));
 

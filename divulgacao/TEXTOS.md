@@ -7,11 +7,12 @@ Site: **eventosconecta.com.br** · WhatsApp: **(19) 99398-4529** · Campinas e r
 | Pasta | Tamanho | Onde postar |
 |---|---|---|
 | `perfil/` | 1080×1080 | Foto de perfil do Instagram, Facebook, WhatsApp Business e TikTok |
-| `feed/` | 1080×1350 | Feed do Instagram e Facebook (01–03 para clientes, 04–05 para profissionais) |
-| `stories/` | 1080×1920 | Stories do Instagram/Facebook e Status do WhatsApp |
-| `whatsapp/` | 1080×1080 | Grupos de WhatsApp e Facebook (01 clientes, 02 profissionais) |
+| `feed/` | 1080×1350 | Feed do Instagram e Facebook (01–03, 06 e 07 para clientes; 04, 05 e 08 para profissionais) |
+| `stories/` | 1080×1920 | Stories do Instagram/Facebook e Status do WhatsApp (04 profissionais, 05 clientes: novidades) |
+| `whatsapp/` | 1080×1080 | Grupos de WhatsApp e Facebook (01 clientes, 02 e 03 profissionais) |
 | `facebook/capa-pagina.png` | 1640×624 | Capa da página do Facebook |
-| `reels-tiktok/` | 1080×1920, 14 s | Reels, TikTok, Shorts e Status. As imagens `-capa` servem de capa do vídeo |
+| `reels-tiktok/` | 1080×1920, 14 s | Reels, TikTok, Shorts e Status (cliente, profissional e lista de compras). As imagens `-capa` servem de capa do vídeo |
+| `assinatura/` | vários | **Venda da assinatura para profissionais**: imagens, vídeo, folheto em PDF e textos em `assinatura/TEXTOS-ASSINATURA.md` |
 
 **Dica para os vídeos:** os vídeos estão sem som. Ao postar no Reels ou TikTok, adicione uma **música em alta pelo próprio aplicativo**. Assim não há problema de direitos autorais e o alcance aumenta.
 
@@ -221,7 +222,90 @@ Mostre o salão bagunçado depois da festa e corte para ele limpo, com o texto: 
 
 ---
 
-## 6. Calendário sugerido (primeiras 2 semanas)
+## 6. Novidades da plataforma (novembro/2026)
+
+Use estas peças para avisar quem já segue a página e para atrair profissionais.
+
+### WhatsApp: para clientes
+```
+🍳 Novidade no Eventos Conecta: *só mão de obra*!
+
+Você compra os ingredientes do seu jeito, e o chef, cozinheiro, garçom ou barman cuida do resto.
+
+✅ Receba a *lista de compras em PDF* com as quantidades certas para os seus convidados
+✅ Pague só pelo serviço
+✅ Contrato com *todos os valores* separados: sem surpresa
+
+Orçamento grátis 👉 eventosconecta.com.br
+```
+
+### WhatsApp: para profissionais
+```
+📣 Novidades para profissionais de eventos no Eventos Conecta:
+
+📝 *Edite a sua proposta* enquanto o cliente decide (achou caro ou barato, é só ajustar)
+🛒 *Lista de compras*: a calculadora monta itens e quantidades, e você cobra pela lista dentro do orçamento ou dá de cortesia
+📄 *Contrato automático* com serviço, lista e total separados
+💰 *Zero comissão*: 100% do valor é seu
+
+Cadastre-se 👉 eventosconecta.com.br/trabalhe-como
+```
+
+### Legendas
+**Feed 06: só mão de obra (cliente)**
+```
+Você compra os ingredientes. O chef cozinha. 🍳
+
+Agora dá para pedir só a mão de obra: o profissional manda a lista de compras em PDF com as quantidades certas para os seus convidados, e você compra do seu jeito.
+
+Orçamento grátis 🔗 eventosconecta.com.br
+
+#chefemcasa #festaemcasa #maodeobra #listadecompras #eventoscampinas #churrasco #aniversario #campinas
+```
+
+**Feed 07: contrato transparente (cliente)**
+```
+Tudo no contrato. Sem surpresa. 📄
+
+Quando você aceita uma proposta, o contrato em PDF sai na hora, com cada valor separado: serviço, lista de compras e total.
+
+🔗 eventosconecta.com.br
+
+#contrato #transparencia #organizacaodeeventos #festa #casamento #eventoscampinas #campinas
+```
+
+**Feed 08: lista de compras (profissional)**
+```
+Chef, a lista de compras do cliente agora vale dinheiro. 🛒💰
+
+A calculadora monta itens e quantidades por convidado. Você cobra pela lista dentro do orçamento ou dá de cortesia, e tudo aparece separado no contrato.
+
+Zero comissão: 100% do valor é seu.
+🔗 Cadastre-se: eventosconecta.com.br
+
+#chefdecozinha #personalchef #cozinheiro #buffet #freelaeventos #gastronomia #empreendedorismo #campinas
+```
+
+### Stories
+- **04-profissional-novidades:** adesivo **Link** com `eventosconecta.com.br/trabalhe-como` sobre o botão.
+- **05-cliente-so-mao-de-obra:** adesivo **Link** com `eventosconecta.com.br` sobre o botão.
+
+### Vídeo pronto: `video-lista-de-compras.mp4` (profissionais)
+Legenda:
+```
+Chef, você ainda faz a lista de compras de graça? 🛒 Agora você cobra por ela no orçamento ou dá de cortesia, e tudo vai para o contrato. Zero comissão. Link na bio!
+#chef #cozinheiro #buffet #personalchef #freela #eventos #campinas
+```
+
+### Roteiro E: "Lista de compras" (você, chef, 20–30 s)
+1. *(Mostrando um caderno ou o celular)* "Quantas vezes você montou lista de compras para cliente e não cobrou nada?"
+2. "No Eventos Conecta, a calculadora monta a lista com as quantidades por convidado."
+3. "Você decide: cobra pela lista dentro do orçamento ou dá de cortesia. E aparece tudo separado no contrato."
+4. "Sem comissão. Link na bio: eventosconecta.com.br."
+
+---
+
+## 7. Calendário sugerido (primeiras 2 semanas)
 
 | Dia | Instagram/Facebook | WhatsApp |
 |---|---|---|
@@ -235,3 +319,5 @@ Mostre o salão bagunçado depois da festa e corte para ele limpo, com o texto: 
 | Qua | Feed 05 + Roteiro A gravado | Status: vídeo profissional |
 
 **Importante:** comece divulgando para **profissionais**. Com profissionais cadastrados em cada cidade, os clientes encontram quem contratar e as páginas do site sobem no Google.
+
+**Semana das novidades:** seg, Feed 08 + Story 04; qua, Reels `video-lista-de-compras` + WhatsApp 03 nos grupos de freelas; sex, Feed 06 + Story 05; dom, Feed 07.

@@ -691,3 +691,4 @@
 .cp-total-line { display: flex; flex-wrap: wrap; gap: 10px; }
 .cp-total-line span { border: 1px solid #ece6da; border-radius: 10px; padding: 10px 14px; font-size: 13px; display: flex; gap: 8px; background: #fff; }
 .cp-total-line .cp-highlight { border-color: var(--gc-orange, #df572f); background: #fdf1ea; }
+.dash-trial { align-items:flex-start; gap:10px; } .dash-trial svg { flex-shrink:0; margin-top:2px; }

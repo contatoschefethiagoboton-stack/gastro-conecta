@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Copy, Link2, Lightbulb, Loader2, Plus, Search, Se
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { TRIAL_UNITS, trialEnd, trialLabel, type TrialSettings, type TrialUnit } from '@shared/subscription';
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Não foi possível concluir.');
 const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -204,6 +205,36 @@ export function MarketingSection() {
 // ------------------------------------------------------------------ Pagamentos: valor da assinatura e cortesias
 
 type PricingRow = { id: number; name: string; email: string; code: string; discountPercent: number; free: boolean };
+
+/** Período de teste: quanto tempo o profissional aprovado usa sem pagar (bloqueio automático depois). */
+export function TrialCard() {
+  const [trial, setTrial] = useState<TrialSettings | null>(null);
+  const [amount, setAmount] = useState('0');
+  const [unit, setUnit] = useState<TrialUnit>('days');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ trial: TrialSettings }>('/admin/payments/trial').then(r => { setTrial(r.trial); setAmount(String(r.trial.amount)); setUnit(r.trial.unit); }).catch(e => toast.error(errText(e))); }, []);
+  const draft: TrialSettings = { amount: Math.max(0, Math.floor(Number(amount) || 0)), unit };
+  const save = async (next: TrialSettings) => {
+    setBusy(true);
+    try { const r = await api<{ trial: TrialSettings }>('/admin/payments/trial', { method: 'PUT', body: JSON.stringify(next) }); setTrial(r.trial); setAmount(String(r.trial.amount)); setUnit(r.trial.unit); toast.success(r.trial.amount ? `Período de teste: ${trialLabel(r.trial)}.` : 'Período de teste desligado.'); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
+  const example = draft.amount > 0 ? trialEnd(new Date(), draft).toLocaleDateString('pt-BR') : '';
+  return <Card title="Período de teste para profissionais">
+    {!trial ? <Spinner/> : <div className="adm-content-fields">
+      <p className="adm-muted">Quando você <strong>aprova</strong> um profissional, ele ganha este tempo para usar a plataforma <strong>sem pagar</strong>: aparece no catálogo e envia propostas. Ao terminar, o perfil é <strong>bloqueado automaticamente</strong> até ele pagar a assinatura via Pix. Ele recebe um aviso 3 dias antes e outro quando o teste acaba. Cada profissional ganha o teste uma única vez.</p>
+      <div className="adm-trial-row">
+        <label className="adm-content-field"><span className="adm-content-label">Duração</span><input type="number" min={0} max={365} inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value)}/></label>
+        <label className="adm-content-field"><span className="adm-content-label">Unidade</span><select value={unit} onChange={e => setUnit(e.target.value as TrialUnit)}>{TRIAL_UNITS.map(u => <option key={u.id} value={u.id}>{u.many.charAt(0).toUpperCase() + u.many.slice(1)}</option>)}</select></label>
+        <button type="button" className="ob-btn ob-btn-primary" disabled={busy} onClick={() => void save(draft)}>{busy ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} Salvar</button>
+        {trial.amount > 0 && <button type="button" className="ob-btn ob-btn-outline" disabled={busy} onClick={() => void save({ amount: 0, unit })}>Desligar teste</button>}
+      </div>
+      <p className={`adm-tag ${trial.amount ? 'adm-ok' : ''}`}>{trial.amount ? `Ativo: ${trialLabel(trial)} grátis para cada profissional aprovado.` : 'Desligado: o profissional aprovado precisa pagar para aparecer.'}</p>
+      {draft.amount > 0 && <small className="adm-muted">Exemplo: aprovado hoje, o teste vai até {example}. Limites: 365 dias, 52 semanas ou 12 meses.</small>}
+      <small className="adm-muted">Para dar um teste a um profissional específico (inclusive quem já foi aprovado), use <strong>Assinaturas → Dar período de teste</strong>.</small>
+    </div>}
+  </Card>;
+}
 
 export function PricingCard() {
   const [data, setData] = useState<{ priceCents: number; providers: PricingRow[] } | null>(null);
