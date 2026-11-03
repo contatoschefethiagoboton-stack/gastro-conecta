@@ -7,7 +7,7 @@ import { ArrowRight, ArrowUpRight, CheckCircle2, MapPin, Radar, Calculator, Wall
 import type { Professional } from '@shared/catalog';
 import { allServices } from '@shared/services';
 import {
-  JOBS_BASE, SEO_PROFESSIONS, SEO_SERVICES, SERVICES_BASE, SITE_NAME,
+  JOBS_BASE, SERVICES_BASE, SITE_NAME, seoCatalogFrom,
   matchProfessionals, nearbyCities, resolveSeoRoute, seoCitiesFrom, type Faq, type SeoCity, type Crumb,
 } from '@shared/seo';
 import { api } from '@/lib/api';
@@ -35,7 +35,8 @@ export default function SeoLanding() {
   const [location] = useLocation();
   const site = useSite();
   const cities = seoCitiesFrom(site.content);
-  const route = resolveSeoRoute(location, cities);
+  const seo = seoCatalogFrom(site.serviceCatalog);
+  const route = resolveSeoRoute(location, cities, seo);
   const pros = useQuery({ queryKey: ['gastro-professionals'], queryFn: () => api<{ professionals: Professional[] }>('/professionals'), retry: false, enabled: Boolean(route && (route.kind === 'service' || route.kind === 'job')) });
   useEffect(() => { if (route) document.title = route.page.title; }, [route?.page.title]);
 
@@ -46,7 +47,7 @@ export default function SeoLanding() {
 
   if (route.kind === 'servicesHub' || route.kind === 'jobsHub') {
     const isJobs = route.kind === 'jobsHub';
-    const items = isJobs ? SEO_PROFESSIONS.map(p => ({ href: `${JOBS_BASE}/${p.slug}`, title: p.name, text: p.intro })) : SEO_SERVICES.map(s => ({ href: `${SERVICES_BASE}/${s.slug}`, title: s.name, text: s.intro }));
+    const items = isJobs ? seo.professions.map(p => ({ href: `${JOBS_BASE}/${p.slug}`, title: p.name, text: p.intro })) : seo.services.map(s => ({ href: `${SERVICES_BASE}/${s.slug}`, title: s.name, text: s.intro }));
     return <main className="wrap info-page seo-page"><Crumbs crumbs={page.crumbs}/><span className="eyebrow">{isJobs ? 'PARA PROFISSIONAIS DE EVENTOS' : 'PROFISSIONAIS PARA EVENTOS'}</span><h1>{page.h1}</h1><p className="lead">{page.lead}</p>
       <div className="seo-cards">{items.map(i => <Link key={i.href} href={i.href} className="seo-card"><h2>{i.title}</h2><p>{i.text}</p><span>Ver mais <ArrowUpRight size={15}/></span></Link>)}</div>
       {!isJobs && <LinkCloud title="Cidades atendidas" links={cities.map(c => ({ href: `${SERVICES_BASE}/chef-para-evento/${c.slug}`, label: `${c.name}/${c.uf}` }))}/>}
@@ -68,7 +69,7 @@ export default function SeoLanding() {
       {matches.length ? <div className="professional-grid">{matches.map(p => <ProfessionalCard key={p.id} professional={p}/>)}</div>
         : <div className="notice"><MapPin size={20}/><p>Publique o seu pedido e receba propostas de {service.plural} que atendem {city ? city.name : 'a sua região'}. É grátis e você só fecha se quiser.</p></div>}
       <Faqs faqs={page.faqs}/>
-      {city ? <><LinkCloud title={`${service.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: `${SERVICES_BASE}/${service.slug}/${c.slug}`, label: `${service.name} em ${c.name}` }))}/><LinkCloud title={`Outros serviços em ${city.name}`} links={SEO_SERVICES.filter(s => s.slug !== service.slug).map(s => ({ href: `${SERVICES_BASE}/${s.slug}/${city.slug}`, label: s.name }))}/></>
+      {city ? <><LinkCloud title={`${service.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: `${SERVICES_BASE}/${service.slug}/${c.slug}`, label: `${service.name} em ${c.name}` }))}/><LinkCloud title={`Outros serviços em ${city.name}`} links={seo.services.filter(s => s.slug !== service.slug).map(s => ({ href: `${SERVICES_BASE}/${s.slug}/${city.slug}`, label: s.name }))}/></>
         : <LinkCloud title={`${service.name} por cidade`} links={cities.map(c => ({ href: `${SERVICES_BASE}/${service.slug}/${c.slug}`, label: `${c.name}/${c.uf}` }))}/>}
       <div className="catalog-cta"><div><h3>{service.name}{where}</h3><p>Conte a data, o local e o número de convidados. Os profissionais enviam propostas para você.</p></div><Link href="/orcamento" className="btn btn-primary">Pedir orçamento <ArrowRight size={18}/></Link></div>
     </main>;

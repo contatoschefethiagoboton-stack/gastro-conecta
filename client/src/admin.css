@@ -270,6 +270,11 @@
 .adm-svc-add input { flex:1 1 220px; width:auto; }
 .adm-svc-warn { color:var(--ob-red); font-size:12.5px; }
 .adm-svc-new { align-self:flex-start; }
+.adm-svc-create { border:1px dashed var(--ob-orange); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; background:var(--ob-soft); }
+.adm-svc-create strong { font-size:15px; color:var(--ob-ink); }
+.adm-svc-create .adm-muted { margin:0; }
+.adm-svc-auto { display:flex; gap:8px; align-items:flex-start; background:#fdf1ea; border:1px solid #f4cdb9; color:#9a4a26; border-radius:9px; padding:10px 12px; font-size:13px; line-height:1.5; }
+.adm-svc-auto svg { flex-shrink:0; margin-top:2px; }
 @media (max-width: 720px) { .adm-svc-grid { grid-template-columns:minmax(0,1fr); } }
 
 /* Pagamentos, promoções e níveis */

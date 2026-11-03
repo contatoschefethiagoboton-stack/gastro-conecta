@@ -1,0 +1,275 @@
+// Gera o kit de divulgação do Eventos Conecta (imagens e vídeos).
+// Uso, na raiz do projeto:  node divulgacao/fonte/gerar.mjs
+// Edite os textos abaixo e rode de novo para atualizar as artes.
+import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import * as Icons from 'lucide-react';
+
+const require = createRequire(import.meta.url);
+let chromium;
+try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const OUT = path.resolve(here, '..');
+const ROOT = path.resolve(OUT, '..');
+
+// ---------- Dados da marca (edite aqui) ----------
+const SITE = 'eventosconecta.com.br';
+const WHATSAPP = '(19) 99398-4529';
+const REGIAO = 'Campinas e região';
+const SERVICOS = [['ChefHat', 'Chef'], ['CookingPot', 'Personal chef'], ['Utensils', 'Buffet'], ['Users', 'Garçom'], ['Wine', 'Barman'], ['Sparkles', 'Limpeza'], ['Leaf', 'Jardinagem']];
+const PROFISSOES = 'Chef · Cozinheiro · Auxiliar · Garçom · Barman · Personal chef · Buffet · Limpeza · Jardinagem';
+
+const icon = (name, size = 40, stroke = 1.8) => renderToStaticMarkup(createElement(Icons[name], { size, strokeWidth: stroke }));
+const heroUri = `data:image/svg+xml;base64,${fs.readFileSync(path.join(ROOT, 'client/public/img/hero.svg')).toString('base64')}`;
+
+// Fontes da marca embutidas (DM Sans e Inter), para não depender da internet.
+const FONTES = fs.readFileSync(path.join(here, 'fontes/fontes.txt'), 'utf8').trim().split('\n').map(linha => {
+  const [familia, peso, arquivo, faixa] = linha.split('|');
+  const dados = fs.readFileSync(path.join(here, 'fontes', arquivo)).toString('base64');
+  return `@font-face{font-family:'${familia}';font-weight:${peso};font-style:normal;src:url(data:font/woff2;base64,${dados}) format('woff2');unicode-range:${faixa}}`;
+}).join('');
+
+const CSS = `
+${FONTES}
+:root{--p:#df572f;--p2:#b8431f;--ink:#262823;--cream:#fcfbf8;--sand:#f5f1e9;--dark:#1d1815;--olive:#83916d;--muted:#8a8473}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:var(--w);height:var(--h);overflow:hidden}
+body{font-family:Inter,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+h1,h2,h3,.dm{font-family:'DM Sans',sans-serif;letter-spacing:-.03em}
+.art{position:relative;width:var(--w);height:var(--h);overflow:hidden;display:flex;flex-direction:column}
+.dark{background:radial-gradient(120% 80% at 70% 20%,#3a2a22 0%,var(--dark) 60%);color:#fff}
+.cream{background:var(--cream)}
+.sand{background:var(--sand)}
+.paprika{background:linear-gradient(160deg,#e8623a 0%,var(--p) 45%,var(--p2) 100%);color:#fff}
+.logo{display:inline-flex;align-items:center;gap:.32em;font-family:'DM Sans',sans-serif;font-weight:700;letter-spacing:-.045em;white-space:nowrap;line-height:1}
+.logo .mark{color:var(--p);position:relative;display:inline-flex}
+.logo .mark i{position:absolute;right:-.08em;top:.02em;width:.18em;height:.18em;border-radius:50%;background:var(--p)}
+.logo .w{font-weight:400}.logo .d{color:var(--p)}
+.on-paprika .logo .mark,.on-paprika .logo .d{color:#fff}.on-paprika .logo .mark i{background:#fff}
+.eyebrow{font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--p)}
+.paprika .eyebrow{color:#ffe1d4}
+.chips{display:flex;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;border-radius:999px;font-weight:600;white-space:nowrap}
+.dark .chip{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.18);color:#fff}
+.dark .chip svg{color:var(--p)}
+.cream .chip,.sand .chip{background:#fff;border:1.5px solid #e6e0d3}
+.cream .chip svg,.sand .chip svg{color:var(--p)}
+.paprika .chip{background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.35);color:#fff}
+.cta{display:flex;align-items:center;justify-content:space-between;border-radius:22px;font-weight:700}
+.cta.solid{background:var(--p);color:#fff}
+.cta.white{background:#fff;color:var(--ink)}
+.cta.white b{color:var(--p)}
+.hl{color:var(--p)}
+.paprika .hl{color:#ffe1d4}
+.muted{color:var(--muted)}
+.dark .muted{color:#cbbfb4}
+.paprika .muted{color:#ffe7dd}
+.hero{position:absolute;inset:0 0 auto 0;background:url(${heroUri}) center/cover}
+.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(29,24,21,.1) 0%,rgba(29,24,21,.55) 55%,var(--dark) 100%)}
+.step{display:flex;align-items:flex-start;background:#fff;border:1.5px solid #e9e3d6;border-radius:28px}
+.step .n{font-family:'DM Sans',sans-serif;font-weight:800;color:var(--p);line-height:1}
+.badge{display:inline-flex;align-items:center;gap:.5em;border-radius:999px;font-weight:700}
+.feat{display:flex;align-items:flex-start}
+.feat .ic{flex-shrink:0;display:grid;place-items:center;border-radius:20px;background:#fbe7df;color:var(--p)}
+.dark .feat .ic{background:rgba(223,87,47,.18)}
+.dots{position:absolute;border-radius:50%;background:var(--p);opacity:.12}
+`;
+
+const logo = (px, extra = '') => `<span class="logo" style="font-size:${px}px;${extra}"><span class="mark">${icon('CookingPot', px * 1.05, 1.8)}<i></i></span><span>eventos<span class="w">conecta</span><span class="d">.</span></span></span>`;
+const chips = (list, px, gap = 14) => `<div class="chips" style="gap:${gap}px">${list.map(([ic, t]) => `<span class="chip" style="font-size:${px}px;padding:${px * .55}px ${px * .9}px;gap:${px * .45}px">${icon(ic, px * 1.25, 2)}${t}</span>`).join('')}</div>`;
+const page = (w, h, cls, body) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>:root{--w:${w}px;--h:${h}px}${CSS}</style></head><body><div class="art ${cls}">${body}</div></body></html>`;
+
+// ---------- Peças ----------
+const pecas = [];
+const add = (arquivo, w, h, cls, body) => pecas.push({ arquivo, w, h, html: page(w, h, cls, body) });
+
+// FEED (1080x1350) — Instagram e Facebook
+add('feed/01-cliente-servicos.png', 1080, 1350, 'dark', `
+  <div class="hero" style="height:640px"></div>
+  <div style="position:relative;padding:70px 80px 0">${logo(46)}</div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 80px">
+    <div class="eyebrow" style="font-size:24px">${REGIAO}</div>
+    <h1 style="font-size:92px;line-height:.98;margin-top:22px;font-weight:700">Seu evento com os<br/><span class="hl">profissionais certos.</span></h1>
+    <div style="margin-top:44px">${chips(SERVICOS, 28, 14)}</div>
+    <div class="cta solid" style="margin-top:50px;padding:32px 40px;font-size:34px"><span>Peça orçamento grátis</span><span style="font-weight:500">${SITE}</span></div>
+  </div>`);
+
+add('feed/02-cliente-como-funciona.png', 1080, 1350, 'cream', `
+  <div style="padding:80px 80px 0;display:flex;justify-content:space-between;align-items:center">${logo(44)}<span class="badge" style="background:#e9f0e2;color:#4f6a3a;font-size:24px;padding:14px 24px">${icon('Check', 26, 2.6)} Grátis para quem contrata</span></div>
+  <div style="padding:70px 80px 0">
+    <div class="eyebrow" style="font-size:24px">Como funciona</div>
+    <h1 style="font-size:84px;line-height:1;margin-top:20px;font-weight:700">Contratar para o seu<br/>evento ficou <span class="hl">simples.</span></h1>
+  </div>
+  <div style="padding:60px 80px 0;display:flex;flex-direction:column;gap:24px">
+    ${[['01', 'Conte o seu evento', 'Data, cidade, número de convidados e o que você precisa.'], ['02', 'Receba propostas', 'Profissionais da sua região enviam propostas. Compare fotos e avaliações.'], ['03', 'Feche com segurança', 'Receba o WhatsApp do profissional e o contrato em PDF.']].map(([n, t, d]) => `
+      <div class="step" style="padding:34px 38px;gap:34px"><span class="n" style="font-size:64px">${n}</span><div><h3 style="font-size:40px;font-weight:700">${t}</h3><p class="muted" style="font-size:27px;line-height:1.4;margin-top:8px">${d}</p></div></div>`).join('')}
+  </div>
+  <div style="margin-top:auto;padding:0 80px 76px"><div class="cta solid" style="padding:30px 40px;font-size:32px"><span>Faça seu pedido</span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+add('feed/03-cliente-fim-de-semana.png', 1080, 1350, 'paprika on-paprika', `
+  <div class="dots" style="width:620px;height:620px;right:-220px;top:-200px;background:#fff;opacity:.08"></div>
+  <div style="position:relative;padding:80px 80px 0">${logo(46)}</div>
+  <div style="position:relative;padding:120px 80px 0">
+    <h1 style="font-size:104px;line-height:.98;font-weight:800">Precisa de garçom, barman ou chef para o fim de semana?</h1>
+    <p style="font-size:36px;line-height:1.4;margin-top:40px;max-width:860px;color:#fff3ee">Peça orçamento grátis e receba propostas de profissionais de ${REGIAO}.</p>
+    <div style="margin-top:56px">${chips(SERVICOS, 28, 14)}</div>
+  </div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 80px"><div class="cta white" style="padding:32px 40px;font-size:34px"><span>Peça agora <b>→</b></span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+add('feed/04-profissional-zero-comissao.png', 1080, 1350, 'dark', `
+  <div style="padding:80px 80px 0;display:flex;justify-content:space-between;align-items:center">${logo(44)}<span class="eyebrow" style="font-size:22px">Para profissionais</span></div>
+  <div style="padding:110px 80px 0">
+    <div class="dm" style="font-size:300px;line-height:.85;font-weight:800;color:var(--p);letter-spacing:-.06em">100%</div>
+    <h1 style="font-size:76px;line-height:1.02;margin-top:26px;font-weight:700">do valor do serviço<br/>fica com você.</h1>
+    <p class="muted" style="font-size:32px;line-height:1.45;margin-top:34px">Zero comissão. Você paga só uma assinatura<br/>mensal fixa e recebe direto no seu Pix.</p>
+  </div>
+  <div style="margin-top:auto;padding:0 80px 80px">
+    <p style="font-size:25px;line-height:1.6;color:#e8ddd3">${PROFISSOES}</p>
+    <div class="cta solid" style="margin-top:34px;padding:30px 40px;font-size:32px"><span>Cadastre-se</span><span style="font-weight:500">${SITE}</span></div>
+  </div>`);
+
+add('feed/05-profissional-ferramentas.png', 1080, 1350, 'sand', `
+  <div style="padding:80px 80px 0">${logo(44)}</div>
+  <div style="padding:70px 80px 0">
+    <div class="eyebrow" style="font-size:24px">Trabalha com eventos?</div>
+    <h1 style="font-size:80px;line-height:1;margin-top:20px;font-weight:700">Mais clientes, <span class="hl">menos correria.</span></h1>
+  </div>
+  <div style="padding:60px 80px 0;display:flex;flex-direction:column;gap:36px">
+    ${[['Radar', 'Radar de pedidos', 'Pedidos de clientes da sua região com data e nº de convidados.'], ['Calculator', 'Calculadoras no Copilot', 'Ingredientes, porções, equipe, custos e lucro antes de propor.'], ['FileText', 'Contrato em PDF automático', 'Gerado quando o cliente aceita a sua proposta.'], ['Award', 'Selo Top Rated', 'Boas avaliações dão destaque ao seu perfil.']].map(([ic, t, d]) => `
+      <div class="feat" style="gap:30px"><span class="ic" style="width:96px;height:96px">${icon(ic, 46, 1.9)}</span><div><h3 style="font-size:38px;font-weight:700">${t}</h3><p class="muted" style="font-size:27px;line-height:1.4;margin-top:6px">${d}</p></div></div>`).join('')}
+  </div>
+  <div style="margin-top:auto;padding:0 80px 76px"><div class="cta solid" style="padding:30px 40px;font-size:32px"><span>Zero comissão · cadastre-se</span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+// STORIES (1080x1920) — área segura: 250px no topo e 340px embaixo
+add('stories/01-cliente.png', 1080, 1920, 'dark', `
+  <div class="hero" style="height:1000px"></div>
+  <div style="position:relative;padding:250px 80px 0">${logo(52)}</div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 340px">
+    <div class="eyebrow" style="font-size:28px">${REGIAO}</div>
+    <h1 style="font-size:110px;line-height:.98;margin-top:26px;font-weight:700">Vai fazer<br/>uma festa?</h1>
+    <p class="muted" style="font-size:38px;line-height:1.4;margin-top:30px">Chef, garçom, barman, buffet e mais. Receba propostas grátis.</p>
+    <div style="margin-top:44px">${chips(SERVICOS.slice(0, 5), 32, 14)}</div>
+    <div class="cta solid" style="margin-top:54px;padding:36px 44px;font-size:38px;justify-content:center">${SITE}</div>
+  </div>`);
+
+add('stories/02-profissional.png', 1080, 1920, 'paprika on-paprika', `
+  <div class="dots" style="width:800px;height:800px;left:-300px;top:-200px;background:#fff;opacity:.07"></div>
+  <div style="position:relative;padding:250px 80px 0">${logo(52)}</div>
+  <div style="position:relative;padding:150px 80px 0">
+    <div class="eyebrow" style="font-size:28px">Para profissionais de eventos</div>
+    <h1 style="font-size:116px;line-height:.98;margin-top:30px;font-weight:800">Faça freelas em eventos sem pagar comissão.</h1>
+    <p style="font-size:40px;line-height:1.45;margin-top:44px;color:#fff3ee">Receba pedidos de clientes da sua região e fique com 100% do valor.</p>
+    <div style="margin-top:60px">${chips(SERVICOS, 34, 16)}</div>
+  </div>
+  <div style="position:relative;margin-top:auto;padding:0 80px 340px"><div class="cta white" style="padding:36px 44px;font-size:38px;justify-content:center">Cadastre-se: <b style="margin-left:.35em">${SITE}</b></div></div>`);
+
+add('stories/03-enquete.png', 1080, 1920, 'cream', `
+  <div style="padding:250px 80px 0">${logo(52)}</div>
+  <div style="padding:120px 80px 0">
+    <h1 style="font-size:104px;line-height:1;font-weight:700">Na sua próxima festa, quem <span class="hl">não pode faltar?</span></h1>
+  </div>
+  <div style="margin:80px 80px 0;height:460px;border:4px dashed #e3d9c8;border-radius:40px"></div>
+  <div style="margin-top:auto;padding:0 80px 340px;text-align:center"><p class="muted" style="font-size:34px">Chef, garçom, barman, buffet e mais em</p><p class="dm" style="font-size:46px;font-weight:700;margin-top:10px">${SITE}</p></div>`);
+
+// WHATSAPP (1080x1080) — grupos e status
+add('whatsapp/01-cliente.png', 1080, 1080, 'dark', `
+  <div class="hero" style="height:480px"></div>
+  <div style="position:relative;padding:64px 70px 0">${logo(42)}</div>
+  <div style="position:relative;margin-top:auto;padding:0 70px 64px">
+    <h1 style="font-size:72px;line-height:1;font-weight:700">Chef, garçom, barman e buffet <span class="hl">para o seu evento.</span></h1>
+    <p class="muted" style="font-size:28px;margin-top:20px">Orçamento grátis · ${REGIAO}</p>
+    <div style="margin-top:32px">${chips(SERVICOS, 24, 10)}</div>
+    <div style="display:flex;gap:16px;margin-top:36px">
+      <div class="cta solid" style="flex:1;padding:24px 30px;font-size:28px;justify-content:center">${icon('Globe', 30, 2)}&nbsp; ${SITE}</div>
+      <div class="cta white" style="padding:24px 30px;font-size:28px">${icon('MessageCircle', 30, 2)}&nbsp; ${WHATSAPP}</div>
+    </div>
+  </div>`);
+
+add('whatsapp/02-profissional.png', 1080, 1080, 'paprika on-paprika', `
+  <div class="dots" style="width:560px;height:560px;right:-200px;top:-200px;background:#fff;opacity:.08"></div>
+  <div style="position:relative;padding:64px 70px 0">${logo(42)}</div>
+  <div style="position:relative;padding:70px 70px 0">
+    <h1 style="font-size:80px;line-height:1;font-weight:800">Trabalha com eventos?</h1>
+    <p style="font-size:36px;line-height:1.4;margin-top:26px;color:#fff3ee">Receba pedidos de clientes da sua região e fique com <b style="color:#fff">100% do valor</b>. Zero comissão.</p>
+    <p style="font-size:24px;line-height:1.6;margin-top:30px;color:#ffe1d4">${PROFISSOES}</p>
+  </div>
+  <div style="position:relative;margin-top:auto;padding:0 70px 64px"><div class="cta white" style="padding:26px 34px;font-size:30px"><span>Cadastre-se grátis <b>→</b></span><span style="font-weight:500">${SITE}</span></div></div>`);
+
+// FACEBOOK — capa da página (1640x624; o centro aparece no celular)
+add('facebook/capa-pagina.png', 1640, 624, 'dark', `
+  <div class="hero" style="inset:0 0 0 auto;width:760px;height:624px"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(90deg,var(--dark) 45%,rgba(29,24,21,.2) 100%)"></div>
+  <div style="position:relative;padding:0 0 0 250px;margin:auto 0">
+    ${logo(46)}
+    <h1 style="font-size:72px;line-height:1;margin-top:28px;font-weight:700">Profissionais para<br/><span class="hl">o seu evento.</span></h1>
+    <p class="muted" style="font-size:28px;margin-top:20px">Chef · Garçom · Barman · Buffet</p><p style="font-size:28px;margin-top:8px;font-weight:600">${SITE}</p>
+  </div>`);
+
+// FOTO DE PERFIL (1080x1080) — Instagram, Facebook, WhatsApp e TikTok (aparece em círculo)
+add('perfil/foto-perfil.png', 1080, 1080, 'paprika on-paprika', `
+  <div style="margin:auto;text-align:center;color:#fff">${icon('CookingPot', 430, 1.6)}
+    <div class="dm" style="font-size:96px;font-weight:700;letter-spacing:-.05em;margin-top:10px">eventos<span style="font-weight:400">conecta</span></div></div>`);
+add('perfil/foto-perfil-escura.png', 1080, 1080, 'dark', `
+  <div style="margin:auto;text-align:center">
+    <span style="color:var(--p)">${icon('CookingPot', 430, 1.6)}</span>
+    <div class="dm" style="font-size:96px;font-weight:700;letter-spacing:-.05em;margin-top:10px">eventos<span style="font-weight:400">conecta</span><span class="hl">.</span></div></div>`);
+
+// ---------- Cenas dos vídeos (Reels / TikTok / Status) ----------
+// Área segura: 220px no topo, 420px embaixo e 140px à direita (botões do app).
+const cena = (cls, inner, hero = false) => page(1080, 1920, cls, `${hero ? '<div class="hero" style="height:1150px"></div>' : ''}<div style="position:relative;display:flex;flex-direction:column;justify-content:center;flex:1;padding:220px 140px 420px 80px">${inner}</div>`);
+const videos = {
+  'reels-tiktok/video-cliente.mp4': [
+    cena('dark', `<div style="margin-top:auto">${logo(48)}<h1 style="font-size:150px;line-height:.95;font-weight:800;margin-top:40px">Vai fazer<br/>uma <span class="hl">festa?</span></h1></div>`, true),
+    cena('cream', `<h1 style="font-size:120px;line-height:1;font-weight:800">Precisa de…</h1><div style="margin-top:70px">${chips(SERVICOS, 54, 22)}</div>`),
+    cena('sand', `<div class="eyebrow" style="font-size:30px">Passo 1</div><h1 style="font-size:104px;line-height:1;font-weight:700;margin-top:24px">Conte o seu evento.</h1><div class="eyebrow" style="font-size:30px;margin-top:70px">Passo 2</div><h1 style="font-size:104px;line-height:1;font-weight:700;margin-top:24px"><span class="hl">Receba propostas</span> da sua região.</h1>`),
+    cena('paprika on-paprika', `<h1 style="font-size:118px;line-height:.98;font-weight:800">Fechou? Contrato em PDF e WhatsApp do profissional.</h1><p style="font-size:44px;margin-top:44px;color:#fff3ee">Grátis para quem contrata.</p>`),
+    cena('dark', `${logo(70)}<h1 style="font-size:96px;line-height:1;font-weight:700;margin-top:60px">Peça seu orçamento</h1><div class="cta solid" style="margin-top:50px;padding:40px 46px;font-size:46px;justify-content:center">${SITE}</div><p class="muted" style="font-size:34px;margin-top:30px">${REGIAO}</p>`),
+  ],
+  'reels-tiktok/video-profissional.mp4': [
+    cena('dark', `<div style="margin-top:auto">${logo(48)}<h1 style="font-size:140px;line-height:.95;font-weight:800;margin-top:40px">Trabalha com <span class="hl">eventos?</span></h1></div>`, true),
+    cena('cream', `<h1 style="font-size:84px;line-height:1.05;font-weight:700">Garçom · Chef<br/>Barman · Cozinheiro<br/>Auxiliar · Buffet<br/>Personal chef<br/><span class="hl">Limpeza · Jardinagem</span></h1>`),
+    cena('sand', `<span class="feat"><span class="ic" style="width:150px;height:150px;border-radius:36px">${icon('Radar', 76, 1.8)}</span></span><h1 style="font-size:104px;line-height:1;font-weight:700;margin-top:50px">Receba pedidos de clientes <span class="hl">da sua região.</span></h1>`),
+    cena('paprika on-paprika', `<div class="dm" style="font-size:300px;line-height:.85;font-weight:800;letter-spacing:-.06em">100%</div><h1 style="font-size:96px;line-height:1;font-weight:800;margin-top:30px">do valor é seu. Zero comissão.</h1>`),
+    cena('dark', `${logo(70)}<h1 style="font-size:96px;line-height:1;font-weight:700;margin-top:60px">Cadastre-se</h1><div class="cta solid" style="margin-top:50px;padding:40px 46px;font-size:46px;justify-content:center">${SITE}</div><p class="muted" style="font-size:34px;margin-top:30px">CPF ou CNPJ · ${REGIAO}</p>`),
+  ],
+};
+
+// ---------- Renderização ----------
+const browser = await chromium.launch();
+async function shot(html, w, h, file) {
+  const pg = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+  await pg.setContent(html, { waitUntil: 'networkidle' });
+  await pg.evaluate(() => document.fonts.ready);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  await pg.screenshot({ path: file });
+  await pg.close();
+}
+for (const p of pecas) { await shot(p.html, p.w, p.h, path.join(OUT, p.arquivo)); console.log('ok', p.arquivo); }
+
+const tmp = fs.mkdtempSync(path.join(OUT, '.cenas-'));
+const SEG = 3.2, FADE = 0.5, FPS = 30;
+for (const [arquivo, cenas] of Object.entries(videos)) {
+  const frames = [];
+  for (const [i, html] of cenas.entries()) { const f = path.join(tmp, `${path.basename(arquivo, '.mp4')}-${i}.png`); await shot(html, 1080, 1920, f); frames.push(f); }
+  fs.mkdirSync(path.join(OUT, path.dirname(arquivo)), { recursive: true });
+  // Capa (1ª cena) para usar como thumbnail do Reels/TikTok.
+  fs.copyFileSync(frames[0], path.join(OUT, arquivo.replace('.mp4', '-capa.png')));
+  const inputs = frames.flatMap(f => ['-i', f]);
+  const zoom = frames.map((_, i) => `[${i}:v]scale=2160:3840,zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${Math.round(SEG * FPS)}:s=1080x1920:fps=${FPS},format=yuv420p,setsar=1[v${i}]`);
+  let chain = '[v0]', parts = [...zoom];
+  for (let i = 1; i < frames.length; i++) {
+    const out = i === frames.length - 1 ? '[out]' : `[x${i}]`;
+    parts.push(`${chain}[v${i}]xfade=transition=fade:duration=${FADE}:offset=${(i * (SEG - FADE)).toFixed(2)}${out}`);
+    chain = out;
+  }
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', parts.join(';'), '-map', '[out]', '-r', String(FPS), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart', path.join(OUT, arquivo)]);
+  console.log('ok', arquivo);
+}
+fs.rmSync(tmp, { recursive: true, force: true });
+await browser.close();

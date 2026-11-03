@@ -2,7 +2,7 @@
 // ("garçom para evento", "chef para evento"…) e uma para cada profissão que o
 // profissional procura ("freela de garçom"…), cada uma também por cidade.
 // O mesmo conteúdo é usado no HTML do servidor (o que o Google lê) e na página React.
-import { slugify } from './services';
+import { DEFAULT_SERVICE_CATALOG, slugify, type RequestCategory, type ServiceCategory } from './services';
 import type { Professional } from './catalog';
 
 export const SITE_NAME = 'Eventos Conecta';
@@ -44,6 +44,8 @@ export type SeoProfession = {
   intro: string;
   clients: string[];
   faqs: Faq[];
+  /** Criada a partir de uma profissão nova do painel: textos neutros ("Bolo personalizado em Campinas"). */
+  neutral?: boolean;
 };
 
 /** Cidades padrão (Campinas e região). O administrador troca em Textos do site → SEO. */
@@ -197,8 +199,78 @@ export const SEO_PROFESSIONS: SeoProfession[] = [
     clients: ['Casas e condomínios', 'Jardins preparados para eventos', 'Projetos de paisagismo'], faqs: proFaqs('jardineiro') },
 ];
 
-export const findSeoService = (slug: string) => SEO_SERVICES.find(s => s.slug === slug);
-export const findSeoProfession = (slug: string) => SEO_PROFESSIONS.find(p => p.slug === slug);
+// ---------- Páginas criadas automaticamente para serviços novos do painel ----------
+
+const OCCASIONS: Record<RequestCategory, string[]> = {
+  event: ['Aniversário', 'Casamento e noivado', 'Evento corporativo', 'Festa em casa', 'Confraternização de fim de ano'],
+  mealPrep: ['Refeições da semana', 'Alimentação fit e com restrições', 'Família com rotina corrida'],
+  cleaning: ['Casa ou apartamento', 'Depois de festas e eventos', 'Escritórios e comércios'],
+  gardening: ['Manutenção mensal', 'Preparar o espaço para um evento', 'Projeto novo'],
+};
+const CLIENTS: Record<RequestCategory, string[]> = {
+  event: ['Festas em casa e aniversários', 'Casamentos e eventos sociais', 'Eventos corporativos', 'Buffets e produtoras que precisam de reforço'],
+  mealPrep: ['Famílias que querem refeições prontas', 'Clientes com dieta ou restrição alimentar'],
+  cleaning: ['Casas e apartamentos', 'Salões e espaços de eventos', 'Escritórios e comércios'],
+  gardening: ['Casas e condomínios', 'Chácaras e espaços de eventos'],
+};
+
+function generatedService(cat: ServiceCategory, slug: string): SeoService {
+  const isEvent = cat.calculator === 'event';
+  const short = cat.name.toLowerCase();
+  const labels = cat.services.map(s => s.label);
+  return {
+    slug,
+    name: isEvent ? `${cat.name} para evento` : cat.name,
+    short,
+    plural: `profissionais de ${short}`,
+    categoryId: cat.id,
+    serviceIds: cat.services.map(s => s.id),
+    intro: `${cat.subtitle ? `${cat.subtitle}. ` : ''}Encontre profissionais de ${short} da sua região${isEvent ? ' para o seu evento' : ''}, compare fotos e avaliações e receba propostas personalizadas: ${labels.join(', ')}.`,
+    occasions: OCCASIONS[cat.calculator] ?? OCCASIONS.event,
+    includes: ['Proposta personalizada para a sua data e necessidade', `Profissionais de ${labels.join(', ')}`, 'Contrato em PDF com escopo, data, local e valor', 'Conversa direta pelo WhatsApp depois do aceite'],
+    tips: ['Informe a data, a cidade e o que você precisa já no pedido.', 'Pergunte o que está incluído no valor.', 'Confira fotos de trabalhos e avaliações de outros clientes.'],
+    faqs: clientFaqs(short),
+  };
+}
+
+function generatedProfession(label: string, serviceId: string, cat: ServiceCategory, slug: string): SeoProfession {
+  const lower = label.toLowerCase();
+  return {
+    slug, name: label, role: lower, plural: `profissionais de ${lower}`, serviceIds: [serviceId], neutral: true,
+    intro: `Trabalha com ${lower}? Receba pedidos de clientes da sua região na categoria ${cat.name}, envie propostas com o seu preço e fique com 100% do valor, sem comissão.`,
+    clients: CLIENTS[cat.calculator] ?? CLIENTS.event,
+    faqs: proFaqs(lower),
+  };
+}
+
+export type SeoCatalog = { services: SeoService[]; professions: SeoProfession[] };
+
+/**
+ * Páginas de SEO a partir do catálogo do painel: as páginas escritas à mão para os
+ * serviços padrão e, para cada categoria ou profissão nova, uma página gerada automaticamente.
+ * Serviços excluídos no painel deixam de ter página.
+ */
+export function seoCatalogFrom(catalog: ServiceCategory[] = DEFAULT_SERVICE_CATALOG): SeoCatalog {
+  const categoryIds = new Set(catalog.map(c => c.id));
+  const serviceIds = new Set(catalog.flatMap(c => c.services.map(s => s.id)));
+  const services = SEO_SERVICES.filter(s => categoryIds.has(s.categoryId));
+  const professions = SEO_PROFESSIONS.filter(p => p.serviceIds.some(id => serviceIds.has(id)));
+  const usedS = new Set(services.map(s => s.slug));
+  const usedP = new Set(professions.map(p => p.slug));
+  const unique = (used: Set<string>, base: string) => { let slug = base || 'servico'; let n = 2; while (used.has(slug)) slug = `${base}-${n++}`; used.add(slug); return slug; };
+  const coveredCategories = new Set(SEO_SERVICES.map(s => s.categoryId));
+  const coveredServices = new Set(SEO_PROFESSIONS.flatMap(p => p.serviceIds));
+  for (const cat of catalog) {
+    if (!cat.id) continue;
+    if (!coveredCategories.has(cat.id)) services.push(generatedService(cat, unique(usedS, slugify(cat.calculator === 'event' ? `${cat.name} para evento` : cat.name))));
+    for (const s of cat.services) if (s.id && !coveredServices.has(s.id)) professions.push(generatedProfession(s.label, s.id, cat, unique(usedP, slugify(s.label))));
+  }
+  return { services, professions };
+}
+
+const DEFAULT_SEO_CATALOG = seoCatalogFrom(DEFAULT_SERVICE_CATALOG);
+export const findSeoService = (slug: string, seo: SeoCatalog = DEFAULT_SEO_CATALOG) => seo.services.find(s => s.slug === slug);
+export const findSeoProfession = (slug: string, seo: SeoCatalog = DEFAULT_SEO_CATALOG) => seo.professions.find(p => p.slug === slug);
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const cityLabel = (c: SeoCity) => `${c.name}/${c.uf}`;
@@ -261,14 +333,17 @@ export function professionPage(profession: SeoProfession, city?: SeoCity): SeoPa
   const path = city ? `${JOBS_BASE}/${profession.slug}/${city.slug}` : `${JOBS_BASE}/${profession.slug}`;
   const crumbs: Crumb[] = [{ name: 'Início', path: '/' }, { name: 'Para profissionais', path: JOBS_BASE }, { name: profession.name, path: `${JOBS_BASE}/${profession.slug}` }];
   if (city) crumbs.push({ name: cityLabel(city), path });
+  const n = profession.neutral;
   const lead = city
-    ? `Quer trabalhar como ${profession.role}${where}? Receba pedidos de clientes de ${city.name} e região, envie propostas com o seu preço e receba 100% do valor, sem comissão.`
+    ? n ? `Trabalha com ${profession.role}${where}? Receba pedidos de clientes de ${city.name} e região, envie propostas com o seu preço e receba 100% do valor, sem comissão.`
+      : `Quer trabalhar como ${profession.role}${where}? Receba pedidos de clientes de ${city.name} e região, envie propostas com o seu preço e receba 100% do valor, sem comissão.`
     : profession.intro;
   return {
     path,
-    title: titleOf(`Freela de ${profession.role}${where}${city ? `/${city.uf}` : ''}`, city ? 'Freelas e clientes' : 'Trabalhe com eventos'),
+    title: n ? titleOf(`${profession.name}${where}${city ? `/${city.uf}` : ''}`, 'Receba pedidos de clientes')
+      : titleOf(`Freela de ${profession.role}${where}${city ? `/${city.uf}` : ''}`, city ? 'Freelas e clientes' : 'Trabalhe com eventos'),
     description: clip(`${capitalize(profession.role)}${where}: receba pedidos de clientes da região, envie propostas e fique com 100% do valor. Sem comissão, só uma assinatura mensal fixa.`, 160),
-    h1: city ? `Trabalhe como ${profession.role}${where}` : `${profession.name}: receba pedidos de clientes`,
+    h1: n ? `${profession.name}${where}: receba pedidos de clientes` : city ? `Trabalhe como ${profession.role}${where}` : `${profession.name}: receba pedidos de clientes`,
     lead,
     faqs: profession.faqs,
     crumbs,
@@ -296,12 +371,12 @@ export const jobsHubPage = (): SeoPage => ({
 });
 
 /** Todas as páginas públicas de SEO (para o sitemap). */
-export function seoPaths(cities: SeoCity[]): string[] {
+export function seoPaths(cities: SeoCity[], seo: SeoCatalog = DEFAULT_SEO_CATALOG): string[] {
   return [
     SERVICES_BASE,
-    ...SEO_SERVICES.flatMap(s => [`${SERVICES_BASE}/${s.slug}`, ...cities.map(c => `${SERVICES_BASE}/${s.slug}/${c.slug}`)]),
+    ...seo.services.flatMap(s => [`${SERVICES_BASE}/${s.slug}`, ...cities.map(c => `${SERVICES_BASE}/${s.slug}/${c.slug}`)]),
     JOBS_BASE,
-    ...SEO_PROFESSIONS.flatMap(p => [`${JOBS_BASE}/${p.slug}`, ...cities.map(c => `${JOBS_BASE}/${p.slug}/${c.slug}`)]),
+    ...seo.professions.flatMap(p => [`${JOBS_BASE}/${p.slug}`, ...cities.map(c => `${JOBS_BASE}/${p.slug}/${c.slug}`)]),
   ];
 }
 
@@ -312,7 +387,7 @@ export type ResolvedSeoRoute =
   | { kind: 'job'; page: SeoPage; profession: SeoProfession; city?: SeoCity };
 
 /** Interpreta um caminho de SEO. Devolve null para caminhos desconhecidos (404). */
-export function resolveSeoRoute(path: string, cities: SeoCity[]): ResolvedSeoRoute | null {
+export function resolveSeoRoute(path: string, cities: SeoCity[], seo: SeoCatalog = DEFAULT_SEO_CATALOG): ResolvedSeoRoute | null {
   const parts = path.replace(/\/+$/, '').split('/').filter(Boolean);
   const base = `/${parts[0] ?? ''}`;
   if (base !== SERVICES_BASE && base !== JOBS_BASE) return null;
@@ -321,10 +396,10 @@ export function resolveSeoRoute(path: string, cities: SeoCity[]): ResolvedSeoRou
   const city = parts[2] ? cities.find(c => c.slug === parts[2]) : undefined;
   if (parts[2] && !city) return null;
   if (base === SERVICES_BASE) {
-    const service = findSeoService(parts[1]!);
+    const service = findSeoService(parts[1]!, seo);
     return service ? { kind: 'service', service, city, page: servicePage(service, city) } : null;
   }
-  const profession = findSeoProfession(parts[1]!);
+  const profession = findSeoProfession(parts[1]!, seo);
   return profession ? { kind: 'job', profession, city, page: professionPage(profession, city) } : null;
 }
 
