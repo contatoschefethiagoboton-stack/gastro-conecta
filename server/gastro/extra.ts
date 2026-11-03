@@ -12,7 +12,9 @@ import { getServiceCatalog, getSiteContent, invalidateSiteContent } from "./cont
 import { assertOwnedMedia, MEDIA_KINDS, MEDIA_RULES, mediaUrl, pruneProfileMedia, saveMedia, type MediaKind } from "./media";
 import { adminExists, consumeSetupCode, createOrPromoteAdmin, dbState, verifySetupCode } from "./bootstrap";
 import { createGcSession, gcCookieOptions, getUserByEmail, hashPassword, isOwner, normalizeEmail, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AuthContext } from "./auth";
-import { copilotProvider } from "./routes";
+import { copilotProvider, resolveCopilotEndpoint } from "./routes";
+import { draftServiceFromName, type ServiceDraft } from "@shared/serviceAreas";
+import { REQUEST_CATEGORIES, SERVICE_ICONS, slugify } from "@shared/services";
 import { clientContractDataComplete, loadDetails, PROVIDER_SCHEMA_VERSION, providerDetailsComplete } from "./profiles";
 import { allServices, findService, normalizeServiceCatalog } from "@shared/services";
 import { normalizeDemos } from "@shared/catalog";
@@ -380,6 +382,46 @@ router.put("/admin/content", wrap(async (req, res) => {
   invalidateSiteContent();
   await audit(context.user.id, "admin.content_update", { keys: entries.map(([key]) => key) });
   res.json({ values: await getSiteContent() });
+}));
+
+/** Pede à IA a categoria de um serviço que a base de áreas não reconhece. Nunca lança: devolve null. */
+async function aiServiceDraft(name: string, existing: string[]): Promise<ServiceDraft | null> {
+  const { base, key, model } = copilotProvider();
+  if (!base || !key) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const system = `Você cadastra serviços em um marketplace brasileiro de profissionais para eventos e para a casa. Responda SOMENTE um JSON {"subtitle": string (até 70 caracteres, frase curta do card), "icon": um de ${JSON.stringify(SERVICE_ICONS)}, "calculator": um de ${JSON.stringify(REQUEST_CATEGORIES.map(c => c.id))} (event = eventos e gastronomia; mealPrep = marmitas; cleaning = limpeza, manutenção e serviços por visita; gardening = jardim), "services": de 2 a 5 profissões ou modalidades desta área, em português, com nomes curtos como as pessoas buscam no Google}. Não repita: ${JSON.stringify(existing.slice(0, 80))}.`;
+    const response = await fetch(resolveCopilotEndpoint(base), { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: `Serviço: ${name}` }], ...(model.startsWith("gpt-5") ? {} : { temperature: 0.2 }) }) });
+    if (!response.ok) return null;
+    const data = await response.json() as any;
+    const text = String(data?.choices?.[0]?.message?.content ?? "");
+    const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    const taken = new Set(existing.map(l => slugify(l)));
+    const services = (Array.isArray(json.services) ? json.services : []).map((l: unknown) => String(l ?? "").trim().slice(0, 100)).filter((l: string) => l.length >= 2 && !taken.has(slugify(l))).slice(0, 6);
+    if (!services.length) return null;
+    return {
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      subtitle: String(json.subtitle ?? "").trim().slice(0, 160) || `${name} para o seu evento`,
+      icon: (SERVICE_ICONS as readonly string[]).includes(json.icon) ? json.icon : "party",
+      calculator: REQUEST_CATEGORIES.some(c => c.id === json.calculator) ? json.calculator : "event",
+      services: [...new Set<string>(services)],
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Criação automática de serviço: categoria, ícone e profissões a partir do nome.
+router.post("/admin/service-draft", wrap(async (req, res) => {
+  await adminCtx(req);
+  limit(`service-draft:${clientIp(req)}`, 30, 60_000, "Muitas sugestões seguidas; aguarde um minuto");
+  const input = body(req, z.object({ name: z.string().trim().min(2).max(80), existing: z.array(z.string().max(100)).max(400).default([]) }));
+  const local = draftServiceFromName(input.name, input.existing);
+  const ai = local.matched ? null : await aiServiceDraft(input.name, input.existing);
+  res.json(local.matched ? { draft: local.draft, source: "base" } : ai ? { draft: ai, source: "ia" } : { draft: local.draft, source: "generico" });
 }));
 
 router.post("/admin/content/reset", wrap(async (req, res) => {

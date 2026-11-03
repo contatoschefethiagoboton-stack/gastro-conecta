@@ -13,6 +13,7 @@ import NotificationBell from '@/components/NotificationBell';
 import { NotificationsSection, MarketingSection, PricingCard, BenefitProductsCard } from './admin/EngageSections';
 import { demosFrom, type DemoProfessional, type Professional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
+import { draftServiceFromName, draftToCategory, findServiceArea, type ServiceDraft } from '@shared/serviceAreas';
 import '../admin.css';
 
 type Section = 'overview' | 'notifications' | 'marketing' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
@@ -273,10 +274,11 @@ const safeCatalog = (raw: string, values: Record<string, string>): ServiceCatego
 function ServiceCatalogEditor({ value, onChange }: { value: ServiceCategory[]; onChange: (list: ServiceCategory[]) => void }) {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const set = (i: number, patch: Partial<ServiceCategory>) => onChange(value.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= value.length) return; const next = [...value]; [next[i], next[j]] = [next[j], next[i]]; onChange(next); };
+  const move = (i: number, dir: -1 | 1) => { const j = i + dir; if (j < 0 || j >= value.length) return; const next = [...value]; [next[i], next[j]] = [next[j], next[i]]; setAutoIndex(null); onChange(next); };
   const removeCategory = (i: number) => {
     if (value.length <= 1) { toast.error('Mantenha pelo menos uma categoria.'); return; }
     if (!confirm(`Excluir a categoria “${value[i].name || 'sem nome'}” e todas as profissões dela? Profissionais cadastrados nessas profissões deixam de receber pedidos delas até escolherem outra.`)) return;
+    setAutoIndex(null);
     onChange(value.filter((_, idx) => idx !== i));
   };
   const addService = (i: number) => {
@@ -292,10 +294,38 @@ function ServiceCatalogEditor({ value, onChange }: { value: ServiceCategory[]; o
     if (svc.id && !confirm(`Excluir a profissão “${svc.label}”? Profissionais cadastrados nela deixam de receber pedidos dela.`)) return;
     set(i, { services: value[i].services.filter((_, idx) => idx !== k) });
   };
-  const addCategory = () => onChange([...value, { id: '', name: 'Novo serviço', subtitle: '', icon: 'utensils', calculator: 'event', cover: '', services: [] }]);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [autoIndex, setAutoIndex] = useState<number | null>(null);
+  const allLabels = () => value.flatMap(c => c.services.map(sv => sv.label));
+  /** Cria a categoria só com o nome: ícone, frase, cálculo e profissões derivadas da área. */
+  const createService = async () => {
+    const name = newName.trim();
+    if (name.length < 2) { toast.error('Digite o nome do serviço (ex.: Confeitaria, DJ, Fotografia).'); return; }
+    if (value.some(c => c.name.trim().toLowerCase() === name.toLowerCase())) { toast.error('Já existe um serviço com esse nome.'); return; }
+    setCreating(true);
+    let draft: ServiceDraft; let source = 'base';
+    try { const r = await api<{ draft: ServiceDraft; source: string }>('/admin/service-draft', { method: 'POST', body: JSON.stringify({ name, existing: allLabels() }) }); draft = r.draft; source = r.source; }
+    catch { const local = draftServiceFromName(name, allLabels()); draft = local.draft; source = local.matched ? 'base' : 'generico'; }
+    finally { setCreating(false); }
+    onChange([...value, draftToCategory(draft)]);
+    setAutoIndex(value.length);
+    setNewName('');
+    toast.success(source === 'generico' ? 'Serviço criado. Confira a frase, o ícone e as profissões.' : `Serviço criado com ${draft.services.length} profissões${source === 'ia' ? ' sugeridas pela IA' : ''}. Confira e clique em Salvar e publicar.`);
+  };
+  /** Acrescenta as profissões da área que ainda não existem nesta categoria. */
+  const suggestServices = (i: number) => {
+    const area = findServiceArea(value[i].name);
+    const taken = new Set(allLabels().map(l => l.toLowerCase()));
+    const extra = (area?.services ?? []).filter(l => !taken.has(l.toLowerCase()));
+    if (!extra.length) { toast.info(area ? 'Todas as profissões sugeridas para esta área já existem.' : 'Não reconheci a área pelo nome. Adicione as profissões à mão.'); return; }
+    set(i, { services: [...value[i].services, ...extra.map(label => ({ id: '', label }))], ...(value[i].icon === 'utensils' && area ? { icon: area.icon } : {}) });
+    toast.success(`${extra.length} ${extra.length === 1 ? 'profissão adicionada' : 'profissões adicionadas'}.`);
+  };
   return <div className="adm-svc">
     <p className="adm-muted">Cada categoria vira um card na página inicial e aparece no pedido de orçamento. As profissões são o que o profissional escolhe no cadastro e o que o cliente pode pedir. Depois de mudar, clique em <strong>Salvar e publicar</strong>.</p>
     {value.map((cat, i) => { const Icon = serviceIcon(cat.icon); return <div className="adm-svc-card" key={cat.id || `novo-${i}`}>
+      {autoIndex === i && <div className="adm-svc-auto"><Sparkles size={15}/><span>Criado automaticamente. Confira o ícone, a frase e as profissões, envie uma foto de capa e clique em <strong>Salvar e publicar</strong>. As páginas do Google deste serviço são criadas ao publicar.</span></div>}
       <div className="adm-svc-head">
         <span className="adm-svc-icon"><Icon size={20}/></span>
         <input className="adm-svc-name" value={cat.name} aria-label="Nome da categoria" placeholder="Nome do serviço (ex.: Confeitaria)" maxLength={80} onChange={e => set(i, { name: e.target.value })}/>
@@ -313,11 +343,15 @@ function ServiceCatalogEditor({ value, onChange }: { value: ServiceCategory[]; o
       <div className="adm-content-field"><span className="adm-content-label">Foto de capa do card</span><ImagePicker value={cat.cover} onChange={url => set(i, { cover: url })}/></div>
       <div className="adm-content-field"><span className="adm-content-label">Profissões desta categoria</span>
         <div className="adm-svc-chips">{cat.services.map((svc, k) => <span className="adm-svc-chip" key={svc.id || `n-${k}`}><input value={svc.label} aria-label="Nome da profissão" maxLength={100} onChange={e => set(i, { services: cat.services.map((x, idx) => (idx === k ? { ...x, label: e.target.value } : x)) })}/><button type="button" aria-label={`Excluir ${svc.label}`} onClick={() => removeService(i, k)}><X size={14}/></button></span>)}</div>
-        <div className="adm-svc-add"><input value={drafts[i] ?? ''} placeholder="Nova profissão (ex.: Confeiteiro(a))" maxLength={100} onChange={e => setDrafts(d => ({ ...d, [i]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addService(i); } }}/><button type="button" className="ob-btn ob-btn-outline" onClick={() => addService(i)}><Plus size={16}/> Adicionar profissão</button></div>
+        <div className="adm-svc-add"><input value={drafts[i] ?? ''} placeholder="Nova profissão (ex.: Confeiteiro(a))" maxLength={100} onChange={e => setDrafts(d => ({ ...d, [i]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addService(i); } }}/><button type="button" className="ob-btn ob-btn-outline" onClick={() => addService(i)}><Plus size={16}/> Adicionar profissão</button><button type="button" className="ob-btn ob-btn-outline" onClick={() => suggestServices(i)} title="Acrescenta profissões comuns desta área"><Sparkles size={16}/> Sugerir profissões</button></div>
         {!cat.services.length && <small className="adm-svc-warn">Adicione pelo menos uma profissão antes de salvar.</small>}
       </div>
     </div>; })}
-    <button type="button" className="ob-btn ob-btn-primary adm-svc-new" onClick={addCategory}><Plus size={16}/> Criar novo serviço</button>
+    <div className="adm-svc-create">
+      <strong>Criar novo serviço</strong>
+      <p className="adm-muted">Digite só o nome. A plataforma cria a categoria, escolhe o ícone, a forma de calcular o valor e as profissões da área.</p>
+      <div className="adm-svc-add"><input value={newName} placeholder="Ex.: Confeitaria, DJ, Fotografia, Churrasco, Decoração" maxLength={80} onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void createService(); } }}/><button type="button" className="ob-btn ob-btn-primary" disabled={creating} onClick={() => void createService()}>{creating ? <Loader2 className="ob-spin" size={16}/> : <Plus size={16}/>} Criar serviço</button></div>
+    </div>
   </div>;
 }
 

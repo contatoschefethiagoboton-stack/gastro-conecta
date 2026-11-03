@@ -4,9 +4,9 @@ import { loadProfessionals } from './gastro/catalog';
 import { businessDefaults, whatsappLink } from '../shared/business';
 import { getSiteContent } from './gastro/content';
 import {
-  DEFAULT_ORIGIN, JOBS_BASE, SEO_PROFESSIONS, SEO_SERVICES, SERVICES_BASE, SITE_NAME,
+  DEFAULT_ORIGIN, JOBS_BASE, SERVICES_BASE, SITE_NAME, seoCatalogFrom,
   isSeoPath, matchProfessionals, nearbyCities, resolveSeoRoute, seoCitiesFrom, seoPaths,
-  type Crumb, type Faq, type ResolvedSeoRoute, type SeoCity,
+  type Crumb, type Faq, type ResolvedSeoRoute, type SeoCatalog, type SeoCity,
 } from '../shared/seo';
 
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -46,14 +46,14 @@ const faqHtml = (faqs: Faq[]) => `<h2>Perguntas frequentes</h2>${faqs.map(([q, a
 const listHtml = (items: string[]) => `<ul>${items.map(i => `<li>${escape(i)}</li>`).join('')}</ul>`;
 const proCard = (p: Professional) => `<article><h3><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h3><p>${escape(p.category)} · ${escape(p.city)}${p.rating?.count ? ` · nota ${p.rating.average.toFixed(1)} (${p.rating.count} avaliações)` : ''}</p><p>${escape(p.description.slice(0, 220))}</p></article>`;
 
-async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content: Record<string, string>): Promise<{ body: string; ld: unknown[] }> {
+async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content: Record<string, string>, seo: SeoCatalog): Promise<{ body: string; ld: unknown[] }> {
   const { page } = route;
   const ld: unknown[] = [breadcrumbLd(page.crumbs), faqLd(page.faqs)];
   let main = '';
   if (route.kind === 'servicesHub') {
-    main = `<h2>Serviços</h2>${SEO_SERVICES.map(s => `<h3><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></h3><p>${escape(s.intro)}</p>`).join('')}<h2>Cidades atendidas</h2><ul>${cities.map(c => `<li>${escape(c.name)}/${escape(c.uf)}: ${SEO_SERVICES.slice(0, 4).map(s => `<a href="${SERVICES_BASE}/${s.slug}/${c.slug}">${escape(s.name)}</a>`).join(', ')}</li>`).join('')}</ul>`;
+    main = `<h2>Serviços</h2>${seo.services.map(s => `<h3><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></h3><p>${escape(s.intro)}</p>`).join('')}<h2>Cidades atendidas</h2><ul>${cities.map(c => `<li>${escape(c.name)}/${escape(c.uf)}: ${seo.services.slice(0, 4).map(s => `<a href="${SERVICES_BASE}/${s.slug}/${c.slug}">${escape(s.name)}</a>`).join(', ')}</li>`).join('')}</ul>`;
   } else if (route.kind === 'jobsHub') {
-    main = `<h2>Profissões</h2>${SEO_PROFESSIONS.map(p => `<h3><a href="${JOBS_BASE}/${p.slug}">${escape(p.name)}</a></h3><p>${escape(p.intro)}</p>`).join('')}<p><a href="/conta?cadastro=profissional">Cadastrar como profissional</a></p>`;
+    main = `<h2>Profissões</h2>${seo.professions.map(p => `<h3><a href="${JOBS_BASE}/${p.slug}">${escape(p.name)}</a></h3><p>${escape(p.intro)}</p>`).join('')}<p><a href="/conta?cadastro=profissional">Cadastrar como profissional</a></p>`;
   } else {
     const catalog = serviceCatalogFrom(content);
     const all = await loadProfessionals().catch(() => [] as Professional[]);
@@ -65,7 +65,7 @@ async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content:
       main = `${city ? `<p>${escape(service.intro)}</p>` : ''}<h2>Para quais ocasiões contratar ${escape(service.short)}${escape(where)}</h2>${listHtml(service.occasions)}<h2>O que o serviço costuma incluir</h2>${listHtml(service.includes)}<h2>Dicas para contratar bem</h2>${listHtml(service.tips)}`
         + `<h2>Profissionais${escape(where)}</h2>${pros.length ? pros.map(proCard).join('') : `<p>Publique o seu pedido e receba propostas de ${escape(service.plural)} que atendem ${escape(city ? city.name : 'a sua região')}.</p>`}`
         + `<p><a href="/orcamento">Pedir orçamento grátis</a> · <a href="/profissionais?tipo=${encodeURIComponent(service.categoryId)}${city ? `&amp;cidade=${encodeURIComponent(city.name)}` : ''}">Ver profissionais</a></p>`
-        + (city ? `<h2>${escape(service.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${SERVICES_BASE}/${service.slug}/${c.slug}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul><h2>Outros serviços em ${escape(city.name)}</h2><ul>${SEO_SERVICES.filter(s => s.slug !== service.slug).map(s => `<li><a href="${SERVICES_BASE}/${s.slug}/${city.slug}">${escape(s.name)} em ${escape(city.name)}</a></li>`).join('')}</ul>`
+        + (city ? `<h2>${escape(service.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${SERVICES_BASE}/${service.slug}/${c.slug}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul><h2>Outros serviços em ${escape(city.name)}</h2><ul>${seo.services.filter(s => s.slug !== service.slug).map(s => `<li><a href="${SERVICES_BASE}/${s.slug}/${city.slug}">${escape(s.name)} em ${escape(city.name)}</a></li>`).join('')}</ul>`
           : `<h2>${escape(service.name)} por cidade</h2><ul>${cities.map(c => `<li><a href="${SERVICES_BASE}/${service.slug}/${c.slug}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`);
       ld.push({ '@context': 'https://schema.org', '@type': 'Service', name: page.h1, serviceType: service.name, description: page.description, url: abs(page.path), provider: organization(), areaServed: city ? { '@type': 'City', name: `${city.name}, ${city.uf}` } : cities.map(c => ({ '@type': 'City', name: `${c.name}, ${c.uf}` })), offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL', description: 'Pedido de orçamento grátis para quem contrata' } });
     } else {
@@ -91,6 +91,7 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
   const path = new URL(originalUrl, 'http://internal.invalid').pathname.replace(/(.)\/+$/, '$1');
   const site = await getSiteContent();
   const cities = seoCitiesFrom(site);
+  const seo = seoCatalogFrom(serviceCatalogFrom(site));
   let page: StaticPage | undefined = descriptions[path];
   if (path === '/' && page) page = { ...page, title: site['seo.homeTitle'] || page.title, description: site['seo.homeDescription'] || page.description };
   let status = 200;
@@ -100,9 +101,9 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
   const ld: unknown[] = [];
 
   if (isSeoPath(path)) {
-    const route = resolveSeoRoute(path, cities);
+    const route = resolveSeoRoute(path, cities, seo);
     if (route) {
-      const html = await seoRouteHtml(route, cities, site);
+      const html = await seoRouteHtml(route, cities, site, seo);
       page = { title: route.page.title, description: route.page.description, heading: route.page.h1, body: route.page.lead };
       customBody = html.body;
       ld.push(...html.ld);
@@ -158,7 +159,7 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
 
   const contact = path === '/' ? `<p>Atendimento em ${escape(region)}. Fale Conosco pelo WhatsApp <a href="${escape(whatsappLink(undefined, waNumber))}">${escape(waDisplay)}</a>.</p>` : '';
   const serviceLinks = path === '/' || path === '/profissionais'
-    ? `<h2>Serviços para eventos</h2><ul>${SEO_SERVICES.map(s => `<li><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></li>`).join('')}</ul><h2>Para profissionais</h2><ul>${SEO_PROFESSIONS.map(p => `<li><a href="${JOBS_BASE}/${p.slug}">${escape(p.name)}</a></li>`).join('')}</ul>`
+    ? `<h2>Serviços para eventos</h2><ul>${seo.services.map(s => `<li><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></li>`).join('')}</ul><h2>Para profissionais</h2><ul>${seo.professions.map(p => `<li><a href="${JOBS_BASE}/${p.slug}">${escape(p.name)}</a></li>`).join('')}</ul>`
     : '';
   const cards = (path === '/' || path === '/profissionais') && site['catalog.showDemo'] !== 'false'
     ? demoProfessionals(site, id => findCategory(serviceCatalogFrom(site), id)?.name).map(p => `<article><h2><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h2><p>${escape(p.type)} · ${escape(p.city)}</p><p>${escape(p.description)}</p><p>Portfólio ilustrativo.</p></article>`).join('')
@@ -187,7 +188,7 @@ export async function sitemapXml(): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const entries: Array<[string, string]> = [
     ['/', '1.0'], ['/profissionais', '0.9'], ['/como-funciona', '0.6'], ['/para-profissionais', '0.8'], ['/sobre', '0.5'], ['/termos', '0.2'], ['/seguranca', '0.2'],
-    ...seoPaths(cities).map(p => [p, p.split('/').length > 3 ? '0.7' : '0.8'] as [string, string]),
+    ...seoPaths(cities, seoCatalogFrom(serviceCatalogFrom(site))).map(p => [p, p.split('/').length > 3 ? '0.7' : '0.8'] as [string, string]),
     ...pros.map(p => [`/profissionais/${p.id}`, '0.6'] as [string, string]),
   ];
   const urls = entries.map(([path, priority]) => `<url><loc>${escape(abs(path))}</loc><lastmod>${today}</lastmod><priority>${priority}</priority></url>`).join('');

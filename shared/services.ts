@@ -12,7 +12,9 @@ export const REQUEST_CATEGORIES: Array<{ id: RequestCategory; label: string }> =
   { id: 'gardening', label: 'Jardinagem / paisagismo' },
 ];
 
-export const SERVICE_ICONS = ['chef', 'pot', 'wine', 'sparkles', 'leaf', 'utensils', 'cake', 'coffee', 'flame', 'music', 'camera', 'truck'] as const;
+export const SERVICE_ICONS = ['chef', 'pot', 'wine', 'sparkles', 'leaf', 'utensils', 'cake', 'coffee', 'flame', 'music', 'camera', 'truck',
+  'party', 'flower', 'baby', 'shield', 'car', 'clipboard', 'users', 'brush', 'pizza', 'fish', 'beer', 'sandwich', 'ice', 'tent',
+  'lightbulb', 'shirt', 'droplets', 'wrench', 'dog', 'graduation', 'bus', 'mic'] as const;
 export type ServiceIcon = typeof SERVICE_ICONS[number];
 
 export type ServiceItem = { id: string; label: string };
