@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { uploadFile } from "@/lib/upload";
 import { PHASE_LABELS } from "@shared/subscription";
-import { categoryLabel, ContractButton, EmptyState, Field, formatDate, formatMoney, LoadingState, parseCents, post, scoreBand, SectionIntro, statusLabel, SubmitButton, todayKey, useAction, useApi, dateKey, type DashboardUser, type EventItem, type Proposal } from "./common";
+import { categoryLabel, ContractButton, EmptyState, ShoppingListButton, Field, formatDate, formatMoney, LoadingState, parseCents, post, scoreBand, SectionIntro, statusLabel, SubmitButton, todayKey, useAction, useApi, dateKey, type DashboardUser, type EventItem, type Proposal } from "./common";
 import { ProposalComposer } from "./CopilotTools";
 
 type ProviderEvents = { radar: EventItem[]; events: EventItem[]; closed: Array<{ id: number; title: string; city: string; date?: string; closedWith: string }> };
@@ -95,6 +95,7 @@ export function ProviderProposals() {
       <div className="dash-record-main"><span className="dash-list-icon"><Send size={17}/></span><div><h4>{p.eventTitle}</h4><p>{p.scope === "full" ? "Serviço completo" : "Só mão de obra"} · custo estimado {formatMoney(p.costCents)} · lucro {formatMoney(p.amountCents - p.costCents)}</p><span>{p.message}</span></div></div>
       <div className="dash-record-actions"><strong>{formatMoney(p.amountCents)}</strong>
         {p.closedWith ? <span className="dash-status dash-status-cancelled">Cliente fechou com {p.closedWith}</span> : <span className={`dash-status dash-status-${p.status}`}>{statusLabel[p.status] ?? p.status}</span>}
+        {Array.isArray(p.breakdown?.shoppingList?.items) && p.breakdown.shoppingList.items.length > 0 && <ShoppingListButton proposalId={p.id}/>}
         {p.whatsappUrl && <a className="dash-small-button dash-whatsapp" href={p.whatsappUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={14}/> WhatsApp do cliente</a>}
         {p.status === "pending" && <button className="dash-small-button dash-ghost-button" type="button" disabled={busy === `withdraw-${p.id}`} onClick={() => void run(`withdraw-${p.id}`, () => post(`/proposals/${p.id}/withdraw`), "Proposta retirada.")}><Undo2 size={14}/> Retirar</button>}
       </div>

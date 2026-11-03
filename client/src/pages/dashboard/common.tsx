@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleAlert, Download, ExternalLink, FileText, Instagram, KeyRound, Loader2, Lock, Star } from "lucide-react";
+import { Check, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Instagram, KeyRound, Loader2, Lock, Star } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useSite } from "@/lib/site";
@@ -21,7 +21,7 @@ export type EventItem = {
 };
 export type Proposal = {
   id: number; eventId: number; providerId: number; amountCents: number; costCents: number; message: string; status: string; scope: "labor" | "full"; paymentTerms: string; eventTime?: string;
-  createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean;
+  createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean; hasShoppingList?: boolean; breakdown?: Record<string, any> | null;
 };
 export type PendingReview = { eventId: number; title: string; completedAt: string; targets: Array<{ id: number; name: string }> };
 export type ReviewsResponse = { pending: PendingReview[]; overdue: number; average: number; count: number; reviews: Array<{ id: number; eventTitle: string; reviewerName: string; targetName: string; rating: number; feedback: string; createdAt: string; mine: boolean }> };
@@ -107,6 +107,11 @@ export async function downloadFile(path: string, fileName: string) {
 
 export function ContractButton({ id, label = "Contrato PDF" }: { id: number; label?: string }) {
   return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/contracts/${id}/pdf`, `contrato-eventosconecta-${id}.pdf`)}><Download size={14}/> {label}</button>;
+}
+
+/** Lista de compras da proposta (só mão de obra) em PDF, com o aviso ao cliente. */
+export function ShoppingListButton({ proposalId, label = "Lista de compras (PDF)" }: { proposalId: number; label?: string }) {
+  return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/proposals/${proposalId}/shopping-list/pdf`, `lista-de-compras-${proposalId}.pdf`)}><ClipboardList size={14}/> {label}</button>;
 }
 
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {

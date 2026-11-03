@@ -179,10 +179,13 @@ export function conversionRate(submitted: number, won: number): number {
 export const PLATFORM_EVENT_MARGIN = 30;
 
 /** Marmitas: horas de trabalho proporcionais ao tamanho do pacote (mínimo de 2h). */
-export const mealPrepInputFor = (meals: number): MealPrepInput => {
+export const mealPrepInputFor = (meals: number, laborOnly = false): MealPrepInput => {
   const total = Math.max(1, Math.floor(meals || 0));
-  return { ...MEAL_PREP_DEFAULTS, meals: total, laborHours: Math.max(2, Math.ceil(total * 0.4)) };
+  return { ...MEAL_PREP_DEFAULTS, meals: total, laborHours: Math.max(2, Math.ceil(total * 0.4)), ...(laborOnly ? LABOR_ONLY_MEAL : {}) };
 };
+
+/** Só mão de obra: o cliente compra ingredientes e embalagens, então eles não entram na conta. */
+export const LABOR_ONLY_MEAL = { ingredientCostPerMealCents: 0, packagingPerMealCents: 0 } as const;
 
 export type EstimateRequest = {
   category: 'event' | 'mealPrep' | 'cleaning' | 'gardening';
@@ -204,7 +207,7 @@ export type EstimateRequest = {
  * o cliente compara as propostas recebidas e escolhe a melhor.
  */
 export function platformEstimateCents(r: EstimateRequest): number {
-  if (r.category === 'mealPrep') return calculateMealPrep(mealPrepInputFor(Math.max(1, r.mealsPerWeek ?? 10) * Math.max(1, r.weeks ?? 1))).priceCents;
+  if (r.category === 'mealPrep') return calculateMealPrep(mealPrepInputFor(Math.max(1, r.mealsPerWeek ?? 10) * Math.max(1, r.weeks ?? 1), r.scope === 'labor')).priceCents;
   if (r.category === 'cleaning' || r.category === 'gardening') {
     const rates = (r.category === 'cleaning' ? CLEANING_RATES : GARDEN_RATES) as Record<string, { m2PerHour: number; hourlyCents: number }>;
     const kind = r.propertyKind && rates[r.propertyKind] ? r.propertyKind : r.type && rates[r.type] ? r.type : Object.keys(rates)[0];

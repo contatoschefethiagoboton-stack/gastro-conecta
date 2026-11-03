@@ -21,7 +21,8 @@ import { calculateIntentScore, isoDate } from "./rules";
 import { assertSubscriptionActive, phaseFor, subscriptionSummary } from "./subscriptions";
 import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLink } from "./profiles";
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
-import { buildPdf } from "./pdf";
+import { buildPdf, type PdfBlock } from "./pdf";
+import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE } from "@shared/shoppingList";
 import { mpConfigured } from "./mercadopago";
 import { mailConfigured } from "./password";
 
@@ -383,6 +384,8 @@ router.get("/proposals", wrap(async (req, res) => {
     if (!isProvider) {
       const rating = await query<any[]>("SELECT AVG(rating) average, COUNT(*) total FROM gastro_reviews WHERE targetId = ?", [row.providerId]);
       extra.providerRating = { average: Number(rating[0]?.average ?? 0), count: Number(rating[0]?.total ?? 0) };
+      // Lista de compras (só itens e quantidades) fica disponível ao cliente em PDF.
+      if (normalizeShoppingList(json(row.breakdown)?.shoppingList)) extra.hasShoppingList = true;
       // Custo estimado é informação interna do profissional.
       row.costCents = 0; row.breakdown = null;
     }
@@ -407,8 +410,15 @@ router.post("/proposals", wrap(async (req, res) => {
   await assertSubscriptionActive(context.user.id);
   await assertNoReviewGuard(context.user.id);
   const input = body(req, proposalSchema);
-  const event = await query<any[]>("SELECT id FROM gastro_events WHERE id = ? AND status = 'open' AND providerId IS NULL AND (preferredProviderId IS NULL OR preferredProviderId = ?) LIMIT 1", [input.eventId, context.user.id]);
+  const event = await query<any[]>("SELECT id, scope FROM gastro_events WHERE id = ? AND status = 'open' AND providerId IS NULL AND (preferredProviderId IS NULL OR preferredProviderId = ?) LIMIT 1", [input.eventId, context.user.id]);
   if (!event[0]) throw new HttpError(404, "Pedido não disponível");
+  // O escopo pedido pelo cliente vale para a proposta: só mão de obra não pode virar serviço completo e vice-versa.
+  if (event[0].scope === "labor" && input.scope !== "labor") throw new HttpError(400, "O cliente pediu só mão de obra: a proposta não pode incluir ingredientes e insumos.");
+  if (event[0].scope === "full" && input.scope !== "full") throw new HttpError(400, "O cliente pediu serviço completo: a proposta precisa incluir ingredientes e insumos.");
+  if (input.breakdown) {
+    const list = input.scope === "labor" ? normalizeShoppingList(input.breakdown.shoppingList) : null;
+    if (list) input.breakdown.shoppingList = list; else delete input.breakdown.shoppingList;
+  }
   const existing = await query<any[]>("SELECT id, status FROM gastro_proposals WHERE eventId = ? AND providerId = ? LIMIT 1", [input.eventId, context.user.id]);
   if (existing[0] && ["pending", "accepted"].includes(existing[0].status)) throw new HttpError(409, "Você já enviou uma proposta para este pedido");
   const values = [input.amountCents, input.message, input.scope, input.costCents, input.paymentTerms, input.eventTime ?? null, input.breakdown ? JSON.stringify(input.breakdown) : null];
@@ -547,6 +557,34 @@ router.get("/contracts/:id/pdf", wrap(async (req, res) => {
   const pdf = payload.version === 2 ? contractPdf(payload as ContractPayload) : legacyContractPdf(rows[0].title, payload);
   if (await isOwner(context)) await audit(context.user.id, "admin.contract_download", { contractId }, contractId);
   res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=contrato-eventosconecta-${contractId}.pdf`, "Cache-Control": "private, no-store" }).send(pdf);
+}));
+
+// Lista de compras da proposta em PDF (cliente do pedido, profissional da proposta ou administração).
+router.get("/proposals/:id/shopping-list/pdf", wrap(async (req, res) => {
+  const context = await auth(req);
+  const proposalId = parse(idSchema, req.params.id);
+  const rows = await query<any[]>("SELECT p.id, p.providerId, p.breakdown, p.scope, e.clientId, e.title, e.eventDate, e.city, e.guests, pu.name providerName FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId JOIN users pu ON pu.id = p.providerId WHERE p.id = ? LIMIT 1", [proposalId]);
+  const row = rows[0];
+  const allowed = row && (Number(row.providerId) === context.user.id || Number(row.clientId) === context.user.id || (await isOwner(context)));
+  const list = allowed ? normalizeShoppingList(json(row.breakdown)?.shoppingList) : null;
+  if (!row || !allowed || !list) throw new HttpError(404, "Lista de compras não encontrada");
+  const date = row.eventDate ? new Date(row.eventDate).toISOString().slice(0, 10).split("-").reverse().join("/") : "a definir";
+  const blocks: PdfBlock[] = [
+    { kind: "title", text: "Lista de compras" },
+    { kind: "pair", label: "Pedido", value: String(row.title) },
+    { kind: "pair", label: "Data", value: date },
+    { kind: "pair", label: "Cidade", value: String(row.city ?? "") },
+    { kind: "pair", label: "Convidados", value: String(row.guests) },
+    { kind: "pair", label: "Profissional", value: String(row.providerName) },
+    { kind: "space" },
+    { kind: "heading", text: "Aviso importante" },
+    { kind: "text", text: SHOPPING_LIST_NOTICE },
+    { kind: "space" },
+    { kind: "heading", text: `Itens (${list.items.length})` },
+    ...list.items.map(item => ({ kind: "text" as const, text: `[  ]  ${item.name}: ${formatQuantity(item.quantity)} ${item.unit}` })),
+    ...(list.note ? [{ kind: "space" as const }, { kind: "heading" as const, text: "Observações do profissional" }, { kind: "text" as const, text: list.note }] : []),
+  ];
+  res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=lista-de-compras-${proposalId}.pdf`, "Cache-Control": "private, no-store" }).send(buildPdf(blocks, `Eventos Conecta - Lista de compras da proposta ${proposalId}`));
 }));
 
 // ------------------------------------------------------------------ financeiro do profissional

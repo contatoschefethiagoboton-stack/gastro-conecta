@@ -670,3 +670,11 @@
 .dash-share-link { display: block; background: #f6f3eb; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; overflow-wrap: anywhere; }
 .dash-topbar-actions { display: flex; align-items: center; gap: 10px; }
 .dash-money-card small { font-size: 12px; color: #787a70; }
+
+/* Só mão de obra: lista de compras */
+.cp-tr.cp-list { grid-template-columns:minmax(0,1fr) 90px 80px 34px; min-width:360px; }
+.cp-labor-note { display:flex; gap:8px; align-items:flex-start; background:#fdf6ea; border:1px solid #efdcb8; color:#86683a; border-radius:9px; padding:10px 12px; font-size:12.5px; line-height:1.55; margin:8px 0; }
+.cp-labor-note svg { flex-shrink:0; margin-top:2px; }
+.cp-shopping { display:flex; flex-direction:column; gap:10px; }
+.dash-list-notice { margin-top:10px; background:#fdf6ea; border:1px solid #efdcb8; border-radius:9px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.dash-list-notice p { font-size:12.5px; line-height:1.55; color:#86683a; margin:0; }
