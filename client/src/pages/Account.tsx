@@ -45,7 +45,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function Account() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<AccountMode>(() => new URLSearchParams(window.location.search).has("cadastro") ? "register" : "login");
+  const [mode, setMode] = useState<AccountMode>(() => { const params = new URLSearchParams(window.location.search); return params.has("cadastro") ? "register" : params.has("esqueci") ? "forgot" : "login"; });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [city, setCity] = useState("");

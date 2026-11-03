@@ -370,6 +370,13 @@ export const contentFields: ContentField[] = [
   "default": ""
  },
  {
+  "key": "price.shoppingList",
+  "group": "Níveis e promoções",
+  "label": "Preço que o profissional paga para gerar a lista de compras (R$; 0 = grátis)",
+  "type": "text",
+  "default": "50"
+ },
+ {
   "key": "level.altoMinAverage",
   "group": "Níveis e promoções",
   "label": "Nível ALTO: média mínima das avaliações (1 a 5)",

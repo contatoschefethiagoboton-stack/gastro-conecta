@@ -6,7 +6,8 @@ import {
   profitability, staffTotalCents, styleForEventType, type EstimateItem, type EventStyle, type MealPrepInput, type StaffItem,
 } from "@shared/copilot";
 import { SCOPE_LABELS, type ContractScope, type RequestCategory } from "@shared/services";
-import { SHOPPING_LIST_NOTICE, SHOPPING_UNITS, type ShoppingItem } from "@shared/shoppingList";
+import { SHOPPING_LIST_NOTICE, SHOPPING_UNITS, shoppingListPriceCents, type ShoppingItem } from "@shared/shoppingList";
+import { useSite } from "@/lib/site";
 import { categoryLabel, centsInput, formatDate, formatMoney, parseCents, post, useAction, type EventItem } from "./common";
 
 /** Campo numérico curto usado nas tabelas editáveis. */
@@ -184,6 +185,8 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
   const [mealList, setMealList] = useState<ShoppingItem[]>([]);
   const [sendList, setSendList] = useState(true);
   const [listNote, setListNote] = useState("");
+  const site = useSite();
+  const listPriceCents = shoppingListPriceCents(site.content["price.shoppingList"]);
   const setScope = (next: ContractScope) => {
     setScopeState(next);
     // Marmitas: só mão de obra zera ingredientes e embalagens; completo volta aos valores padrão.
@@ -220,7 +223,7 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
     if (amountCents <= 0) { toast.error("Informe o valor da proposta."); return; }
     const shoppingList = laborOnly && sendList && validList.length ? { items: validList, ...(listNote.trim() ? { note: listNote.trim() } : {}) } : undefined;
     const breakdown = { category, scope, margin, discount, extraCents, ...(category === "event" ? { eventCalc } : category === "mealPrep" ? { meal } : { area }), ...(shoppingList ? { shoppingList } : {}) };
-    const ok = await run("send-proposal", () => post("/proposals", { eventId: event.id, amountCents, costCents, message, paymentTerms: terms, scope: hasScope ? scope : "labor", ...(time ? { eventTime: time } : {}), breakdown }), "Proposta enviada ao cliente.");
+    const ok = await run("send-proposal", () => post<{ shoppingListPayment?: unknown }>("/proposals", { eventId: event.id, amountCents, costCents, message, paymentTerms: terms, scope: hasScope ? scope : "labor", ...(time ? { eventTime: time } : {}), breakdown }), shoppingList && listPriceCents > 0 ? `Proposta enviada. Pague o Pix de ${formatMoney(listPriceCents)} em Minhas propostas para liberar a lista ao cliente.` : "Proposta enviada ao cliente.");
     if (ok) onClose();
   };
 
@@ -233,7 +236,8 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
     {category === "mealPrep" && <MealPrepCalculator value={laborOnly ? { ...meal, ...LABOR_ONLY_MEAL } : meal} onChange={setMeal} laborOnly={laborOnly}/>}
     {laborOnly && <div className="cp-block cp-shopping">
       {category === "mealPrep" && <><h4 className="cp-title"><ClipboardList size={16}/> Lista de compras para o cliente</h4><ShoppingListEditor items={mealList} onChange={setMealList}/></>}
-      <label className="cp-check"><input type="checkbox" checked={sendList} onChange={e => setSendList(e.target.checked)}/> Enviar a lista de compras ao cliente em PDF ({validList.length} {validList.length === 1 ? "item" : "itens"})</label>
+      <label className="cp-check"><input type="checkbox" checked={sendList} onChange={e => setSendList(e.target.checked)}/> Enviar a lista de compras ao cliente em PDF ({validList.length} {validList.length === 1 ? "item" : "itens"}){listPriceCents > 0 ? ` · custa ${formatMoney(listPriceCents)} via Pix` : " · grátis"}</label>
+      {sendList && listPriceCents > 0 && <p className="cp-labor-note"><Info size={14}/><span>Gerar a lista de compras custa <strong>{formatMoney(listPriceCents)}</strong>, pagos por Pix depois de enviar a proposta (em Minhas propostas). O cliente recebe a lista assim que o pagamento é confirmado.</span></p>}
       {sendList && <><label className="dash-field"><span>Observações da lista (opcional)</span><textarea rows={2} value={listNote} onChange={e => setListNote(e.target.value)} placeholder="Ex.: comprar as carnes até 2 dias antes; prefira arroz agulhinha." maxLength={1000}/></label>
       <p className="cp-labor-note"><Info size={14}/><span>O cliente verá este aviso junto da lista: “{SHOPPING_LIST_NOTICE}”</span></p></>}
     </div>}

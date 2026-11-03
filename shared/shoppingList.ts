@@ -28,3 +28,11 @@ export function normalizeShoppingList(raw: unknown): ShoppingList | null {
 }
 
 export const formatQuantity = (q: number) => q.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+/** Preço da lista de compras (em centavos) a partir do texto do painel ("50", "49,90"). */
+export function shoppingListPriceCents(text: string | undefined): number {
+  const raw = String(text ?? '').trim();
+  if (!raw) return 5000;
+  const n = Number(raw.replace(/[^\d,.]/g, '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? Math.min(Math.round(n * 100), 100_000) : 5000;
+}

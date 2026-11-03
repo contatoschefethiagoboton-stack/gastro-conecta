@@ -678,3 +678,11 @@
 .cp-shopping { display:flex; flex-direction:column; gap:10px; }
 .dash-list-notice { margin-top:10px; background:#fdf6ea; border:1px solid #efdcb8; border-radius:9px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
 .dash-list-notice p { font-size:12.5px; line-height:1.55; color:#86683a; margin:0; }
+.dash-record:has(.dash-record-extra) { flex-wrap: wrap; }
+.dash-record-extra { flex-basis: 100%; width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.cp-list-pix { margin: 0; }
+.cp-edit-proposal { border: 1px solid #ece6da; border-radius: 12px; padding: 16px; background: #fffdf9; display: flex; flex-direction: column; gap: 12px; }
+.dash-danger-card { border-color: #f1cfc9; }
+.dash-danger-button { color: #a33b33 !important; border-color: #e9b8b1 !important; }
+.dash-primary-button.dash-danger-button { background: #b93832 !important; color: #fff !important; border-color: #b93832 !important; }
+.dash-primary-button.dash-danger-button:disabled { opacity: .5; }

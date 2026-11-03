@@ -10,6 +10,7 @@ import { hashPassword, normalizeEmail, passwordIsStrong } from "./auth";
 import { refreshMpSettings } from "./mercadopago";
 import { refreshNotifySettings } from "./notify";
 import { refreshPricing } from "./subscriptions";
+import { claimOwnership, ensureOwner } from "./staff";
 
 export const dbState: { ready: boolean; error: string } = { ready: false, error: "" };
 
@@ -56,7 +57,8 @@ async function adminFromEnv() {
   if (!email || !password) return;
   if (!passwordIsStrong(password)) { console.warn("[Eventos Conecta] ADMIN_PASSWORD ignorada: use 10+ caracteres com maiúscula, minúscula, número e símbolo."); return; }
   const passwordHash = await hashPassword(password);
-  await createOrPromoteAdmin({ email, name: process.env.ADMIN_NAME || "Administrador", passwordHash });
+  const id = await createOrPromoteAdmin({ email, name: process.env.ADMIN_NAME || "Administrador", passwordHash });
+  await claimOwnership(id);
   console.log(`[Eventos Conecta] Administrador sincronizado a partir de ADMIN_EMAIL (${email}).`);
 }
 
@@ -118,6 +120,7 @@ export async function bootstrapDatabase() {
     await migrate(drizzle(getGastroPool()), { migrationsFolder: folder });
     console.log("[Eventos Conecta] Banco de dados atualizado (migrações aplicadas).");
     await seedPromotions();
+    await ensureOwner();
     await renameBrandInContent();
     await refreshMpSettings();
     await refreshNotifySettings();

@@ -17,6 +17,7 @@ import { later, notifyAdmin, notifyUser } from "./notify";
 import { cancelPreapproval, createPixPayment, createPreapproval, getAuthorizedPayment, getPayment, getPreapproval, mpConfigured, mpWebhookSecret, refreshMpSettings, verifyWebhookSignature } from "./mercadopago";
 import { parsePaymentReference, paymentDescription, paymentReference, subscriberCode } from "@shared/payments";
 import { promotionWindowEnd, type Promotion } from "@shared/promotions";
+import { requireStaff, type StaffContext } from "./staff";
 
 const router = Router();
 const HOUR = 60 * 60 * 1000;
@@ -105,6 +106,13 @@ export async function applyApprovedPayment(paymentRowId: number) {
       await connection.execute("UPDATE gc_subscription_payments SET status = 'cancelled' WHERE userId = ? AND purpose = 'benefit' AND benefitId = ? AND status = 'pending' AND id <> ?", [payment.userId, payment.benefitId, paymentRowId]);
       return;
     }
+    if (payment.purpose === "shopping_list") {
+      // Lista de compras paga: fica disponível ao cliente na proposta.
+      await connection.execute("UPDATE gc_subscription_payments SET status = 'approved', approvedAt = CURRENT_TIMESTAMP WHERE id = ?", [paymentRowId]);
+      await connection.execute("UPDATE gastro_proposals SET shoppingListPaidAt = COALESCE(shoppingListPaidAt, CURRENT_TIMESTAMP) WHERE id = ? AND providerId = ?", [payment.proposalId, payment.userId]);
+      await connection.execute("UPDATE gc_subscription_payments SET status = 'cancelled' WHERE userId = ? AND purpose = 'shopping_list' AND proposalId = ? AND status = 'pending' AND id <> ?", [payment.userId, payment.proposalId, paymentRowId]);
+      return;
+    }
     if (payment.purpose === "promotion") {
       // Adicional de promoção: libera o fornecedor na promoção até o fim da temporada.
       const [promos] = await connection.execute<any[]>("SELECT * FROM gc_promotions WHERE id = ? LIMIT 1", [payment.promotionId]);
@@ -128,11 +136,11 @@ export async function applyApprovedPayment(paymentRowId: number) {
   // Só avisa na primeira confirmação (o webhook pode chegar mais de uma vez).
   if (!applied || !row || row.status !== "approved") return;
   const purpose = String(row.purpose ?? "subscription");
-  await audit(Number(row.userId), purpose === "promotion" ? "promotion.paid" : purpose === "benefit" ? "benefit.paid" : "subscription.paid", { paymentId: paymentRowId, method: row.method, amountCents: Number(row.amountCents), ...(row.promotionId ? { promotionId: Number(row.promotionId) } : {}), ...(row.benefitId ? { benefitId: Number(row.benefitId) } : {}) }, Number(row.userId));
+  await audit(Number(row.userId), purpose === "promotion" ? "promotion.paid" : purpose === "benefit" ? "benefit.paid" : purpose === "shopping_list" ? "shopping_list.paid" : "subscription.paid", { paymentId: paymentRowId, method: row.method, amountCents: Number(row.amountCents), ...(row.promotionId ? { promotionId: Number(row.promotionId) } : {}), ...(row.benefitId ? { benefitId: Number(row.benefitId) } : {}) }, Number(row.userId));
   const value = (Number(row.amountCents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const what = purpose === "promotion" ? "adicional de promoção" : purpose === "benefit" ? "benefício extra" : "assinatura";
+  const what = purpose === "promotion" ? "adicional de promoção" : purpose === "benefit" ? "benefício extra" : purpose === "shopping_list" ? "lista de compras" : "assinatura";
   later(() => notifyAdmin({ type: `payment.${purpose}`, title: `Pagamento recebido: ${what}`, body: `${row.name ?? "Profissional"} pagou ${value} (${what}).`, path: "/admin/painel?secao=payments" }));
-  later(() => notifyUser(Number(row.userId), { type: `payment.${purpose}`, title: "Pagamento confirmado", body: `Recebemos seu pagamento de ${value} (${what}). Obrigado!`, path: purpose === "subscription" ? "/painel?aba=subscription" : "/painel?aba=growth" }));
+  later(() => notifyUser(Number(row.userId), { type: `payment.${purpose}`, title: "Pagamento confirmado", body: `Recebemos seu pagamento de ${value} (${what}). Obrigado!`, path: purpose === "subscription" ? "/painel?aba=subscription" : purpose === "shopping_list" ? "/painel?aba=proposals" : "/painel?aba=growth" }));
 }
 
 const MP_FINAL_FAIL = new Set(["rejected", "cancelled", "refunded", "charged_back", "expired"]);
@@ -340,10 +348,9 @@ router.delete("/subscription/auto", wrap(async (req, res) => {
 
 // ------------------------------------------------------------------ administração
 
-async function adminCtx(req: Request) {
-  const context = await requireAuth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
-  return context;
+/** Equipe da administração: a permissão exigida vem do endereço (ver @shared/staff). */
+async function adminCtx(req: Request): Promise<StaffContext> {
+  return requireStaff(req);
 }
 
 router.get("/admin/subscriptions", wrap(async (req, res) => {

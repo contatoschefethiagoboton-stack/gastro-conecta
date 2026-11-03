@@ -22,6 +22,7 @@ export type EventItem = {
 export type Proposal = {
   id: number; eventId: number; providerId: number; amountCents: number; costCents: number; message: string; status: string; scope: "labor" | "full"; paymentTerms: string; eventTime?: string;
   createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean; hasShoppingList?: boolean; breakdown?: Record<string, any> | null;
+  shoppingList?: { paid: boolean; payment?: { id: number; status: string; amountCents: number; qrCode: string; qrCodeBase64: string; ticketUrl: string; expiresAt: string | null } };
 };
 export type PendingReview = { eventId: number; title: string; completedAt: string; targets: Array<{ id: number; name: string }> };
 export type ReviewsResponse = { pending: PendingReview[]; overdue: number; average: number; count: number; reviews: Array<{ id: number; eventTitle: string; reviewerName: string; targetName: string; rating: number; feedback: string; createdAt: string; mine: boolean }> };
@@ -212,5 +213,26 @@ export function SecurityPanel({ user }: { user: DashboardUser }) {
         <Field label="Repita a nova senha" type="password" value={form.confirm} onChange={v => setForm(f => ({ ...f, confirm: v }))} required/>
       </div><PasswordRules value={form.next}/><SubmitButton loading={busy === "password"} label="Salvar nova senha"/></form>
     </section>
+    <DeleteAccountCard/>
   </div>;
+}
+
+/** O usuário sai do site: os dados pessoais são apagados e fica só o registro no histórico. */
+function DeleteAccountCard() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const { busy, run } = useAction();
+  const remove = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const ok = await run("delete-account", () => post("/account/delete", { password, confirm: confirmText.trim().toUpperCase() }), "Conta excluída. Até logo!");
+    if (ok) window.location.assign("/");
+  };
+  return <section className="dash-card dash-danger-card"><div className="dash-card-heading"><div><span className="dash-eyebrow">Zona de risco</span><h3>Excluir minha conta</h3><p className="dash-muted">Seus dados pessoais são apagados e você sai do site. Fica só um registro no histórico, e contratos já assinados são guardados por obrigação legal. Para voltar, será preciso fazer um cadastro novo do zero.</p></div></div>
+    {!open ? <button type="button" className="dash-outline-button dash-danger-button" onClick={() => setOpen(true)}>Quero excluir minha conta</button>
+      : <form className="dash-form" onSubmit={remove}><div className="dash-form-grid">
+        <Field label="Sua senha" type="password" value={password} onChange={setPassword} required/>
+        <Field label='Digite EXCLUIR para confirmar' value={confirmText} onChange={setConfirmText} required/>
+      </div><div className="cp-actions"><button type="button" className="dash-outline-button" onClick={() => setOpen(false)}>Cancelar</button><button type="submit" className="dash-primary-button dash-danger-button" disabled={busy === "delete-account" || confirmText.trim().toUpperCase() !== "EXCLUIR"}>Excluir definitivamente</button></div></form>}
+  </section>;
 }

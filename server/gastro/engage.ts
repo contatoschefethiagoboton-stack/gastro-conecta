@@ -15,6 +15,7 @@ import { getSiteContent } from "./content";
 import { copilotProvider, resolveCopilotEndpoint } from "./routes";
 import { priceFor, saveBasePrice, subscriptionBasePrice, webhookUrl } from "./subscriptions";
 import { createPixPayment, mpConfigured } from "./mercadopago";
+import { requireStaff, type StaffContext } from "./staff";
 
 const router = Router();
 const idSchema = z.coerce.number().int().positive();
@@ -42,11 +43,9 @@ router.use((req, _res, next) => { if (!["GET", "HEAD", "OPTIONS"].includes(req.m
 function requireDb() {
   if (!dbConfigured()) throw new HttpError(503, "Banco de dados não configurado (DATABASE_URL)");
 }
-async function adminCtx(req: Request): Promise<AuthContext> {
-  requireDb();
-  const context = await requireAuth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
-  return context;
+/** Equipe da administração: a permissão exigida vem do endereço (ver @shared/staff). */
+async function adminCtx(req: Request): Promise<StaffContext> {
+  return requireStaff(req);
 }
 async function audit(actorId: number, action: string, details: unknown, targetId?: number) {
   await execute("INSERT INTO gastro_audit_logs (action, details, actorId, targetId) VALUES (?, ?, ?, ?)", [action, JSON.stringify(details).slice(0, 60000), actorId, targetId ?? null]);

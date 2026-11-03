@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Activity, BadgeCheck, CalendarDays, Check, Copy, CreditCard, EyeOff, FileUp, Loader2, MessageCircle, QrCode, ReceiptText, RefreshCw, Send, Trash2, TrendingUp, Undo2, UserCheck, UserPlus, Wallet, X } from "lucide-react";
+import { Activity, BadgeCheck, CalendarDays, Check, Copy, PenLine, CreditCard, EyeOff, FileUp, Loader2, MessageCircle, QrCode, ReceiptText, RefreshCw, Send, Trash2, TrendingUp, Undo2, UserCheck, UserPlus, Wallet, X } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -86,19 +86,71 @@ export function RadarPanel({ user }: { user: DashboardUser }) {
   </div>;
 }
 
+/** Edição da proposta enquanto o cliente não respondeu. */
+function ProposalEditor({ proposal, onDone }: { proposal: Proposal; onDone: () => void }) {
+  const { busy, run } = useAction();
+  const [amount, setAmount] = useState((proposal.amountCents / 100).toFixed(2).replace(".", ","));
+  const [terms, setTerms] = useState(proposal.paymentTerms);
+  const [message, setMessage] = useState(proposal.message);
+  const [time, setTime] = useState(proposal.eventTime ?? "");
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    const amountCents = parseCents(amount);
+    if (!amountCents || amountCents <= 0) { toast.error("Informe o valor da proposta."); return; }
+    const ok = await run(`edit-${proposal.id}`, () => api(`/proposals/${proposal.id}`, { method: "PATCH", body: JSON.stringify({ amountCents, paymentTerms: terms, message, eventTime: time || null }) }), "Proposta atualizada. O cliente foi avisado se o valor mudou.");
+    if (ok) onDone();
+  };
+  const step = (pct: number) => { const c = parseCents(amount) ?? proposal.amountCents; setAmount((Math.round(c * (1 + pct / 100)) / 100).toFixed(2).replace(".", ",")); };
+  return <form className="cp-edit-proposal" onSubmit={save}>
+    <div className="dash-form-grid">
+      <label className="dash-field"><span>Novo valor (R$)</span><input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)}/></label>
+      <label className="dash-field"><span>Horário</span><input type="time" value={time} onChange={e => setTime(e.target.value)}/></label>
+    </div>
+    <div className="cp-actions"><button type="button" className="dash-small-button dash-ghost-button" onClick={() => step(-10)}>− 10%</button><button type="button" className="dash-small-button dash-ghost-button" onClick={() => step(-5)}>− 5%</button><button type="button" className="dash-small-button" onClick={() => step(5)}>+ 5%</button><button type="button" className="dash-small-button" onClick={() => step(10)}>+ 10%</button></div>
+    <label className="dash-field"><span>Condições de pagamento</span><input required value={terms} onChange={e => setTerms(e.target.value)} maxLength={600}/></label>
+    <label className="dash-field"><span>Mensagem ao cliente</span><textarea required rows={3} value={message} onChange={e => setMessage(e.target.value)} maxLength={5000}/></label>
+    <div className="cp-actions"><button type="button" className="dash-outline-button" onClick={onDone}>Cancelar</button><button className="dash-primary-button" type="submit" disabled={busy === `edit-${proposal.id}`}>{busy === `edit-${proposal.id}` ? <Loader2 className="dash-spinner" size={16}/> : <Check size={16}/>} Salvar alterações</button></div>
+  </form>;
+}
+
+/** Lista de compras: paga (baixar PDF) ou aguardando o Pix do profissional. */
+function ShoppingListStatus({ proposal }: { proposal: Proposal }) {
+  const { busy, run } = useAction();
+  const list = proposal.shoppingList;
+  if (!list) return null;
+  if (list.paid) return <ShoppingListButton proposalId={proposal.id}/>;
+  const pay = list.payment;
+  const copy = async (code: string) => { try { await navigator.clipboard.writeText(code); toast.success("Código Pix copiado."); } catch { toast.error("Não foi possível copiar. Selecione o código e copie."); } };
+  return <div className="dash-pix cp-list-pix">
+    {pay?.qrCodeBase64 && <img src={`data:image/png;base64,${pay.qrCodeBase64}`} alt="QR Code Pix" width={150} height={150}/>}
+    <div><p><strong>Lista de compras: {pay ? formatMoney(pay.amountCents) : "pagamento pendente"}</strong> · o cliente recebe a lista em PDF assim que o Pix for confirmado.</p>
+      {pay?.qrCode && <code className="dash-pix-code">{pay.qrCode}</code>}
+      <div className="cp-actions">
+        {pay?.qrCode ? <button type="button" className="dash-small-button" onClick={() => void copy(pay.qrCode)}><Copy size={14}/> Copiar código</button>
+          : <button type="button" className="dash-small-button" disabled={busy === `list-pay-${proposal.id}`} onClick={() => void run(`list-pay-${proposal.id}`, () => post(`/proposals/${proposal.id}/shopping-list/pay`), "Pix gerado.")}><QrCode size={14}/> Gerar Pix</button>}
+        <button type="button" className="dash-small-button" disabled={busy === "list-refresh"} onClick={() => void run("list-refresh", () => post("/provider/promotions/refresh"))}><RefreshCw size={14}/> Já paguei, verificar</button>
+      </div></div>
+  </div>;
+}
+
 export function ProviderProposals() {
   const query = useApi<{ proposals: Proposal[] }>("proposals", "/proposals");
   const { busy, run } = useAction();
+  const [editing, setEditing] = useState<number | null>(null);
   return <div className="dash-stack">
     <SectionIntro eyebrow="Negociação" title="Suas propostas." text="Acompanhe o que foi enviado. Quando o cliente aceita, o WhatsApp dele é liberado e o contrato é gerado."/>
     <section className="dash-card">{query.isLoading ? <LoadingState/> : !query.data?.proposals.length ? <EmptyState title="Nenhuma proposta enviada" detail="Use o radar para enviar sua primeira proposta."/> : <div className="dash-record-list">{query.data.proposals.map(p => <article className={`dash-record ${p.closedWith ? "dash-record-muted" : ""}`} key={p.id}>
       <div className="dash-record-main"><span className="dash-list-icon"><Send size={17}/></span><div><h4>{p.eventTitle}</h4><p>{p.scope === "full" ? "Serviço completo" : "Só mão de obra"} · custo estimado {formatMoney(p.costCents)} · lucro {formatMoney(p.amountCents - p.costCents)}</p><span>{p.message}</span></div></div>
       <div className="dash-record-actions"><strong>{formatMoney(p.amountCents)}</strong>
         {p.closedWith ? <span className="dash-status dash-status-cancelled">Cliente fechou com {p.closedWith}</span> : <span className={`dash-status dash-status-${p.status}`}>{statusLabel[p.status] ?? p.status}</span>}
-        {Array.isArray(p.breakdown?.shoppingList?.items) && p.breakdown.shoppingList.items.length > 0 && <ShoppingListButton proposalId={p.id}/>}
+        {p.status === "pending" && editing !== p.id && <button className="dash-small-button" type="button" onClick={() => setEditing(p.id)}><PenLine size={14}/> Editar</button>}
         {p.whatsappUrl && <a className="dash-small-button dash-whatsapp" href={p.whatsappUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={14}/> WhatsApp do cliente</a>}
         {p.status === "pending" && <button className="dash-small-button dash-ghost-button" type="button" disabled={busy === `withdraw-${p.id}`} onClick={() => void run(`withdraw-${p.id}`, () => post(`/proposals/${p.id}/withdraw`), "Proposta retirada.")}><Undo2 size={14}/> Retirar</button>}
       </div>
+      {(p.shoppingList || editing === p.id) && <div className="dash-record-extra">
+        <ShoppingListStatus proposal={p}/>
+        {editing === p.id && <ProposalEditor proposal={p} onDone={() => setEditing(null)}/>}
+      </div>}
     </article>)}</div>}</section>
   </div>;
 }

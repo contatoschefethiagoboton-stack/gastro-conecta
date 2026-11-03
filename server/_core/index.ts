@@ -14,6 +14,8 @@ import { registerSubscriptionRoutes, startBillingScheduler } from "../gastro/sub
 import { registerGrowthRoutes } from "../gastro/growth";
 import { registerEngageRoutes } from "../gastro/engage";
 import { registerPasswordRoutes } from "../gastro/password";
+import { registerStaffRoutes } from "../gastro/staff";
+import { registerAuditTrail } from "../gastro/auditTrail";
 import { robotsTxt, sitemapXml } from "../publicSeo";
 
 async function startServer() {
@@ -36,6 +38,8 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Histórico de tudo o que é feito na plataforma (antes de qualquer rota da API).
+  registerAuditTrail(app);
   app.get("/api/health", (_req, res) => res.json({ status: "ok", database: process.env.DATABASE_URL ? (dbState.ready ? "ok" : "error") : "missing" }));
   app.get("/robots.txt", (_req, res) => { res.set("Cache-Control", "public, max-age=3600").type("text/plain").send(robotsTxt()); });
   app.get("/sitemap.xml", async (_req, res) => {
@@ -50,6 +54,7 @@ async function startServer() {
   // Webhook do Mercado Pago (sem cabeçalho Origin) precisa vir antes das rotas com proteção CSRF.
   registerSubscriptionRoutes(app);
   registerPasswordRoutes(app);
+  registerStaffRoutes(app);
   registerExtraRoutes(app);
   registerGrowthRoutes(app);
   registerEngageRoutes(app);
