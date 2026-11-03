@@ -25,7 +25,7 @@ const REGIAO = 'Campinas e região';
 const SERVICOS = [['ChefHat', 'Chef'], ['CookingPot', 'Personal chef'], ['Utensils', 'Buffet'], ['Users', 'Garçom'], ['Wine', 'Barman'], ['Sparkles', 'Limpeza'], ['Leaf', 'Jardinagem']];
 const PROFISSOES = 'Chef · Cozinheiro · Auxiliar · Garçom · Barman · Personal chef · Buffet · Limpeza · Jardinagem';
 // Valor da assinatura mensal do profissional (confira em Painel → Pagamentos; padrão da plataforma: R$ 49,90).
-const PRECO_CENTAVOS = 4990;
+const PRECO_CENTAVOS = 9990;
 const PRECO = (PRECO_CENTAVOS / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const PRECO_DIA = `R$ ${(Math.ceil(PRECO_CENTAVOS / 30) / 100).toFixed(2).replace('.', ',')}`;
 const [PRECO_REAIS, PRECO_CENTS] = (PRECO_CENTAVOS / 100).toFixed(2).split('.');

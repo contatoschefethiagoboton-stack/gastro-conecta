@@ -1,6 +1,6 @@
 # Material de venda: assinatura para profissionais
 
-**Valor usado nas artes: R$ 49,90/mês** (o padrão da plataforma). Se você mudou o valor no painel (**Pagamentos → Preço da assinatura**), troque `PRECO_CENTAVOS` em `divulgacao/fonte/gerar.mjs` e gere as artes de novo (ou me peça).
+**Valor usado nas artes: R$ 99,90/mês**. Se você mudou o valor no painel (**Pagamentos → Preço da assinatura**), troque `PRECO_CENTAVOS` em `divulgacao/fonte/gerar.mjs` e gere as artes de novo (ou me peça).
 
 ## Arquivos
 
@@ -37,7 +37,7 @@
 ```
 💰 Profissional de eventos: chega de pagar comissão!
 
-No Eventos Conecta você paga só R$ 49,90/mês (menos de R$ 1,67 por dia) e fica com 100% do valor de cada serviço.
+No Eventos Conecta você paga só R$ 99,90/mês (menos de R$ 3,33 por dia) e fica com 100% do valor de cada serviço.
 
 ✅ Pedidos de clientes da sua região
 ✅ Calculadoras de custo e lucro
@@ -52,7 +52,7 @@ Cadastre-se 👉 eventosconecta.com.br/trabalhe-como
 
 Quanto a comissão já levou dos seus eventos? Com 15% de comissão, um evento de R$ 2.000 deixa R$ 300 pelo caminho.
 
-No *Eventos Conecta* é diferente: assinatura fixa de *R$ 49,90/mês* e *zero comissão*. Com um único evento, ela já se paga.
+No *Eventos Conecta* é diferente: assinatura fixa de *R$ 99,90/mês* e *zero comissão*. Com um único evento, ela já se paga.
 
 O que você ganha:
 🔎 Perfil no catálogo e no Google da sua cidade
@@ -75,7 +75,7 @@ Oi, [nome]! Tudo bem? Aqui é o Thiago, chef e criador do Eventos Conecta.
 
 Estou chamando profissionais de confiança da região para a plataforma. Lá o cliente pede orçamento de graça, você recebe o pedido no radar e manda a sua proposta.
 
-O melhor: *não tem comissão*. É uma assinatura fixa de R$ 49,90 por mês e o valor do serviço é 100% seu. Te mando o folheto com tudo 👇
+O melhor: *não tem comissão*. É uma assinatura fixa de R$ 99,90 por mês e o valor do serviço é 100% seu. Te mando o folheto com tudo 👇
 
 Quer que eu te ajude no cadastro?
 ```
@@ -87,9 +87,9 @@ Quer que eu te ajude no cadastro?
 
 **Feed 01: preço**
 ```
-Receba pedidos de clientes por R$ 49,90/mês. 💰
+Receba pedidos de clientes por R$ 99,90/mês. 💰
 
-Menos de R$ 1,67 por dia, e zero comissão sobre os seus serviços. Radar de pedidos, calculadoras, contrato automático e muito mais.
+Menos de R$ 3,33 por dia, e zero comissão sobre os seus serviços. Radar de pedidos, calculadoras, contrato automático e muito mais.
 
 🔗 Assine: eventosconecta.com.br/trabalhe-como
 
@@ -98,7 +98,7 @@ Menos de R$ 1,67 por dia, e zero comissão sobre os seus serviços. Radar de ped
 
 **Feed 02: vantagens**
 ```
-Tudo isso por R$ 49,90/mês 👇
+Tudo isso por R$ 99,90/mês 👇
 
 🔎 Perfil no catálogo e no Google
 📡 Radar de pedidos da sua região
@@ -118,7 +118,7 @@ Salve para lembrar! 📌 🔗 eventosconecta.com.br
 ```
 Comissão come o seu lucro. Assinatura, não. 📉➡️📈
 
-Exemplo: com 15% de comissão, um evento de R$ 2.000 deixa R$ 300 na plataforma. No Eventos Conecta, a comissão é R$ 0: você paga só R$ 49,90 por mês e o resto é seu.
+Exemplo: com 15% de comissão, um evento de R$ 2.000 deixa R$ 300 na plataforma. No Eventos Conecta, a comissão é R$ 0: você paga só R$ 99,90 por mês e o resto é seu.
 
 🔗 eventosconecta.com.br/trabalhe-como
 
@@ -128,7 +128,7 @@ Exemplo: com 15% de comissão, um evento de R$ 2.000 deixa R$ 300 na plataforma.
 
 **Vídeo `video-assinatura.mp4`**
 ```
-Quanto a comissão leva do seu evento? 🤔 No Eventos Conecta: R$ 49,90/mês e 100% do valor é seu. Link na bio!
+Quanto a comissão leva do seu evento? 🤔 No Eventos Conecta: R$ 99,90/mês e 100% do valor é seu. Link na bio!
 #freela #eventos #chef #garcom #barman #semcomissao #campinas
 ```
 
@@ -140,7 +140,7 @@ Quanto a comissão leva do seu evento? 🤔 No Eventos Conecta: R$ 49,90/mês e 
 
 1. *(Olhando para a câmera)* "Se você trabalha com eventos, presta atenção nessa conta."
 2. "Num evento de 2 mil reais, uma comissão de 15% leva 300 reais seus."
-3. "No Eventos Conecta não tem comissão. Você paga 49,90 por mês, e o valor do evento é 100% seu."
+3. "No Eventos Conecta não tem comissão. Você paga 99,90 por mês, e o valor do evento é 100% seu."
 4. *(Mostrando o celular com o painel)* "Você recebe os pedidos da sua região, monta a proposta com as calculadoras, e o contrato sai sozinho."
 5. "Sou chef e criei a plataforma pensando em quem vive de eventos. Link na bio."
 
