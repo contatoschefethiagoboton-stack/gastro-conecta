@@ -12,6 +12,7 @@ Site: **eventosconecta.com.br** · WhatsApp: **(19) 99398-4529** · Campinas e r
 | `whatsapp/` | 1080×1080 | Grupos de WhatsApp e Facebook (01 clientes, 02 e 03 profissionais) |
 | `facebook/capa-pagina.png` | 1640×624 | Capa da página do Facebook |
 | `reels-tiktok/` | 1080×1920, 14 s | Reels, TikTok, Shorts e Status (cliente, profissional e lista de compras). As imagens `-capa` servem de capa do vídeo |
+| `assinatura/` | vários | **Venda da assinatura para profissionais**: imagens, vídeo, folheto em PDF e textos em `assinatura/TEXTOS-ASSINATURA.md` |
 
 **Dica para os vídeos:** os vídeos estão sem som. Ao postar no Reels ou TikTok, adicione uma **música em alta pelo próprio aplicativo**. Assim não há problema de direitos autorais e o alcance aumenta.
 
