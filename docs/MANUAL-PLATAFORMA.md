@@ -1,4 +1,4 @@
-# Manual da plataforma GastroConecta
+# Manual da plataforma Eventos Conecta
 
 **Versão do manual:** 2.0 — versão independente (Render)
 **Idioma:** Português do Brasil

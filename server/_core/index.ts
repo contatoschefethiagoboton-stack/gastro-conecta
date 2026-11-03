@@ -14,6 +14,7 @@ import { registerSubscriptionRoutes, startBillingScheduler } from "../gastro/sub
 import { registerGrowthRoutes } from "../gastro/growth";
 import { registerEngageRoutes } from "../gastro/engage";
 import { registerPasswordRoutes } from "../gastro/password";
+import { robotsTxt, sitemapXml } from "../publicSeo";
 
 async function startServer() {
   const app = express();
@@ -22,10 +23,25 @@ async function startServer() {
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
   await bootstrapDatabase();
+  // SEO: um único endereço oficial. Com GASTRO_PUBLIC_ORIGIN definido (ex.: https://eventosconecta.com.br),
+  // visitas pelo endereço do Render ou pelo "www" são redirecionadas (301) para o domínio oficial.
+  app.use((req, res, next) => {
+    const origin = process.env.GASTRO_PUBLIC_ORIGIN?.trim();
+    if (!origin || !/^https:\/\//.test(origin) || (req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api/")) return next();
+    const official = new URL(origin).host;
+    const host = String(req.headers.host ?? "").toLowerCase();
+    if (host && host !== official && (host.endsWith(".onrender.com") || host === `www.${official}`)) return res.redirect(301, new URL(req.originalUrl, origin).href);
+    next();
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/api/health", (_req, res) => res.json({ status: "ok", database: process.env.DATABASE_URL ? (dbState.ready ? "ok" : "error") : "missing" }));
+  app.get("/robots.txt", (_req, res) => { res.set("Cache-Control", "public, max-age=3600").type("text/plain").send(robotsTxt()); });
+  app.get("/sitemap.xml", async (_req, res) => {
+    try { res.set("Cache-Control", "public, max-age=3600").type("application/xml").send(await sitemapXml()); }
+    catch { res.status(500).type("text/plain").send("sitemap indisponível"); }
+  });
   app.get("/api/platform/config.js", (_req, res) => {
     res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
   });

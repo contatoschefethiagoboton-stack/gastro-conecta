@@ -1,7 +1,7 @@
-// Identificação dos pagamentos do GastroConecta no Mercado Pago.
+// Identificação dos pagamentos do Eventos Conecta no Mercado Pago.
 // A mesma conta do Mercado Pago recebe de outras plataformas, então cada cobrança leva:
 //  - "Referência externa" (external_reference): GASTROCONECTA-<TIPO>-U<id do assinante>[-P<nº do pagamento>]
-//  - Descrição: "GastroConecta · <tipo> · <código do assinante> · <nome>"
+//  - Descrição: "Eventos Conecta · <tipo> · <código do assinante> · <nome>"
 //  - metadata: { plataforma: "gastroconecta", assinante_id, codigo_assinante, tipo }
 // Assim, no extrato/relatório do Mercado Pago, dá para filtrar por "GASTROCONECTA" e saber quem pagou.
 
@@ -15,7 +15,7 @@ export const subscriberCode = (userId: number) => `GC-${String(Math.max(0, Math.
 export const paymentReference = (kind: PaymentKind, userId: number, rowId?: number) => `${PLATFORM_TAG}-${kind}-U${userId}${rowId ? `-P${rowId}` : ''}`;
 
 export function paymentDescription(kind: PaymentKind, userId: number, name: string, extra = ''): string {
-  return ['GastroConecta', PAYMENT_KIND_LABELS[kind] + (extra ? ` ${extra}` : ''), subscriberCode(userId), name.trim()].filter(Boolean).join(' · ').slice(0, 200);
+  return ['Eventos Conecta', PAYMENT_KIND_LABELS[kind] + (extra ? ` ${extra}` : ''), subscriberCode(userId), name.trim()].filter(Boolean).join(' · ').slice(0, 200);
 }
 
 /** Lê a referência (formato novo e o antigo "gcsub:<id>:<pagamento>" / "gcsub-auto:<id>"). */

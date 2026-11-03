@@ -143,7 +143,7 @@ export default function Account() {
     <main className="account-page">
       <section className="account-shell" aria-labelledby="account-title">
         <div className="account-intro">
-          <span className="account-kicker">GastroConecta</span>
+          <span className="account-kicker">Eventos Conecta</span>
           <h1 id="account-title">Uma boa conexão começa pela sua mesa.</h1>
           <p>
             Crie sua conta para organizar experiências, encontrar profissionais e manter tudo o que importa em um só lugar.
@@ -201,7 +201,7 @@ export default function Account() {
           ) : (<>
           <div className="account-heading">
             <span className="account-eyebrow">{mode === "login" ? "Que bom ter você aqui" : "Comece sua jornada"}</span>
-            <h2>{mode === "login" ? "Entre na sua conta" : "Crie seu acesso GastroConecta"}</h2>
+            <h2>{mode === "login" ? "Entre na sua conta" : "Crie seu acesso Eventos Conecta"}</h2>
             <p>
               {mode === "login"
                 ? "Clientes e profissionais entram por aqui."

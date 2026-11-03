@@ -129,7 +129,7 @@ export default function Copilot() {
   return (
     <div className="copilot-root">
       {isOpen && (
-        <section className="copilot-panel" aria-label="Copilot GastroConecta">
+        <section className="copilot-panel" aria-label="Copilot Eventos Conecta">
           <header className="copilot-header">
             <div className="copilot-title">
               <span className="copilot-icon"><Bot size={17} aria-hidden="true" /></span>

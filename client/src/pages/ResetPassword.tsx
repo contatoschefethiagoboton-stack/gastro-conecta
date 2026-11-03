@@ -22,7 +22,7 @@ export default function ResetPassword() {
     catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível redefinir.'); }
     finally { setBusy(false); }
   };
-  return <main className="account-page"><section className="account-shell"><div className="account-intro"><span className="account-kicker">GastroConecta</span><h1>Crie uma nova senha.</h1><p>Por segurança, todas as sessões abertas serão encerradas.</p></div>
+  return <main className="account-page"><section className="account-shell"><div className="account-intro"><span className="account-kicker">Eventos Conecta</span><h1>Crie uma nova senha.</h1><p>Por segurança, todas as sessões abertas serão encerradas.</p></div>
     <div className="account-card">{done ? <div className="account-heading"><span className="account-eyebrow"><Check size={14}/> Pronto</span><h2>Senha atualizada</h2><p>Entre com a nova senha.</p><Link href="/conta" className="account-submit"><ArrowRight size={18}/> Ir para o login</Link></div>
       : !token ? <div className="account-heading"><h2>Link inválido</h2><p>Peça um novo link em “Esqueci minha senha”.</p><Link href="/conta" className="account-submit"><ArrowRight size={18}/> Voltar</Link></div>
       : <form className="account-form" onSubmit={submit}>

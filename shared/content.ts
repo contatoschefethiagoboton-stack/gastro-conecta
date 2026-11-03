@@ -52,7 +52,7 @@ export const contentFields: ContentField[] = [
   "group": "Contato e marca",
   "label": "Nome no rodapé (razão social ou marca)",
   "type": "text",
-  "default": "GastroConecta"
+  "default": "Eventos Conecta"
  },
  {
   "key": "whatsapp.enabled",
@@ -64,7 +64,7 @@ export const contentFields: ContentField[] = [
  {
   "key": "growth.googleReviewUrl",
   "group": "Contato e marca",
-  "label": "Link para avaliar a GastroConecta no Google (exibido após cada avaliação)",
+  "label": "Link para avaliar a Eventos Conecta no Google (exibido após cada avaliação)",
   "type": "url",
   "default": ""
  },
@@ -241,7 +241,7 @@ export const contentFields: ContentField[] = [
   "group": "Quem somos",
   "label": "Primeiro parágrafo (destaque)",
   "type": "textarea",
-  "default": "O GastroConecta nasceu de uma ideia simples: aproximar quem ama receber de quem faz da gastronomia a sua profissão."
+  "default": "O Eventos Conecta nasceu de uma ideia simples: aproximar quem ama receber de quem faz da gastronomia a sua profissão."
  },
  {
   "key": "about.body",
@@ -332,28 +332,42 @@ export const contentFields: ContentField[] = [
   "group": "Textos legais",
   "label": "Termos da plataforma (## no início da linha = subtítulo)",
   "type": "textarea",
-  "default": "## Intermediação e contratação\n\nO GastroConecta conecta clientes e profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem). O serviço é prestado pelo profissional contratado, nas condições da proposta aceita e do contrato gerado pela plataforma. A GastroConecta não é parte do contrato entre cliente e profissional.\n\n## Planos e cobrança\n\nClientes não pagam nada. Profissionais pagam uma assinatura mensal fixa, cobrada via Pix pelo Mercado Pago, e recebem 100% do valor negociado com o cliente, sem comissão. A renovação automática é tentada 5 dias antes do vencimento; se falhar, o Pix manual fica disponível no painel. Sem pagamento até o vencimento, o perfil fica oculto do catálogo e o envio de propostas é bloqueado até a renovação.\n\n## Propostas, contratos e pagamentos\n\nAo aceitar uma proposta, o cliente recebe o WhatsApp do profissional e o contrato em PDF é gerado com os dados das duas partes, o escopo (só mão de obra ou serviço completo), data, horário, local, valor e condições de pagamento. O pagamento do serviço é feito diretamente ao profissional.\n\n## Avaliações e uso responsável\n\nDepois de cada serviço concluído, cliente e profissional avaliam um ao outro (nota de 1 a 5 e comentário). Se a avaliação ficar pendente por mais de 24 horas, novos pedidos, propostas e aceites ficam bloqueados até que ela seja feita. Não publique dados pessoais de terceiros ou conteúdos ofensivos.\n\n## Catálogo demonstrativo\n\nPortfólios identificados como ilustrativos, seus nomes, imagens e preços não representam profissionais contratáveis."
+  "default": "## Intermediação e contratação\n\nO Eventos Conecta conecta clientes e profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem). O serviço é prestado pelo profissional contratado, nas condições da proposta aceita e do contrato gerado pela plataforma. A Eventos Conecta não é parte do contrato entre cliente e profissional.\n\n## Planos e cobrança\n\nClientes não pagam nada. Profissionais pagam uma assinatura mensal fixa, cobrada via Pix pelo Mercado Pago, e recebem 100% do valor negociado com o cliente, sem comissão. A renovação automática é tentada 5 dias antes do vencimento; se falhar, o Pix manual fica disponível no painel. Sem pagamento até o vencimento, o perfil fica oculto do catálogo e o envio de propostas é bloqueado até a renovação.\n\n## Propostas, contratos e pagamentos\n\nAo aceitar uma proposta, o cliente recebe o WhatsApp do profissional e o contrato em PDF é gerado com os dados das duas partes, o escopo (só mão de obra ou serviço completo), data, horário, local, valor e condições de pagamento. O pagamento do serviço é feito diretamente ao profissional.\n\n## Avaliações e uso responsável\n\nDepois de cada serviço concluído, cliente e profissional avaliam um ao outro (nota de 1 a 5 e comentário). Se a avaliação ficar pendente por mais de 24 horas, novos pedidos, propostas e aceites ficam bloqueados até que ela seja feita. Não publique dados pessoais de terceiros ou conteúdos ofensivos.\n\n## Catálogo demonstrativo\n\nPortfólios identificados como ilustrativos, seus nomes, imagens e preços não representam profissionais contratáveis."
  },
  {
   "key": "legal.privacy",
   "group": "Textos legais",
   "label": "Segurança e privacidade (## no início da linha = subtítulo)",
   "type": "textarea",
-  "default": "## Dados da sua conta\n\nSão utilizados nome, e-mail, cidade e informações fornecidas em perfis, pedidos, propostas e avaliações. A senha é armazenada em formato derivado criptograficamente, não em texto aberto. Você pode trocar a senha a qualquer momento no painel ou pedir um link em “Esqueci minha senha”.\n\n## Cadastro de profissionais\n\nProfissionais informam CPF ou CNPJ, nome ou razão social, telefone, endereço, logo, fotos de trabalhos, foto do rosto e dados bancários/Pix. O catálogo mostra apenas nome comercial, cidade, serviços, fotos de trabalhos e avaliações. Documento, endereço, rosto e banco/Pix são vistos apenas pelo titular, pela administração e, no contrato, pelo cliente que aceitou a proposta.\n\n## Dados do cliente para o contrato\n\nPara aceitar uma proposta, o cliente informa nome completo, CPF, endereço, telefone e foto do rosto. Esses dados entram no contrato em PDF e ficam visíveis ao profissional contratado e à administração.\n\n## Foto do rosto (antifraude)\n\nA foto do rosto serve para a administração conferir a identidade de quem usa a plataforma. É um arquivo privado, não aparece no site e não é usada para reconhecimento facial automático.\n\n## Pagamentos\n\nAs assinaturas dos profissionais são processadas pelo Mercado Pago; a GastroConecta não armazena dados de cartão. Os pagamentos dos serviços são feitos diretamente entre cliente e profissional.\n\n## Direitos e responsabilidades\n\nSolicitações de acesso, correção ou exclusão de dados podem ser feitas pelo Fale Conosco. A exclusão administrativa é lógica, mantendo registros de auditoria e contratos exigidos por lei."
+  "default": "## Dados da sua conta\n\nSão utilizados nome, e-mail, cidade e informações fornecidas em perfis, pedidos, propostas e avaliações. A senha é armazenada em formato derivado criptograficamente, não em texto aberto. Você pode trocar a senha a qualquer momento no painel ou pedir um link em “Esqueci minha senha”.\n\n## Cadastro de profissionais\n\nProfissionais informam CPF ou CNPJ, nome ou razão social, telefone, endereço, logo, fotos de trabalhos, foto do rosto e dados bancários/Pix. O catálogo mostra apenas nome comercial, cidade, serviços, fotos de trabalhos e avaliações. Documento, endereço, rosto e banco/Pix são vistos apenas pelo titular, pela administração e, no contrato, pelo cliente que aceitou a proposta.\n\n## Dados do cliente para o contrato\n\nPara aceitar uma proposta, o cliente informa nome completo, CPF, endereço, telefone e foto do rosto. Esses dados entram no contrato em PDF e ficam visíveis ao profissional contratado e à administração.\n\n## Foto do rosto (antifraude)\n\nA foto do rosto serve para a administração conferir a identidade de quem usa a plataforma. É um arquivo privado, não aparece no site e não é usada para reconhecimento facial automático.\n\n## Pagamentos\n\nAs assinaturas dos profissionais são processadas pelo Mercado Pago; a Eventos Conecta não armazena dados de cartão. Os pagamentos dos serviços são feitos diretamente entre cliente e profissional.\n\n## Direitos e responsabilidades\n\nSolicitações de acesso, correção ou exclusão de dados podem ser feitas pelo Fale Conosco. A exclusão administrativa é lógica, mantendo registros de auditoria e contratos exigidos por lei."
  },
  {
   "key": "seo.homeTitle",
   "group": "SEO (Google)",
   "label": "Título da página inicial no Google",
   "type": "text",
-  "default": "GastroConecta | Chefs e profissionais para o seu evento"
+  "default": "Eventos Conecta | Chef, garçom, barman e buffet para eventos"
  },
  {
   "key": "seo.homeDescription",
   "group": "SEO (Google)",
   "label": "Descrição da página inicial no Google",
   "type": "textarea",
-  "default": "Encontre chefs, personal chefs, garçons, barmans, limpeza e jardinagem na sua região. Cadastro gratuito para clientes e propostas personalizadas."
+  "default": "Contrate chef, personal chef, buffet, garçom, barman, limpeza e jardinagem para o seu evento. Grátis para quem contrata: receba propostas de profissionais da sua região."
+ },
+ {
+  "key": "seo.cities",
+  "group": "SEO (Google)",
+  "label": "Cidades com página própria no Google (uma por linha, no formato Cidade/UF)",
+  "type": "textarea",
+  "default": "Campinas/SP\nValinhos/SP\nVinhedo/SP\nIndaiatuba/SP\nSumaré/SP\nHortolândia/SP\nPaulínia/SP\nAmericana/SP\nJundiaí/SP\nItatiba/SP\nJaguariúna/SP\nSanta Bárbara d'Oeste/SP\nNova Odessa/SP\nLouveira/SP\nMonte Mor/SP\nHolambra/SP\nPiracicaba/SP\nAtibaia/SP"
+ },
+ {
+  "key": "seo.googleVerification",
+  "group": "SEO (Google)",
+  "label": "Código de verificação do Google Search Console (só o código do content=\"…\")",
+  "type": "text",
+  "default": ""
  },
  {
   "key": "level.altoMinAverage",

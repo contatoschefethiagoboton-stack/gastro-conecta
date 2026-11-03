@@ -64,7 +64,7 @@ export default function AdminConsole() {
     <div className={`adm-layout ${navOpen ? 'nav-open' : ''}`}>
       <button type="button" className="adm-backdrop" aria-label="Fechar menu" onClick={() => setNavOpen(false)}/>
       <aside className="adm-sidebar">
-        <div className="adm-brand"><span>G</span><div><strong>GastroConecta</strong><small>Administração</small></div><button type="button" className="adm-close" onClick={() => setNavOpen(false)} aria-label="Fechar"><X size={18}/></button></div>
+        <div className="adm-brand"><span>E</span><div><strong>Eventos Conecta</strong><small>Administração</small></div><button type="button" className="adm-close" onClick={() => setNavOpen(false)} aria-label="Fechar"><X size={18}/></button></div>
         <nav>{NAV.map(item => { const Icon = item.icon; return <button key={item.id} type="button" className={section === item.id ? 'is-active' : ''} onClick={() => go(item.id)}><Icon size={17}/><span>{item.label}</span>{section === item.id && <ChevronRight size={15}/>}</button>; })}</nav>
         <div className="adm-sidebar-foot"><a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Ver o site</a><button type="button" onClick={logout}><LogOut size={15}/> Sair</button></div>
       </aside>
@@ -557,7 +557,7 @@ function PaymentsSection() {
     const rows = [['Data', 'Código do assinante', 'Nome', 'E-mail', 'Tipo', 'Valor (R$)', 'Situação', 'ID no Mercado Pago', 'Referência externa'], ...list.map(p => [new Date(p.createdAt).toLocaleString('pt-BR'), p.code, p.name, p.email, p.kind, (p.amountCents / 100).toFixed(2).replace('.', ','), PAY_STATUS[p.status] ?? p.status, p.mpPaymentId, p.reference])];
     const text = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a'); a.href = url; a.download = `pagamentos-gastroconecta-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `pagamentos-eventosconecta-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
   const keyState = (k: { configured: boolean; source: string; hint: string }) => k.configured ? <span className="adm-tag adm-ok">Cadastrada {k.hint}{k.source === 'render' ? ' (variável do Render)' : ''}</span> : <span className="adm-tag adm-warn">Não cadastrada</span>;
   return <div className="adm-stack">
@@ -578,10 +578,10 @@ function PaymentsSection() {
       </div>}
     </Card>
     <Card title="Como achar os pagamentos do site no extrato">
-      <p className="adm-muted">Toda cobrança do GastroConecta vai para o Mercado Pago com:</p>
+      <p className="adm-muted">Toda cobrança do Eventos Conecta vai para o Mercado Pago com:</p>
       <ul className="adm-help-list">
         <li><strong>Referência externa</strong> começando com <code>GASTROCONECTA-</code>, por exemplo <code>GASTROCONECTA-ASSINATURA-U12-P45</code> (U12 = assinante nº 12; P45 = pagamento nº 45 desta lista) ou <code>GASTROCONECTA-PROMOCAO-U12-P46</code>.</li>
-        <li><strong>Descrição</strong> no formato <code>GastroConecta · Assinatura mensal · GC-00012 · Nome do profissional</code>.</li>
+        <li><strong>Descrição</strong> no formato <code>Eventos Conecta · Assinatura mensal · GC-00012 · Nome do profissional</code>.</li>
         <li>No relatório do Mercado Pago (Relatórios → Vendas/Liberações), filtre ou procure por <code>GASTROCONECTA</code>: o que não tiver essa marca veio das suas outras plataformas.</li>
       </ul>
     </Card>
@@ -691,7 +691,7 @@ function ContractsSection() {
       const response = await fetch(`/api/gastro/contracts/${id}/pdf`, { credentials: 'include' });
       if (!response.ok) throw new Error('Não foi possível baixar o contrato.');
       const url = URL.createObjectURL(await response.blob());
-      const a = document.createElement('a'); a.href = url; a.download = `contrato-gastroconecta-${id}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+      const a = document.createElement('a'); a.href = url; a.download = `contrato-eventosconecta-${id}.pdf`; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { toast.error(errText(e)); }
   };

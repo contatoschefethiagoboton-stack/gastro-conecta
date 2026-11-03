@@ -213,7 +213,7 @@ export async function notifyUser(userId: number, input: NotifyInput) {
     if (input.whatsapp !== false) await sendWhatsapp(await userPhone(userId), input.title, input.body, link);
     if (input.email) {
       const rows = await query<any[]>("SELECT email FROM users WHERE id = ? LIMIT 1", [userId]);
-      if (rows[0]?.email) await sendMail(String(rows[0].email), input.title, `<p>${escapeHtml(input.body)}</p><p><a href="${link}">Abrir no GastroConecta</a></p>`);
+      if (rows[0]?.email) await sendMail(String(rows[0].email), input.title, `<p>${escapeHtml(input.body)}</p><p><a href="${link}">Abrir no Eventos Conecta</a></p>`);
     }
   } catch (error) {
     console.warn("[Notificação] falhou:", error instanceof Error ? error.message : error);
@@ -229,7 +229,7 @@ export async function notifyAdmin(input: NotifyInput) {
     const url = `${origin}${path}`;
     if (settings.adminEmailOn) {
       const list = settings.adminEmails || process.env.ADMIN_EMAIL || (await query<any[]>("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL LIMIT 3")).map(r => r.email).join(",");
-      for (const to of list.split(/[,;\s]+/).filter(e => /@/.test(e)).slice(0, 5)) await sendMail(to, `[GastroConecta] ${input.title}`, `<p>${escapeHtml(input.body)}</p><p><a href="${url}">Abrir o painel</a></p>`);
+      for (const to of list.split(/[,;\s]+/).filter(e => /@/.test(e)).slice(0, 5)) await sendMail(to, `[Eventos Conecta] ${input.title}`, `<p>${escapeHtml(input.body)}</p><p><a href="${url}">Abrir o painel</a></p>`);
     }
     if (settings.adminWhatsappOn && whatsappConfigured()) {
       const content = await getSiteContent();

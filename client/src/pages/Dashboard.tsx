@@ -73,7 +73,7 @@ export default function Dashboard() {
   };
 
   if (me.isLoading) return <main className="dash-page"><div className="dash-auth-loading"><Loader2 className="dash-spinner" size={24}/> Verificando sua sessão…</div></main>;
-  if (!user) return <main className="dash-page dash-logged-out"><section className="dash-login-card"><span className="dash-kicker">GastroConecta / painel</span><div className="dash-empty-mark"><LayoutDashboard size={22}/></div><h1>Seu painel começa com uma conexão.</h1><p>Entre na sua conta para acessar pedidos, propostas e contratos.</p><Link className="dash-primary-button" href="/conta">Entrar <ChevronRight size={17}/></Link></section></main>;
+  if (!user) return <main className="dash-page dash-logged-out"><section className="dash-login-card"><span className="dash-kicker">Eventos Conecta / painel</span><div className="dash-empty-mark"><LayoutDashboard size={22}/></div><h1>Seu painel começa com uma conexão.</h1><p>Entre na sua conta para acessar pedidos, propostas e contratos.</p><Link className="dash-primary-button" href="/conta">Entrar <ChevronRight size={17}/></Link></section></main>;
   if (user.accountType === "provider" && !user.profileComplete) return <main className="dash-page ob-page"><div className="ob-page-top"><button type="button" className="ob-link" onClick={signOut}><LogOut size={15}/> Sair</button></div><Onboarding mode="required" onDone={() => void me.refetch()}/></main>;
 
   const isProvider = user.accountType === "provider";
