@@ -5,7 +5,8 @@ import { z } from "zod";
 import { HttpError } from "@shared/_core/errors";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { dbConfigured, execute, query, withTransaction } from "./db";
-import { getUserByEmail, hashPassword, isOwner, passwordIsStrong, requireAuth, setGcSession, tokenHash, verifyPassword } from "./auth";
+import { requireStaff } from "./staff";
+import { getUserByEmail, hashPassword, passwordIsStrong, requireAuth, setGcSession, tokenHash, verifyPassword } from "./auth";
 
 const router = Router();
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -68,7 +69,7 @@ router.post("/password/forgot", wrap(async (req, res) => {
   limit(`forgot:${clientIp(req)}`, 5, 15 * 60_000);
   limit(`forgot-mail:${input.email.toLowerCase()}`, 3, 60 * 60_000);
   const found = await getUserByEmail(input.email);
-  if (found && found.user.role !== "admin" && !["deleted", "blocked"].includes(found.profile.status)) {
+  if (found && !["deleted", "blocked", "suspended"].includes(found.profile.status)) {
     const link = await createResetLink(req, found.user.id);
     const sent = await sendMail(found.user.email ?? input.email, "Redefinição de senha - Eventos Conecta", `<p>Olá, ${String(found.user.name ?? "").replace(/[<>&]/g, "")}.</p><p>Para criar uma nova senha, acesse o link abaixo (válido por 1 hora):</p><p><a href="${link}">${link}</a></p><p>Se você não pediu a troca, ignore este e-mail.</p>`);
     if (!sent && process.env.NODE_ENV !== "production") console.log(`[Eventos Conecta] Link de redefinição (desenvolvimento) para ${found.user.email}: ${link}`);
@@ -88,6 +89,8 @@ router.post("/password/reset", wrap(async (req, res) => {
     await connection.execute("UPDATE gc_password_resets SET usedAt = CURRENT_TIMESTAMP WHERE id = ?", [rows[0].id]);
     await connection.execute("UPDATE account_profiles SET passwordHash = ? WHERE userId = ?", [passwordHash, rows[0].userId]);
     await connection.execute("DELETE FROM gc_sessions WHERE userId = ?", [rows[0].userId]);
+    // Quem tinha senha temporária e redefiniu pelo e-mail já criou a própria senha.
+    await connection.execute("UPDATE gc_staff SET mustChangePassword = 0 WHERE userId = ?", [rows[0].userId]);
     return Number(rows[0].userId);
   });
   await execute("INSERT INTO gastro_audit_logs (action, details, actorId, targetId) VALUES ('account.password_reset', '{}', ?, ?)", [userId, userId]);
@@ -108,8 +111,7 @@ router.post("/password/change", wrap(async (req, res) => {
 
 /** A administração gera o link para quem pediu ajuda pelo Fale Conosco. */
 router.post("/admin/users/:id/reset-link", wrap(async (req, res) => {
-  const context = await requireAuth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
+  const context = await requireStaff(req);
   const id = parse(z.coerce.number().int().positive(), req.params.id);
   const target = await query<any[]>("SELECT id, role FROM users WHERE id = ? LIMIT 1", [id]);
   if (!target[0] || target[0].role === "admin") throw new HttpError(404, "Usuário não encontrado");

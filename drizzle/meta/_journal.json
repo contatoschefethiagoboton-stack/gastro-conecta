@@ -64,6 +64,13 @@
       "when": 1792252560671,
       "tag": "0008_notifications_marketing",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1792252560672,
+      "tag": "0009_staff_shopping_list",
+      "breakpoints": true
     }
   ]
 }

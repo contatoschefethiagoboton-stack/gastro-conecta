@@ -370,6 +370,13 @@ export const contentFields: ContentField[] = [
   "default": ""
  },
  {
+  "key": "price.shoppingList",
+  "group": "Níveis e promoções",
+  "label": "Valor sugerido da lista de compras, cobrado pelo profissional do cliente dentro do orçamento (R$). O profissional pode mudar ou dar como cortesia",
+  "type": "text",
+  "default": "50"
+ },
+ {
   "key": "level.altoMinAverage",
   "group": "Níveis e promoções",
   "label": "Nível ALTO: média mínima das avaliações (1 a 5)",

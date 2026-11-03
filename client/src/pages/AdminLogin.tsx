@@ -46,6 +46,7 @@ export default function AdminLogin() {
         <label className="ob-field"><span>Senha</span><input required type="password" value={form.password} onChange={e => set('password', e.target.value)} autoComplete={status.setupRequired ? 'new-password' : 'current-password'}/></label>
         {status.setupRequired && <p className="adm-hint">Mínimo de 10 caracteres, com maiúscula, minúscula, número e símbolo.</p>}
         <button className="ob-btn ob-btn-primary adm-full" disabled={busy} type="submit">{busy ? <Loader2 className="ob-spin" size={18}/> : <ShieldCheck size={18}/>} {status.setupRequired ? 'Criar e entrar' : 'Entrar'}</button>
+        {!status.setupRequired && <Link href="/conta?esqueci=1" className="adm-back">Esqueci minha senha</Link>}
       </>}
       <Link href="/" className="adm-back">← Voltar ao site</Link>
     </form>

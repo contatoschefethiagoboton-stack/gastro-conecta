@@ -228,7 +228,7 @@ export async function notifyAdmin(input: NotifyInput) {
     await execute("INSERT INTO gc_notifications (audience, userId, type, title, body, link) VALUES ('admin', NULL, ?, ?, ?, ?)", [input.type, input.title.slice(0, 200), input.body, path]);
     const url = `${origin}${path}`;
     if (settings.adminEmailOn) {
-      const list = settings.adminEmails || process.env.ADMIN_EMAIL || (await query<any[]>("SELECT email FROM users WHERE role = 'admin' AND email IS NOT NULL LIMIT 3")).map(r => r.email).join(",");
+      const list = settings.adminEmails || process.env.ADMIN_EMAIL || (await query<any[]>("SELECT u.email FROM users u LEFT JOIN gc_staff s ON s.userId = u.id WHERE u.role = 'admin' AND u.email IS NOT NULL AND (s.staffRole IS NULL OR s.staffRole IN ('owner', 'admin')) ORDER BY u.id LIMIT 3")).map(r => r.email).join(",");
       for (const to of list.split(/[,;\s]+/).filter(e => /@/.test(e)).slice(0, 5)) await sendMail(to, `[Eventos Conecta] ${input.title}`, `<p>${escapeHtml(input.body)}</p><p><a href="${url}">Abrir o painel</a></p>`);
     }
     if (settings.adminWhatsappOn && whatsappConfigured()) {

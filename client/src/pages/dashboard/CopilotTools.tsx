@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, BadgePercent, Calculator, ChefHat, Leaf, Loader2, Minus, Plus, RotateCcw, Send, Sparkles, Trash2, TrendingUp, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, BadgePercent, Calculator, ChefHat, ClipboardList, Info, Leaf, Loader2, Minus, Plus, RotateCcw, Send, Sparkles, Trash2, TrendingUp, UtensilsCrossed } from "lucide-react";
 import { toast } from "sonner";
 import {
-  calculateMealPrep, CLEANING_RATES, estimateAreaService, estimateBrigade, estimateIngredients, EVENT_STYLES, GARDEN_RATES, itemsTotalCents, MEAL_PREP_DEFAULTS, mealPrepInputFor,
+  calculateMealPrep, CLEANING_RATES, LABOR_ONLY_MEAL, estimateAreaService, estimateBrigade, estimateIngredients, EVENT_STYLES, GARDEN_RATES, itemsTotalCents, MEAL_PREP_DEFAULTS, mealPrepInputFor,
   profitability, staffTotalCents, styleForEventType, type EstimateItem, type EventStyle, type MealPrepInput, type StaffItem,
 } from "@shared/copilot";
 import { SCOPE_LABELS, type ContractScope, type RequestCategory } from "@shared/services";
+import { SHOPPING_LIST_NOTICE, SHOPPING_UNITS, shoppingListPriceCents, type ShoppingItem } from "@shared/shoppingList";
+import { useSite } from "@/lib/site";
 import { categoryLabel, centsInput, formatDate, formatMoney, parseCents, post, useAction, type EventItem } from "./common";
 
 /** Campo numérico curto usado nas tabelas editáveis. */
 function Num({ value, onChange, step = "1", label }: { value: number; onChange: (v: number) => void; step?: string; label: string }) {
-  return <input className="cp-num" type="number" min="0" step={step} value={Number.isFinite(value) ? value : 0} aria-label={label} onChange={e => onChange(Math.max(0, Number(e.target.value) || 0))}/>;
+  // Texto próprio: dá para apagar tudo e digitar de novo (vazio conta como 0 só no cálculo).
+  const [text, setText] = useState(String(Number.isFinite(value) ? value : 0));
+  useEffect(() => { setText(current => (Number(current.replace(",", ".")) === value || (current === "" && value === 0) ? current : String(value))); }, [value]);
+  return <input className="cp-num" inputMode="decimal" value={text} aria-label={label} data-step={step} onChange={e => { const t = e.target.value.replace(/[^\d.,]/g, ""); setText(t); const n = Number(t.replace(",", ".")); onChange(Number.isFinite(n) ? Math.max(0, n) : 0); }}/>;
 }
 function MoneyInput({ cents, onChange, label }: { cents: number; onChange: (c: number) => void; label: string }) {
   const [text, setText] = useState(centsInput(cents));
@@ -26,7 +31,7 @@ export function initialEventCalc(guests: number, type: string, withAlcohol = tru
   return { style, withAlcohol, items: estimateIngredients(guests, style, withAlcohol), staff: estimateBrigade(guests, style, withAlcohol) };
 }
 
-export function EventEstimator({ guests, value, onChange }: { guests: number; value: EventCalc; onChange: (v: EventCalc) => void }) {
+export function EventEstimator({ guests, value, onChange, laborOnly = false }: { guests: number; value: EventCalc; onChange: (v: EventCalc) => void; laborOnly?: boolean }) {
   const regenerate = (style: EventStyle, withAlcohol: boolean) => onChange({ style, withAlcohol, items: estimateIngredients(guests, style, withAlcohol), staff: estimateBrigade(guests, style, withAlcohol) });
   const setItem = (i: number, patch: Partial<EstimateItem>) => onChange({ ...value, items: value.items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) });
   const setStaff = (i: number, patch: Partial<StaffItem>) => onChange({ ...value, staff: value.staff.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) });
@@ -36,24 +41,25 @@ export function EventEstimator({ guests, value, onChange }: { guests: number; va
       <label className="cp-check"><input type="checkbox" checked={value.withAlcohol} onChange={e => regenerate(value.style, e.target.checked)}/> Bebida alcoólica / bar</label>
       <button type="button" className="dash-small-button" onClick={() => regenerate(value.style, value.withAlcohol)}><Sparkles size={14}/> Recalcular sugestão</button>
     </div>
-    <h4 className="cp-title"><UtensilsCrossed size={16}/> Ingredientes e porções para {guests} convidado(s)</h4>
+    <h4 className="cp-title">{laborOnly ? <><ClipboardList size={16}/> Lista de compras para o cliente ({guests} convidado(s))</> : <><UtensilsCrossed size={16}/> Ingredientes e porções para {guests} convidado(s)</>}</h4>
+    {laborOnly && <p className="cp-labor-note"><Info size={14}/><span>Só mão de obra: estes itens <strong>não entram no valor</strong> da proposta. Ajuste as quantidades; o cliente recebe a lista em PDF.</span></p>}
     <div className="cp-table" role="table">
-      <div className="cp-tr cp-th" role="row"><span>Item</span><span>Qtd.</span><span>Un.</span><span>Custo/un. (R$)</span><span>Subtotal</span><span/></div>
-      {value.items.map((item, i) => <div className="cp-tr" role="row" key={`${item.key}-${i}`}>
+      <div className={`cp-tr cp-th${laborOnly ? " cp-list" : ""}`} role="row"><span>Item</span><span>Qtd.</span><span>Un.</span>{!laborOnly && <><span>Custo/un. (R$)</span><span>Subtotal</span></>}<span/></div>
+      {value.items.map((item, i) => <div className={`cp-tr${laborOnly ? " cp-list" : ""}`} role="row" key={`${item.key}-${i}`}>
         <input className="cp-name" value={item.name} aria-label="Item" onChange={e => setItem(i, { name: e.target.value })}/>
         <Num value={item.quantity} step="0.1" label={`Quantidade de ${item.name}`} onChange={v => setItem(i, { quantity: v })}/>
-        <select value={item.unit} aria-label="Unidade" onChange={e => setItem(i, { unit: e.target.value })}><option value="kg">kg</option><option value="L">L</option><option value="un">un</option></select>
-        <MoneyInput cents={item.unitCostCents} label={`Custo de ${item.name}`} onChange={c => setItem(i, { unitCostCents: c })}/>
-        <strong>{formatMoney(Math.round(item.quantity * item.unitCostCents))}</strong>
+        <select value={item.unit} aria-label="Unidade" onChange={e => setItem(i, { unit: e.target.value })}>{[...new Set([item.unit, ...SHOPPING_UNITS])].map(u => <option key={u} value={u}>{u}</option>)}</select>
+        {!laborOnly && <><MoneyInput cents={item.unitCostCents} label={`Custo de ${item.name}`} onChange={c => setItem(i, { unitCostCents: c })}/>
+        <strong>{formatMoney(Math.round(item.quantity * item.unitCostCents))}</strong></>}
         <button type="button" className="cp-icon" aria-label="Remover item" onClick={() => onChange({ ...value, items: value.items.filter((_, idx) => idx !== i) })}><Trash2 size={14}/></button>
       </div>)}
       <button type="button" className="dash-text-link" onClick={() => onChange({ ...value, items: [...value.items, { key: `extra-${Date.now()}`, name: "Novo item", quantity: 1, unit: "un", unitCostCents: 0 }] })}><Plus size={14}/> Adicionar item</button>
     </div>
-    <p className="cp-total">Total de ingredientes: <strong>{formatMoney(itemsTotalCents(value.items))}</strong></p>
+    {!laborOnly && <p className="cp-total">Total de ingredientes: <strong>{formatMoney(itemsTotalCents(value.items))}</strong></p>}
     <h4 className="cp-title"><ChefHat size={16}/> Brigada recomendada</h4>
     <div className="cp-table" role="table">
       <div className="cp-tr cp-th cp-staff" role="row"><span>Função</span><span>Pessoas</span><span>Diária (R$)</span><span>Subtotal</span><span/></div>
-      {value.staff.map((s, i) => <div className="cp-tr cp-staff" role="row" key={`${s.role}-${i}`}>
+      {value.staff.map((s, i) => <div className="cp-tr cp-staff" role="row" key={`staff-${i}`}>
         <input className="cp-name" value={s.role} aria-label="Função" onChange={e => setStaff(i, { role: e.target.value })}/>
         <Num value={s.count} label={`Pessoas em ${s.role}`} onChange={v => setStaff(i, { count: Math.round(v) })}/>
         <MoneyInput cents={s.dailyCents} label={`Diária de ${s.role}`} onChange={c => setStaff(i, { dailyCents: c })}/>
@@ -68,15 +74,15 @@ export function EventEstimator({ guests, value, onChange }: { guests: number; va
 
 // ------------------------------------------------------------------ personal chef / marmitas
 
-export function MealPrepCalculator({ value, onChange }: { value: MealPrepInput; onChange: (v: MealPrepInput) => void }) {
+export function MealPrepCalculator({ value, onChange, laborOnly = false }: { value: MealPrepInput; onChange: (v: MealPrepInput) => void; laborOnly?: boolean }) {
   const r = calculateMealPrep(value);
   const set = (patch: Partial<MealPrepInput>) => onChange({ ...value, ...patch });
   return <div className="cp-block">
     <div className="cp-grid">
       <label className="dash-field"><span>Total de refeições</span><Num value={value.meals} label="Refeições" onChange={v => set({ meals: Math.round(v) })}/></label>
       <label className="dash-field"><span>Refeições por kit</span><Num value={value.mealsPerKit} label="Refeições por kit" onChange={v => set({ mealsPerKit: Math.max(1, Math.round(v)) })}/></label>
-      <label className="dash-field"><span>Ingredientes por refeição (R$)</span><MoneyInput cents={value.ingredientCostPerMealCents} label="Ingredientes por refeição" onChange={c => set({ ingredientCostPerMealCents: c })}/></label>
-      <label className="dash-field"><span>Embalagem por refeição (R$)</span><MoneyInput cents={value.packagingPerMealCents} label="Embalagem" onChange={c => set({ packagingPerMealCents: c })}/></label>
+      {!laborOnly && <><label className="dash-field"><span>Ingredientes por refeição (R$)</span><MoneyInput cents={value.ingredientCostPerMealCents} label="Ingredientes por refeição" onChange={c => set({ ingredientCostPerMealCents: c })}/></label>
+      <label className="dash-field"><span>Embalagem por refeição (R$)</span><MoneyInput cents={value.packagingPerMealCents} label="Embalagem" onChange={c => set({ packagingPerMealCents: c })}/></label></>}
       <label className="dash-field"><span>Distância por viagem (km ida+volta)</span><Num value={value.distanceKm} label="Distância" onChange={v => set({ distanceKm: v })}/></label>
       <label className="dash-field"><span>Viagens</span><Num value={value.trips} label="Viagens" onChange={v => set({ trips: Math.round(v) })}/></label>
       <label className="dash-field"><span>Custo por km (R$)</span><MoneyInput cents={value.costPerKmCents} label="Custo por km" onChange={c => set({ costPerKmCents: c })}/></label>
@@ -85,7 +91,7 @@ export function MealPrepCalculator({ value, onChange }: { value: MealPrepInput; 
       <label className="dash-field"><span>Margem (%)</span><Num value={value.marginPercent} label="Margem" onChange={v => set({ marginPercent: v })}/></label>
     </div>
     <div className="cp-summary">
-      <span>Ingredientes <b>{formatMoney(r.ingredientsCents)}</b></span><span>Embalagens <b>{formatMoney(r.packagingCents)}</b></span><span>Deslocamento <b>{formatMoney(r.transportCents)}</b></span><span>Mão de obra <b>{formatMoney(r.laborCents)}</b></span>
+      {laborOnly ? <span>Ingredientes e embalagens <b>por conta do cliente</b></span> : <><span>Ingredientes <b>{formatMoney(r.ingredientsCents)}</b></span><span>Embalagens <b>{formatMoney(r.packagingCents)}</b></span></>}<span>Deslocamento <b>{formatMoney(r.transportCents)}</b></span><span>Mão de obra <b>{formatMoney(r.laborCents)}</b></span>
       <span>Custo total <b>{formatMoney(r.costCents)}</b></span><span className="cp-highlight">Preço sugerido <b>{formatMoney(r.priceCents)}</b></span><span>Por refeição <b>{formatMoney(r.perMealCents)}</b></span><span>Por kit ({value.mealsPerKit}) <b>{formatMoney(r.perKitCents)}</b> · {r.kits} kit(s)</span>
     </div>
   </div>;
@@ -147,14 +153,48 @@ function PriceAdjuster({ platformCents, amountCents, copilotCents, onChange }: {
   </div>;
 }
 
+// ------------------------------------------------------------------ lista de compras (só mão de obra)
+
+/** Lista livre de itens e quantidades (sem preço) para o cliente comprar. */
+function ShoppingListEditor({ items, onChange }: { items: ShoppingItem[]; onChange: (items: ShoppingItem[]) => void }) {
+  const set = (i: number, patch: Partial<ShoppingItem>) => onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  return <div className="cp-table" role="table">
+    <div className="cp-tr cp-th cp-list" role="row"><span>Item</span><span>Qtd.</span><span>Un.</span><span/></div>
+    {items.map((item, i) => <div className="cp-tr cp-list" role="row" key={`list-${i}`}>
+      <input className="cp-name" value={item.name} aria-label="Item" placeholder="Ex.: Peito de frango" onChange={e => set(i, { name: e.target.value })}/>
+      <Num value={item.quantity} step="0.1" label={`Quantidade de ${item.name}`} onChange={v => set(i, { quantity: v })}/>
+      <select value={item.unit} aria-label="Unidade" onChange={e => set(i, { unit: e.target.value })}>{SHOPPING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
+      <button type="button" className="cp-icon" aria-label="Remover item" onClick={() => onChange(items.filter((_, idx) => idx !== i))}><Trash2 size={14}/></button>
+    </div>)}
+    <button type="button" className="dash-text-link" onClick={() => onChange([...items, { name: "", quantity: 1, unit: "kg" }])}><Plus size={14}/> Adicionar item</button>
+  </div>;
+}
+
 // ------------------------------------------------------------------ montar e enviar proposta
 
 export function ProposalComposer({ event, onClose }: { event: EventItem; onClose: () => void }) {
   const { busy, run } = useAction();
   const category = event.category as RequestCategory;
-  const [scope, setScope] = useState<ContractScope>(event.scope === "full" ? "full" : "labor");
+  // O escopo pedido pelo cliente vale para a proposta; só "tanto faz" deixa o profissional escolher.
+  const scopeLocked = event.scope === "labor" || event.scope === "full";
+  const [scope, setScopeState] = useState<ContractScope>(event.scope === "full" ? "full" : "labor");
+  const hasScope = category === "event" || category === "mealPrep";
+  const laborOnly = hasScope && scope === "labor";
   const [eventCalc, setEventCalc] = useState<EventCalc>(() => initialEventCalc(event.guests, event.type, event.details?.withAlcohol !== false));
-  const [meal, setMeal] = useState<MealPrepInput>(() => mealPrepInputFor(Math.max(1, Number(event.details?.mealsPerWeek ?? 10) * Number(event.details?.weeks ?? 1))));
+  const [meal, setMeal] = useState<MealPrepInput>(() => mealPrepInputFor(Math.max(1, Number(event.details?.mealsPerWeek ?? 10) * Number(event.details?.weeks ?? 1)), event.scope !== "full"));
+  const [mealList, setMealList] = useState<ShoppingItem[]>([]);
+  const [sendList, setSendList] = useState(true);
+  const [listNote, setListNote] = useState("");
+  const site = useSite();
+  // Valor da lista cobrado do cliente (sugestão do painel; o profissional muda ou dá como cortesia).
+  const listPriceCents = shoppingListPriceCents(site.content["price.shoppingList"]);
+  const [listFeeCents, setListFeeCents] = useState<number | null>(null);
+  const [listCourtesy, setListCourtesy] = useState(false);
+  const setScope = (next: ContractScope) => {
+    setScopeState(next);
+    // Marmitas: só mão de obra zera ingredientes e embalagens; completo volta aos valores padrão.
+    if (category === "mealPrep") setMeal(m => ({ ...m, ...(next === "labor" ? LABOR_ONLY_MEAL : { ingredientCostPerMealCents: MEAL_PREP_DEFAULTS.ingredientCostPerMealCents, packagingPerMealCents: MEAL_PREP_DEFAULTS.packagingPerMealCents }) }));
+  };
   const [area, setArea] = useState<AreaCalc>(() => initialAreaCalc(category === "gardening" ? "gardening" : "cleaning", event.details?.propertyKind, Number(event.details?.areaM2 ?? 80)));
   const [extraCents, setExtraCents] = useState(0);
   const [margin, setMargin] = useState(30);
@@ -167,23 +207,29 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
   const [time, setTime] = useState(event.time ?? "");
 
   const costCents = useMemo(() => {
-    if (category === "mealPrep") return calculateMealPrep(meal).costCents + extraCents;
+    if (category === "mealPrep") return calculateMealPrep(laborOnly ? { ...meal, ...LABOR_ONLY_MEAL } : meal).costCents + extraCents;
     if (category === "cleaning" || category === "gardening") return extraCents;
     return staffTotalCents(eventCalc.staff) + (scope === "full" ? itemsTotalCents(eventCalc.items) : 0) + extraCents;
-  }, [category, meal, eventCalc, scope, extraCents]);
+  }, [category, meal, eventCalc, scope, extraCents, laborOnly]);
   const suggestedCents = useMemo(() => {
-    const base = category === "mealPrep" ? calculateMealPrep(meal).priceCents + extraCents
+    const base = category === "mealPrep" ? calculateMealPrep(laborOnly ? { ...meal, ...LABOR_ONLY_MEAL } : meal).priceCents + extraCents
       : category === "cleaning" || category === "gardening" ? areaTotalCents(area) + extraCents
       : Math.round(costCents * (1 + margin / 100));
     return Math.round(base * (1 - discount / 100));
-  }, [category, meal, area, costCents, margin, extraCents, discount]);
+  }, [category, meal, area, costCents, margin, extraCents, discount, laborOnly]);
+  const listItems: ShoppingItem[] = category === "event" ? eventCalc.items.map(it => ({ name: it.name, quantity: it.quantity, unit: it.unit })) : mealList;
+  const validList = listItems.filter(it => it.name.trim().length >= 2 && it.quantity > 0);
   const amountCents = parseCents(amountText) ?? suggestedCents;
+  const withList = laborOnly && sendList && validList.length > 0;
+  const listCharge = withList && !listCourtesy ? (listFeeCents ?? listPriceCents) : 0;
+  const totalCents = amountCents + listCharge;
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (amountCents <= 0) { toast.error("Informe o valor da proposta."); return; }
-    const breakdown = { category, scope, margin, discount, extraCents, ...(category === "event" ? { eventCalc } : category === "mealPrep" ? { meal } : { area }) };
-    const ok = await run("send-proposal", () => post("/proposals", { eventId: event.id, amountCents, costCents, message, paymentTerms: terms, scope, ...(time ? { eventTime: time } : {}), breakdown }), "Proposta enviada ao cliente.");
+    const shoppingList = withList ? { items: validList, ...(listNote.trim() ? { note: listNote.trim() } : {}), feeCents: listCharge, courtesy: listCharge === 0 } : undefined;
+    const breakdown = { category, scope, margin, discount, extraCents, ...(category === "event" ? { eventCalc } : category === "mealPrep" ? { meal } : { area }), ...(shoppingList ? { shoppingList } : {}) };
+    const ok = await run("send-proposal", () => post("/proposals", { eventId: event.id, amountCents: totalCents, costCents, message, paymentTerms: terms, scope: hasScope ? scope : "labor", ...(time ? { eventTime: time } : {}), breakdown }), "Proposta enviada ao cliente.");
     if (ok) onClose();
   };
 
@@ -191,24 +237,34 @@ export function ProposalComposer({ event, onClose }: { event: EventItem; onClose
     <div className="dash-card-heading"><div><span className="dash-eyebrow">Copilot · {categoryLabel[category]}</span><h3>Proposta para “{event.title}”</h3><p className="dash-muted">{event.type} · {event.city} · {event.guests} pessoa(s) · {formatDate(event.date)}{event.time ? ` às ${event.time}` : ""} · orçamento do cliente {formatMoney(event.budgetCents)}</p></div><Calculator size={20}/></div>
     {event.clientTag === "Cliente Antigo" && <div className="dash-alert dash-alert-success"><BadgePercent size={17}/> Cliente antigo ({event.clientPreviousEvents} serviço(s) fechado(s) na plataforma). Que tal oferecer um desconto de fidelidade ou um pacote especial? <button type="button" className="dash-small-button" onClick={() => { setDiscount(5); setAmountText(""); }}>Aplicar 5%</button><button type="button" className="dash-small-button" onClick={() => { setDiscount(10); setAmountText(""); }}>Aplicar 10%</button></div>}
     {event.description && <p className="cp-note">“{event.description}”</p>}
-    {category === "event" && <>
-      <label className="dash-field"><span>Escopo do contrato</span><select value={scope} onChange={e => setScope(e.target.value as ContractScope)}>{(Object.keys(SCOPE_LABELS) as ContractScope[]).map(s => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}</select><small className="dash-field-help">{scope === "labor" ? "Só mão de obra: os ingredientes servem como lista de compras para o cliente e não entram no seu custo." : "Serviço completo: ingredientes, louças e utensílios entram no seu custo."}</small></label>
-      <EventEstimator guests={event.guests} value={eventCalc} onChange={setEventCalc}/>
-    </>}
-    {category === "mealPrep" && <MealPrepCalculator value={meal} onChange={setMeal}/>}
+    {hasScope && <label className="dash-field"><span>Escopo do contrato</span><select value={scope} disabled={scopeLocked} onChange={e => setScope(e.target.value as ContractScope)}>{(Object.keys(SCOPE_LABELS) as ContractScope[]).map(s => <option key={s} value={s}>{SCOPE_LABELS[s]}</option>)}</select><small className="dash-field-help">{scopeLocked ? (scope === "labor" ? "O cliente pediu só mão de obra: ingredientes e insumos não entram no valor." : "O cliente pediu serviço completo: inclua ingredientes e insumos no valor.") : scope === "labor" ? "Só mão de obra: ingredientes e insumos não entram no seu custo nem no valor." : "Serviço completo: ingredientes, louças e utensílios entram no seu custo."}</small></label>}
+    {category === "event" && <EventEstimator guests={event.guests} value={eventCalc} onChange={setEventCalc} laborOnly={laborOnly}/>}
+    {category === "mealPrep" && <MealPrepCalculator value={laborOnly ? { ...meal, ...LABOR_ONLY_MEAL } : meal} onChange={setMeal} laborOnly={laborOnly}/>}
+    {laborOnly && <div className="cp-block cp-shopping">
+      {category === "mealPrep" && <><h4 className="cp-title"><ClipboardList size={16}/> Lista de compras para o cliente</h4><ShoppingListEditor items={mealList} onChange={setMealList}/></>}
+      <label className="cp-check"><input type="checkbox" checked={sendList} onChange={e => setSendList(e.target.checked)}/> Enviar a lista de compras ao cliente em PDF ({validList.length} {validList.length === 1 ? "item" : "itens"})</label>
+      {sendList && <div className="cp-row cp-list-fee">
+        <label className="dash-field"><span>Valor da lista cobrado do cliente (R$)</span><MoneyInput cents={listCourtesy ? 0 : listFeeCents ?? listPriceCents} label="Valor da lista de compras" onChange={c => { setListFeeCents(c); if (c > 0) setListCourtesy(false); }}/></label>
+        <label className="cp-check"><input type="checkbox" checked={listCourtesy} onChange={e => setListCourtesy(e.target.checked)}/> Dar a lista como cortesia (não cobrar)</label>
+      </div>}
+      {sendList && <p className="cp-labor-note"><Info size={14}/><span>{listCharge > 0 ? <>O valor da lista (<strong>{formatMoney(listCharge)}</strong>) é somado ao total da proposta e aparece separado no contrato. Você recebe direto do cliente, sem passar pela plataforma.</> : <>A lista vai como <strong>cortesia</strong> e aparece assim no contrato.</>}</span></p>}
+      {sendList && <><label className="dash-field"><span>Observações da lista (opcional)</span><textarea rows={2} value={listNote} onChange={e => setListNote(e.target.value)} placeholder="Ex.: comprar as carnes até 2 dias antes; prefira arroz agulhinha." maxLength={1000}/></label>
+      <p className="cp-labor-note"><Info size={14}/><span>O cliente verá este aviso junto da lista: “{SHOPPING_LIST_NOTICE}”</span></p></>}
+    </div>}
     {(category === "cleaning" || category === "gardening") && <AreaCalculator category={category} value={area} onChange={setArea}/>}
     <div className="dash-form-grid">
       <label className="dash-field"><span>Outros custos (transporte, gás, aluguel…) R$</span><MoneyInput cents={extraCents} label="Outros custos" onChange={setExtraCents}/></label>
       {category === "event" && <label className="dash-field"><span>Margem desejada (%)</span><Num value={margin} label="Margem" onChange={setMargin}/></label>}
       <label className="dash-field"><span>Desconto (%)</span><Num value={discount} label="Desconto" onChange={v => setDiscount(Math.min(100, v))}/></label>
-      <label className="dash-field"><span>Valor da proposta (R$)</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">{platformCents > 0 ? `Sugestão da plataforma: ${formatMoney(platformCents)} · cálculo do Copilot: ${formatMoney(suggestedCents)}.` : `Sugestão do Copilot: ${formatMoney(suggestedCents)}. Você pode alterar.`}</small></label>
+      <label className="dash-field"><span>{withList ? "Valor do serviço (R$)" : "Valor da proposta (R$)"}</span><input inputMode="decimal" value={amountText} placeholder={centsInput(suggestedCents)} onChange={e => setAmountText(e.target.value)}/><small className="dash-field-help">{platformCents > 0 ? `Sugestão da plataforma: ${formatMoney(platformCents)} · cálculo do Copilot: ${formatMoney(suggestedCents)}.` : `Sugestão do Copilot: ${formatMoney(suggestedCents)}. Você pode alterar.`}</small></label>
       <label className="dash-field"><span>Horário</span><input type="time" value={time} onChange={e => setTime(e.target.value)}/></label>
     </div>
     {platformCents > 0 && <PriceAdjuster platformCents={platformCents} amountCents={amountCents} copilotCents={suggestedCents} onChange={c => setAmountText(centsInput(c))}/>}
-    <ProfitBox priceCents={amountCents} costCents={costCents}/>
+    {withList && <div className="cp-total-line"><span>Serviço <b>{formatMoney(amountCents)}</b></span><span>Lista de compras <b>{listCharge > 0 ? formatMoney(listCharge) : "cortesia"}</b></span><span className="cp-highlight">Total para o cliente <b>{formatMoney(totalCents)}</b></span></div>}
+    <ProfitBox priceCents={totalCents} costCents={costCents}/>
     <label className="dash-field"><span>Condições de pagamento</span><input required value={terms} onChange={e => setTerms(e.target.value)} maxLength={600}/></label>
     <label className="dash-field"><span>Mensagem ao cliente</span><textarea required rows={4} value={message} onChange={e => setMessage(e.target.value)} placeholder="Cardápio, o que está incluso, equipe, diferenciais e disponibilidade." maxLength={5000}/></label>
-    <div className="cp-actions"><button type="button" className="dash-outline-button" onClick={onClose}>Cancelar</button><button className="dash-primary-button" type="submit" disabled={busy === "send-proposal"}>{busy === "send-proposal" ? <Loader2 className="dash-spinner" size={16}/> : <Send size={16}/>} Enviar proposta de {formatMoney(amountCents)}</button></div>
+    <div className="cp-actions"><button type="button" className="dash-outline-button" onClick={onClose}>Cancelar</button><button className="dash-primary-button" type="submit" disabled={busy === "send-proposal"}>{busy === "send-proposal" ? <Loader2 className="dash-spinner" size={16}/> : <Send size={16}/>} Enviar proposta de {formatMoney(totalCents)}</button></div>
   </form>;
 }
 

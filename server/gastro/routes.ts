@@ -21,9 +21,11 @@ import { calculateIntentScore, isoDate } from "./rules";
 import { assertSubscriptionActive, phaseFor, subscriptionSummary } from "./subscriptions";
 import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLink } from "./profiles";
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
-import { buildPdf } from "./pdf";
+import { buildPdf, type PdfBlock } from "./pdf";
+import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListFeeLabel } from "@shared/shoppingList";
 import { mpConfigured } from "./mercadopago";
 import { mailConfigured } from "./password";
+import { anonymizeAccount, hasPermission, loadStaff, requireStaff, staffCan, type StaffContext } from "./staff";
 
 const router = Router();
 const emailSchema = z.string().trim().email().max(320);
@@ -45,10 +47,9 @@ router.use((req, _res, next) => {
 
 const auth = (req: Request) => requireAuth(req);
 
-async function admin(req: Request): Promise<AuthContext> {
-  const context = await auth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
-  return context;
+/** Equipe da administração: a permissão exigida vem do endereço (ver @shared/staff). */
+async function admin(req: Request): Promise<StaffContext> {
+  return requireStaff(req);
 }
 
 async function audit(actorId: number, action: string, details: unknown, targetId?: number) {
@@ -375,6 +376,7 @@ router.get("/proposals", wrap(async (req, res) => {
     const isProvider = Number(row.providerId) === me;
     const extra: Record<string, unknown> = {};
     if (isProvider && row.eventProviderId && Number(row.eventProviderId) !== me) extra.closedWith = row.winnerName ?? "outro profissional";
+
     if (row.status === "accepted") {
       const otherId = isProvider ? Number(row.clientId) : Number(row.providerId);
       const { details } = await loadDetails(otherId);
@@ -383,6 +385,9 @@ router.get("/proposals", wrap(async (req, res) => {
     if (!isProvider) {
       const rating = await query<any[]>("SELECT AVG(rating) average, COUNT(*) total FROM gastro_reviews WHERE targetId = ?", [row.providerId]);
       extra.providerRating = { average: Number(rating[0]?.average ?? 0), count: Number(rating[0]?.total ?? 0) };
+      // Lista de compras (só itens e quantidades) fica disponível ao cliente em PDF.
+      const list = normalizeShoppingList(json(row.breakdown)?.shoppingList);
+      if (list) { extra.hasShoppingList = true; extra.shoppingListFee = { feeCents: list.feeCents, courtesy: list.courtesy }; }
       // Custo estimado é informação interna do profissional.
       row.costCents = 0; row.breakdown = null;
     }
@@ -407,8 +412,18 @@ router.post("/proposals", wrap(async (req, res) => {
   await assertSubscriptionActive(context.user.id);
   await assertNoReviewGuard(context.user.id);
   const input = body(req, proposalSchema);
-  const event = await query<any[]>("SELECT id FROM gastro_events WHERE id = ? AND status = 'open' AND providerId IS NULL AND (preferredProviderId IS NULL OR preferredProviderId = ?) LIMIT 1", [input.eventId, context.user.id]);
+  const event = await query<any[]>("SELECT id, scope FROM gastro_events WHERE id = ? AND status = 'open' AND providerId IS NULL AND (preferredProviderId IS NULL OR preferredProviderId = ?) LIMIT 1", [input.eventId, context.user.id]);
   if (!event[0]) throw new HttpError(404, "Pedido não disponível");
+  // O escopo pedido pelo cliente vale para a proposta: só mão de obra não pode virar serviço completo e vice-versa.
+  if (event[0].scope === "labor" && input.scope !== "labor") throw new HttpError(400, "O cliente pediu só mão de obra: a proposta não pode incluir ingredientes e insumos.");
+  if (event[0].scope === "full" && input.scope !== "full") throw new HttpError(400, "O cliente pediu serviço completo: a proposta precisa incluir ingredientes e insumos.");
+  if (input.breakdown) {
+    const list = input.scope === "labor" ? normalizeShoppingList(input.breakdown.shoppingList) : null;
+    if (list) input.breakdown.shoppingList = list; else delete input.breakdown.shoppingList;
+  }
+  // O valor da lista (se cobrado) já vem somado ao total da proposta.
+  const listFee = normalizeShoppingList(input.breakdown?.shoppingList)?.feeCents ?? 0;
+  if (listFee >= input.amountCents) throw new HttpError(400, "O valor da lista de compras precisa ser menor que o total da proposta.");
   const existing = await query<any[]>("SELECT id, status FROM gastro_proposals WHERE eventId = ? AND providerId = ? LIMIT 1", [input.eventId, context.user.id]);
   if (existing[0] && ["pending", "accepted"].includes(existing[0].status)) throw new HttpError(409, "Você já enviou uma proposta para este pedido");
   const values = [input.amountCents, input.message, input.scope, input.costCents, input.paymentTerms, input.eventTime ?? null, input.breakdown ? JSON.stringify(input.breakdown) : null];
@@ -423,6 +438,39 @@ router.post("/proposals", wrap(async (req, res) => {
   if (eventRow) later(() => notifyUser(Number(eventRow.clientId), { type: "proposal.new", title: "Você recebeu uma proposta", body: `${context.user.name ?? "Um profissional"} enviou uma proposta de ${amount} para “${eventRow.title}”. Toque no link para ver e responder.`, path: "/painel?aba=requests" }));
   later(() => notifyAdmin({ type: "proposal.new", title: "Nova proposta enviada", body: `${context.user.name ?? "Profissional"} propôs ${amount} para “${eventRow?.title ?? "pedido"}”.` }));
   res.status(201).json({ proposal: mapProposal(proposal) });
+}));
+
+/** O profissional ajusta a proposta enquanto o cliente ainda não respondeu (valor, mensagem, condições e horário). */
+router.patch("/proposals/:id", wrap(async (req, res) => {
+  const context = await auth(req);
+  const id = parse(idSchema, req.params.id);
+  const input = body(req, z.object({ amountCents: z.number().int().positive().max(2_000_000_000).optional(), message: z.string().trim().min(2).max(5000).optional(), paymentTerms: z.string().trim().min(5, "Informe as condições de pagamento").max(600).optional(), eventTime: timeSchema.nullable().optional(),
+    shoppingListFeeCents: z.number().int().min(0).max(100_000_000).optional(), shoppingListCourtesy: z.boolean().optional() }).strict());
+  const rows = await query<any[]>("SELECT p.*, e.clientId, e.title eventTitle FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId WHERE p.id = ? AND p.providerId = ? LIMIT 1", [id, context.user.id]);
+  const row = rows[0];
+  if (!row) throw new HttpError(404, "Proposta não encontrada");
+  if (row.status !== "pending") throw new HttpError(409, "Só dá para editar propostas que o cliente ainda não respondeu.");
+  const updates: string[] = [], values: unknown[] = [];
+  for (const key of ["amountCents", "message", "paymentTerms", "eventTime"] as const) if (input[key] !== undefined) { updates.push(`${key} = ?`); values.push(input[key]); }
+  // Valor da lista de compras (ou cortesia): fica no detalhamento e entra no contrato.
+  const breakdown = json(row.breakdown) ?? {};
+  const list = normalizeShoppingList(breakdown.shoppingList);
+  if (list && (input.shoppingListFeeCents !== undefined || input.shoppingListCourtesy !== undefined)) {
+    const courtesy = input.shoppingListCourtesy ?? list.courtesy;
+    breakdown.shoppingList = { ...list, courtesy, feeCents: courtesy ? 0 : input.shoppingListFeeCents ?? list.feeCents };
+    updates.push("breakdown = ?"); values.push(JSON.stringify(breakdown));
+  }
+  const total = input.amountCents ?? Number(row.amountCents);
+  if (list && (normalizeShoppingList(breakdown.shoppingList)?.feeCents ?? 0) >= total) throw new HttpError(400, "O valor da lista de compras precisa ser menor que o total da proposta.");
+  if (!updates.length) throw new HttpError(400, "Nada para alterar");
+  await execute(`UPDATE gastro_proposals SET ${updates.join(", ")} WHERE id = ?`, [...values, id]);
+  await audit(context.user.id, "proposal.edited", { before: { amountCents: Number(row.amountCents), paymentTerms: row.paymentTerms, eventTime: row.eventTime ?? null }, after: input }, id);
+  if (input.amountCents !== undefined && input.amountCents !== Number(row.amountCents)) {
+    const amount = (input.amountCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    later(() => notifyUser(Number(row.clientId), { type: "proposal.updated", title: "Proposta atualizada", body: `${context.user.name ?? "O profissional"} alterou a proposta para “${row.eventTitle}”: novo valor ${amount}.`, path: "/painel?aba=requests" }));
+  }
+  const updated = await query<any[]>("SELECT p.*, u.name providerName, e.title eventTitle FROM gastro_proposals p JOIN users u ON u.id = p.providerId JOIN gastro_events e ON e.id = p.eventId WHERE p.id = ?", [id]);
+  res.json({ proposal: mapProposal(updated[0]) });
 }));
 
 router.post("/proposals/:id/withdraw", wrap(async (req, res) => {
@@ -518,7 +566,7 @@ router.post("/reviews", wrap(async (req, res) => {
 // ------------------------------------------------------------------ contratos (cliente, profissional e administração)
 
 async function canUseContract(contract: any, context: AuthContext): Promise<boolean> {
-  if (await isOwner(context)) return true;
+  if (await staffCan(context, "contracts.view")) return true;
   if (!contract.eventId) return Number(contract.createdByUserId) === context.user.id;
   const rows = await query<any[]>("SELECT id FROM gastro_events WHERE id = ? AND (clientId = ? OR providerId = ?) LIMIT 1", [contract.eventId, context.user.id, context.user.id]);
   return Boolean(rows[0]);
@@ -545,8 +593,37 @@ router.get("/contracts/:id/pdf", wrap(async (req, res) => {
   if (!rows[0] || !(await canUseContract(rows[0], context))) throw new HttpError(404, "Contrato não encontrado");
   const payload = json(rows[0].payload);
   const pdf = payload.version === 2 ? contractPdf(payload as ContractPayload) : legacyContractPdf(rows[0].title, payload);
-  if (await isOwner(context)) await audit(context.user.id, "admin.contract_download", { contractId }, contractId);
+  if (context.user.role === "admin") await audit(context.user.id, "admin.contract_download", { contractId }, contractId);
   res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=contrato-eventosconecta-${contractId}.pdf`, "Cache-Control": "private, no-store" }).send(pdf);
+}));
+
+// Lista de compras da proposta em PDF (cliente do pedido, profissional da proposta ou administração).
+router.get("/proposals/:id/shopping-list/pdf", wrap(async (req, res) => {
+  const context = await auth(req);
+  const proposalId = parse(idSchema, req.params.id);
+  const rows = await query<any[]>("SELECT p.id, p.providerId, p.breakdown, p.scope, p.amountCents, e.clientId, e.title, e.eventDate, e.city, e.guests, pu.name providerName FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId JOIN users pu ON pu.id = p.providerId WHERE p.id = ? LIMIT 1", [proposalId]);
+  const row = rows[0];
+  const allowed = row && (Number(row.providerId) === context.user.id || Number(row.clientId) === context.user.id || (await staffCan(context, "contracts.view")));
+  const list = allowed ? normalizeShoppingList(json(row.breakdown)?.shoppingList) : null;
+  if (!row || !allowed || !list) throw new HttpError(404, "Lista de compras não encontrada");
+  const date = row.eventDate ? new Date(row.eventDate).toISOString().slice(0, 10).split("-").reverse().join("/") : "a definir";
+  const blocks: PdfBlock[] = [
+    { kind: "title", text: "Lista de compras" },
+    { kind: "pair", label: "Pedido", value: String(row.title) },
+    { kind: "pair", label: "Data", value: date },
+    { kind: "pair", label: "Cidade", value: String(row.city ?? "") },
+    { kind: "pair", label: "Convidados", value: String(row.guests) },
+    { kind: "pair", label: "Profissional", value: String(row.providerName) },
+    { kind: "pair", label: "Valor da lista de compras", value: `${shoppingListFeeLabel(list)}${list.feeCents > 0 ? " (já incluído no total da proposta)" : ""}` },
+    { kind: "space" },
+    { kind: "heading", text: "Aviso importante" },
+    { kind: "text", text: SHOPPING_LIST_NOTICE },
+    { kind: "space" },
+    { kind: "heading", text: `Itens (${list.items.length})` },
+    ...list.items.map(item => ({ kind: "text" as const, text: `[  ]  ${item.name}: ${formatQuantity(item.quantity)} ${item.unit}` })),
+    ...(list.note ? [{ kind: "space" as const }, { kind: "heading" as const, text: "Observações do profissional" }, { kind: "text" as const, text: list.note }] : []),
+  ];
+  res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=lista-de-compras-${proposalId}.pdf`, "Cache-Control": "private, no-store" }).send(buildPdf(blocks, `Eventos Conecta - Lista de compras da proposta ${proposalId}`));
 }));
 
 // ------------------------------------------------------------------ financeiro do profissional
@@ -701,7 +778,7 @@ router.get("/admin/users", wrap(async (req, res) => {
       (SELECT COUNT(*) FROM gastro_events e WHERE e.clientId = u.id) requestCount
     FROM users u JOIN account_profiles p ON p.userId = u.id LEFT JOIN gc_profile_details d ON d.userId = u.id ORDER BY u.createdAt DESC`);
   // Clientes e fornecedores ficam em abas separadas no painel; o admin não entra na lista.
-  res.json({ users: rows.filter(row => row.role !== "admin").map(row => ({ ...mapUser(row), code: `GC-${String(Number(row.id)).padStart(5, "0")}`, specialty: row.specialty ?? "", whatsapp: row.whatsapp ?? "", source: row.signupSource ?? "", subscriptionFree: Boolean(row.subscriptionFree), requestCount: Number(row.requestCount ?? 0) })) });
+  res.json({ users: rows.filter(row => row.role !== "admin" && row.status !== "deleted").map(row => ({ ...mapUser(row), code: `GC-${String(Number(row.id)).padStart(5, "0")}`, specialty: row.specialty ?? "", whatsapp: row.whatsapp ?? "", source: row.signupSource ?? "", subscriptionFree: Boolean(row.subscriptionFree), requestCount: Number(row.requestCount ?? 0) })) });
 }));
 
 const adminUserSchema = z.object({ name: z.string().trim().min(2).max(160).optional(), status: z.enum(["active", "pending", "suspended", "blocked", "deleted"]).optional(), vip: z.boolean().optional(), discountPercent: z.number().int().min(0).max(100).optional(), featured: z.boolean().optional(), faceVerified: z.boolean().optional() }).strict();
@@ -710,8 +787,15 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
   const targetId = parse(idSchema, req.params.id);
   const input = body(req, adminUserSchema);
   if (targetId === context.user.id && input.status !== undefined && input.status !== "active") throw new HttpError(400, "O proprietário não pode deixar a própria conta inativa");
-  const target = await query<any[]>("SELECT u.id, p.accountType, p.status FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [targetId]);
-  if (!target[0]) throw new HttpError(404, "Usuário não encontrado");
+  const target = await query<any[]>("SELECT u.id, u.role, p.accountType, p.status FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [targetId]);
+  // Contas da equipe são geridas em Equipe; contas já excluídas não voltam.
+  if (!target[0] || target[0].role === "admin" || target[0].status === "deleted") throw new HttpError(404, "Usuário não encontrado");
+  if (input.status === "deleted") {
+    if (!hasPermission(context.staff, "users.delete")) throw new HttpError(403, "Seu acesso não permite excluir contas.");
+    await anonymizeAccount(targetId, context.user.id, "admin_removed");
+    res.json({ ok: true, deleted: true });
+    return;
+  }
   const { details, completedAt } = await loadDetails(targetId);
   if (input.status === "active" && target[0].accountType === "provider" && !providerDetailsComplete(details, completedAt)) throw new HttpError(400, "Este cadastro ainda está incompleto. A aprovação fica liberada quando o profissional enviar todos os dados obrigatórios (logo, foto do rosto, fotos dos serviços, documento e Pix).");
   await withTransaction(async connection => {
@@ -740,9 +824,10 @@ async function announceNewProvider(providerId: number) {
 router.get("/admin/overview", wrap(async (req, res) => {
   await admin(req);
   const [users, events, pending, activeSubs, contracts] = await Promise.all([
-    query<any[]>("SELECT COUNT(*) count FROM users").then(rows => Number(rows[0].count)),
+    // Só clientes e profissionais: o dono e a equipe não contam como usuários.
+    query<any[]>("SELECT COUNT(*) count FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.role <> 'admin' AND p.status <> 'deleted'").then(rows => Number(rows[0].count)),
     query<any[]>("SELECT COUNT(*) count FROM gastro_events").then(rows => Number(rows[0].count)),
-    query<any[]>("SELECT COUNT(*) count FROM account_profiles WHERE status = 'pending'").then(rows => Number(rows[0].count)),
+    query<any[]>("SELECT COUNT(*) count FROM account_profiles p JOIN users u ON u.id = p.userId WHERE p.status = 'pending' AND u.role <> 'admin'").then(rows => Number(rows[0].count)),
     query<any[]>("SELECT COUNT(*) count FROM gc_provider_subscriptions WHERE periodEnd > CURRENT_TIMESTAMP").then(rows => Number(rows[0].count)),
     query<any[]>("SELECT COUNT(*) count FROM gastro_contracts").then(rows => Number(rows[0].count)),
   ]);
@@ -752,15 +837,22 @@ router.get("/admin/overview", wrap(async (req, res) => {
 
 router.get("/admin/audit", wrap(async (req, res) => {
   await admin(req);
-  const rows = await query<any[]>("SELECT id, action, details, createdAt, actorId FROM gastro_audit_logs ORDER BY createdAt DESC LIMIT 500");
-  res.json({ logs: rows.map(row => ({ id: Number(row.id), action: row.action, details: row.details, createdAt: new Date(row.createdAt).toISOString(), actorId: Number(row.actorId) })) });
+  // Busca por ação, nome/e-mail de quem fez ou do alvo; mais recentes primeiro.
+  const q = String(req.query.q ?? "").trim().slice(0, 80);
+  const limitRows = Math.min(2000, Math.max(50, Number(req.query.limit) || 500));
+  const like = `%${q}%`;
+  const rows = await query<any[]>(`SELECT l.id, l.action, l.details, l.createdAt, l.actorId, l.targetId, a.name actorName, a.email actorEmail, sa.staffRole actorRole, t.name targetName
+    FROM gastro_audit_logs l LEFT JOIN users a ON a.id = l.actorId LEFT JOIN gc_staff sa ON sa.userId = l.actorId LEFT JOIN users t ON t.id = l.targetId
+    ${q ? "WHERE l.action LIKE ? OR a.name LIKE ? OR a.email LIKE ? OR t.name LIKE ? OR l.details LIKE ?" : ""}
+    ORDER BY l.id DESC LIMIT ${limitRows}`, q ? [like, like, like, like, like] : []);
+  res.json({ logs: rows.map(row => ({ id: Number(row.id), action: row.action, details: row.details, createdAt: new Date(row.createdAt).toISOString(), actorId: Number(row.actorId), actorName: row.actorName ?? (Number(row.actorId) ? `#${row.actorId}` : "Visitante / sistema"), actorEmail: row.actorEmail ?? undefined, actorRole: row.actorRole ?? undefined, targetId: row.targetId ? Number(row.targetId) : undefined, targetName: row.targetName ?? undefined })) });
 }));
 
 router.get("/report/pdf", wrap(async (req, res) => {
   const context = await admin(req);
   const count = (sql: string) => query<any[]>(sql).then(rows => Number(rows[0].count));
   const [users, providers, events, contracts, activeSubs] = await Promise.all([
-    count("SELECT COUNT(*) count FROM users"), count("SELECT COUNT(*) count FROM account_profiles WHERE accountType = 'provider'"), count("SELECT COUNT(*) count FROM gastro_events"),
+    count("SELECT COUNT(*) count FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.role <> 'admin' AND p.status <> 'deleted'"), count("SELECT COUNT(*) count FROM account_profiles p JOIN users u ON u.id = p.userId WHERE p.accountType = 'provider' AND u.role <> 'admin' AND p.status <> 'deleted'"), count("SELECT COUNT(*) count FROM gastro_events"),
     count("SELECT COUNT(*) count FROM gastro_contracts"), count("SELECT COUNT(*) count FROM gc_provider_subscriptions WHERE periodEnd > CURRENT_TIMESTAMP"),
   ]);
   const logs = await query<any[]>("SELECT action, actorId, targetId, createdAt FROM gastro_audit_logs ORDER BY createdAt DESC LIMIT 200");

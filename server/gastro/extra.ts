@@ -20,6 +20,7 @@ import { allServices, findService, normalizeServiceCatalog } from "@shared/servi
 import { normalizeDemos } from "@shared/catalog";
 import { subscriptionSummary } from "./subscriptions";
 import { later, notifyAdmin } from "./notify";
+import { claimOwnership, requireStaff, staffCan, type StaffContext } from "./staff";
 
 const router = Router();
 const idSchema = z.coerce.number().int().positive();
@@ -33,11 +34,9 @@ function requireDb() {
   if (!dbConfigured()) throw new HttpError(503, "Banco de dados não configurado (DATABASE_URL)");
 }
 
-async function adminCtx(req: Request): Promise<AuthContext> {
-  requireDb();
-  const context = await requireAuth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
-  return context;
+/** Equipe da administração: a permissão exigida vem do endereço (ver @shared/staff). */
+async function adminCtx(req: Request): Promise<StaffContext> {
+  return requireStaff(req);
 }
 
 async function audit(actorId: number, action: string, details: unknown, targetId?: number) {
@@ -78,7 +77,7 @@ router.get("/media/:id", wrap(async (req, res) => {
     if (!context) throw new HttpError(401, "Autenticação necessária");
     const ownerId = Number(media.ownerId);
     // Arquivos privados (rosto, notas fiscais, currículos antigos): só o dono e a administração.
-    const allowed = context.user.id === ownerId || (await isOwner(context));
+    const allowed = context.user.id === ownerId || (await staffCan(context, "users.private"));
     if (!allowed) throw new HttpError(403, "Arquivo restrito");
   }
   const data: Buffer = Buffer.isBuffer(media.data) ? media.data : Buffer.from(media.data);
@@ -101,7 +100,7 @@ router.post("/media", wrap(async (req, res) => {
   const context = await requireAuth(req);
   limit(`upload:${context.user.id}`, 80, 60 * 60_000, "Muitos envios em pouco tempo; tente mais tarde");
   const input = body(req, uploadSchema);
-  const admin = await isOwner(context);
+  const admin = await staffCan(context, "content.edit");
   if (input.kind === "resume") throw new HttpError(400, "Envio de currículo não é mais utilizado");
   if (!admin && ["service", "invoice", "avatar"].includes(input.kind) && context.profile.accountType !== "provider") throw new HttpError(403, "Este envio é exclusivo de profissionais");
   const saved = await saveMedia({ ownerId: context.user.id, kind: input.kind, filename: input.filename, data: input.data, isAdmin: admin });
@@ -113,7 +112,7 @@ router.delete("/media/:id", wrap(async (req, res) => {
   requireDb();
   const context = await requireAuth(req);
   const id = parse(idSchema, req.params.id);
-  const admin = await isOwner(context);
+  const admin = await staffCan(context, "content.edit");
   const result = admin ? await execute("DELETE FROM gc_media WHERE id = ?", [id]) : await execute("DELETE FROM gc_media WHERE id = ? AND ownerId = ?", [id, context.user.id]);
   if (!result.affectedRows) throw new HttpError(404, "Arquivo não encontrado");
   if (admin) await audit(context.user.id, "admin.media_delete", { id });
@@ -300,6 +299,7 @@ router.post("/admin/setup", wrap(async (req, res) => {
   if (!verifySetupCode(input.code)) throw new HttpError(403, "Código de configuração inválido. Confira o código nos logs do Render.");
   const id = await createOrPromoteAdmin({ email: normalizeEmail(input.email), name: input.name, passwordHash: await hashPassword(input.password) });
   consumeSetupCode();
+  await claimOwnership(id);
   const token = await createGcSession(id);
   res.cookie("gc_session", token, gcCookieOptions(req));
   await audit(id, "admin.setup", { email: normalizeEmail(input.email) }, id);
@@ -312,7 +312,11 @@ router.post("/admin/login", wrap(async (req, res) => {
   limit(`admin-login:${clientIp(req)}:${input.email.toLowerCase()}`, 6, 15 * 60_000);
   const found = await getUserByEmail(input.email);
   const valid = found ? await verifyPassword(input.password, found.profile.passwordHash) : false;
-  if (!found || !valid || found.user.role !== "admin") throw new HttpError(401, "Credenciais de administração inválidas");
+  if (!found || !valid || found.user.role !== "admin") {
+    await audit(found?.user.id ?? 0, "admin.login_failed", { email: normalizeEmail(input.email), ip: clientIp(req) }, found?.user.id);
+    throw new HttpError(401, "Credenciais de administração inválidas");
+  }
+  if (found.profile.status !== "active") throw new HttpError(403, "Seu acesso à administração está suspenso. Fale com o dono do site.");
   const token = await createGcSession(found.user.id);
   res.cookie("gc_session", token, gcCookieOptions(req));
   await audit(found.user.id, "admin.login", { ip: clientIp(req) }, found.user.id);
@@ -324,6 +328,7 @@ router.post("/admin/password", wrap(async (req, res) => {
   const input = body(req, z.object({ current: z.string().min(1).max(200), next: strongPassword }));
   if (!(await verifyPassword(input.current, context.profile.passwordHash))) throw new HttpError(400, "Senha atual incorreta");
   await execute("UPDATE account_profiles SET passwordHash = ? WHERE userId = ?", [await hashPassword(input.next), context.user.id]);
+  await execute("UPDATE gc_staff SET mustChangePassword = 0 WHERE userId = ?", [context.user.id]);
   await audit(context.user.id, "admin.password_change", {}, context.user.id);
   res.json({ ok: true });
 }));

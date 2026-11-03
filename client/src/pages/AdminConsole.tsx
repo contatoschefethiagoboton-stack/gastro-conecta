@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2, BriefcaseBusiness } from 'lucide-react';
+import { BadgePercent, ShieldCheck, UserPlus, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2, BriefcaseBusiness } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
@@ -13,30 +13,33 @@ import NotificationBell from '@/components/NotificationBell';
 import { NotificationsSection, MarketingSection, PricingCard, BenefitProductsCard } from './admin/EngageSections';
 import { demosFrom, type DemoProfessional, type Professional } from '@shared/catalog';
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
+import { canManageRole, isFullAccess, PERMISSIONS, ROLE_DEFAULTS, STAFF_ROLE_LABELS, type Permission, type StaffRole } from '@shared/staff';
 import { draftServiceFromName, draftToCategory, findServiceArea, type ServiceDraft } from '@shared/serviceAreas';
 import '../admin.css';
 
-type Section = 'overview' | 'notifications' | 'marketing' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'account';
+type Section = 'overview' | 'notifications' | 'marketing' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'staff' | 'account';
+type StaffMe = { name: string; email: string; role: StaffRole; permissions: Permission[]; mustChangePassword: boolean };
 type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string; code?: string; specialty?: string; whatsapp?: string; source?: string; subscriptionFree?: boolean; requestCount?: number };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
 type Benefit = { id: number; userId: number; userName?: string; userEmail?: string; kind: string; title: string; description: string; amountCents: number; percent: number; expiresAt: string | null; active: boolean; createdAt: string };
 type Media = { id: number; kind: string; filename: string; size: number; url: string; createdAt: string };
 
-const NAV: Array<{ id: Section; label: string; icon: typeof Users }> = [
-  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
+const NAV: Array<{ id: Section; label: string; icon: typeof Users; perm?: Permission }> = [
+  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard, perm: 'overview.view' },
   { id: 'notifications', label: 'Notificações', icon: Bell },
-  { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp },
-  { id: 'providers', label: 'Fornecedores (profissionais)', icon: BriefcaseBusiness },
-  { id: 'clients', label: 'Clientes', icon: Users },
-  { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard },
-  { id: 'payments', label: 'Pagamentos (Mercado Pago)', icon: Wallet },
-  { id: 'contracts', label: 'Contratos (auditoria)', icon: FileSignature },
-  { id: 'content', label: 'Textos do site', icon: PenLine },
-  { id: 'media', label: 'Imagens', icon: ImageIcon },
-  { id: 'promotions', label: 'Promoções', icon: Megaphone },
-  { id: 'benefits', label: 'Bônus e benefícios', icon: Gift },
-  { id: 'coupons', label: 'Cupons', icon: BadgePercent },
-  { id: 'audit', label: 'Auditoria', icon: ScrollText },
+  { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp, perm: 'marketing.view' },
+  { id: 'providers', label: 'Fornecedores (profissionais)', icon: BriefcaseBusiness, perm: 'users.view' },
+  { id: 'clients', label: 'Clientes', icon: Users, perm: 'users.view' },
+  { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard, perm: 'subscriptions.view' },
+  { id: 'payments', label: 'Pagamentos (Mercado Pago)', icon: Wallet, perm: 'payments.view' },
+  { id: 'contracts', label: 'Contratos (auditoria)', icon: FileSignature, perm: 'contracts.view' },
+  { id: 'content', label: 'Textos do site', icon: PenLine, perm: 'content.edit' },
+  { id: 'media', label: 'Imagens', icon: ImageIcon, perm: 'content.edit' },
+  { id: 'promotions', label: 'Promoções', icon: Megaphone, perm: 'promotions.manage' },
+  { id: 'benefits', label: 'Bônus e benefícios', icon: Gift, perm: 'benefits.manage' },
+  { id: 'coupons', label: 'Cupons', icon: BadgePercent, perm: 'benefits.manage' },
+  { id: 'audit', label: 'Histórico (auditoria)', icon: ScrollText, perm: 'audit.view' },
+  { id: 'staff', label: 'Equipe e acessos', icon: ShieldCheck, perm: 'staff.manage' },
   { id: 'account', label: 'Minha senha', icon: KeyRound },
 ];
 const typeLabel = { client: 'Cliente', provider: 'Profissional' } as const;
@@ -52,41 +55,46 @@ function Card({ title, action, children }: { title?: string; action?: ReactNode;
 function Empty({ text }: { text: string }) { return <p className="adm-empty">{text}</p>; }
 
 export default function AdminConsole() {
-  const [me, setMe] = useState<{ name: string; role: string } | null | undefined>(undefined);
+  const [me, setMe] = useState<StaffMe | null | undefined>(undefined);
   const [section, setSection] = useState<Section>(() => { const s = new URLSearchParams(window.location.search).get('secao'); const sec = s === 'users' ? 'providers' : s; return sec && NAV.some(n => n.id === sec) ? sec as Section : 'overview'; });
   const [navOpen, setNavOpen] = useState(false);
-  useEffect(() => { api<{ user: { name: string; role: string } | null }>('/me').then(r => setMe(r.user)).catch(() => setMe(null)); }, []);
+  const loadMe = () => api<{ staff: StaffMe }>('/admin/me').then(r => setMe(r.staff)).catch(() => setMe(null));
+  useEffect(() => { void loadMe(); }, []);
   if (me === undefined) return <main className="adm-page"><div className="adm-center"><Loader2 className="ob-spin" size={22}/> Carregando…</div></main>;
-  if (!me || me.role !== 'admin') return <main className="adm-page"><div className="adm-center"><p>Acesso restrito à administração.</p><Link href="/admin" className="ob-btn ob-btn-primary">Entrar como administrador</Link></div></main>;
-  const go = (s: Section) => { setSection(s); setNavOpen(false); window.scrollTo(0, 0); };
+  if (!me) return <main className="adm-page"><div className="adm-center"><p>Acesso restrito à administração.</p><Link href="/admin" className="ob-btn ob-btn-primary">Entrar como administrador</Link></div></main>;
   const logout = () => { void api('/logout', { method: 'POST' }).finally(() => window.location.assign('/')); };
-  const current = NAV.find(n => n.id === section)!;
+  if (me.mustChangePassword) return <FirstPassword me={me} onDone={() => void loadMe()} onLogout={logout}/>;
+  const can = (perm?: Permission) => !perm || isFullAccess(me.role) || me.permissions.includes(perm);
+  const nav = NAV.filter(n => can(n.perm));
+  const go = (s: Section) => { setSection(s); setNavOpen(false); window.scrollTo(0, 0); };
+  const current = nav.find(n => n.id === section) ?? nav[0];
   return <main className="adm-page">
     <div className={`adm-layout ${navOpen ? 'nav-open' : ''}`}>
       <button type="button" className="adm-backdrop" aria-label="Fechar menu" onClick={() => setNavOpen(false)}/>
       <aside className="adm-sidebar">
         <div className="adm-brand"><span>E</span><div><strong>Eventos Conecta</strong><small>Administração</small></div><button type="button" className="adm-close" onClick={() => setNavOpen(false)} aria-label="Fechar"><X size={18}/></button></div>
-        <nav>{NAV.map(item => { const Icon = item.icon; return <button key={item.id} type="button" className={section === item.id ? 'is-active' : ''} onClick={() => go(item.id)}><Icon size={17}/><span>{item.label}</span>{section === item.id && <ChevronRight size={15}/>}</button>; })}</nav>
-        <div className="adm-sidebar-foot"><a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Ver o site</a><button type="button" onClick={logout}><LogOut size={15}/> Sair</button></div>
+        <nav>{nav.map(item => { const Icon = item.icon; return <button key={item.id} type="button" className={current.id === item.id ? 'is-active' : ''} onClick={() => go(item.id)}><Icon size={17}/><span>{item.label}</span>{current.id === item.id && <ChevronRight size={15}/>}</button>; })}</nav>
+        <div className="adm-sidebar-foot"><span className="adm-whoami"><strong>{me.name}</strong><small>{STAFF_ROLE_LABELS[me.role]}</small></span><a href="/" target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Ver o site</a><button type="button" onClick={logout}><LogOut size={15}/> Sair</button></div>
       </aside>
       <section className="adm-main">
         <header className="adm-topbar"><button type="button" className="adm-menu" onClick={() => setNavOpen(true)} aria-label="Abrir menu"><Menu size={20}/></button><div><small>Administração /</small><strong>{current.label}</strong></div><span className="adm-top-actions"><NotificationBell admin onNavigate={link => { const s = new URL(link, window.location.origin).searchParams.get('secao'); go(s && NAV.some(n => n.id === s) ? s as Section : 'notifications'); }}/><span className="adm-who">{me.name}</span></span></header>
         <div className="adm-content">
-          {section === 'overview' && <Overview go={go}/>}
-          {section === 'providers' && <UsersSection key="providers" kind="provider"/>}
-          {section === 'clients' && <UsersSection key="clients" kind="client"/>}
-          {section === 'notifications' && <NotificationsSection/>}
-          {section === 'marketing' && <MarketingSection/>}
-          {section === 'subscriptions' && <SubscriptionsSection/>}
-          {section === 'payments' && <PaymentsSection/>}
-          {section === 'contracts' && <ContractsSection/>}
-          {section === 'content' && <ContentSection/>}
-          {section === 'media' && <MediaSection/>}
-          {section === 'promotions' && <PromotionsSection/>}
-          {section === 'benefits' && <BenefitsSection/>}
-          {section === 'coupons' && <CouponsSection/>}
-          {section === 'audit' && <AuditSection/>}
-          {section === 'account' && <AccountSection/>}
+          {current.id === 'overview' && <Overview go={go}/>}
+          {current.id === 'providers' && <UsersSection key="providers" kind="provider"/>}
+          {current.id === 'clients' && <UsersSection key="clients" kind="client"/>}
+          {current.id === 'notifications' && <NotificationsSection/>}
+          {current.id === 'marketing' && <MarketingSection/>}
+          {current.id === 'subscriptions' && <SubscriptionsSection/>}
+          {current.id === 'payments' && <PaymentsSection/>}
+          {current.id === 'contracts' && <ContractsSection/>}
+          {current.id === 'content' && <ContentSection/>}
+          {current.id === 'media' && <MediaSection/>}
+          {current.id === 'promotions' && <PromotionsSection/>}
+          {current.id === 'benefits' && <BenefitsSection/>}
+          {current.id === 'coupons' && <CouponsSection/>}
+          {current.id === 'audit' && <AuditSection/>}
+          {current.id === 'staff' && <StaffSection me={me}/>}
+          {current.id === 'account' && <AccountSection/>}
         </div>
       </section>
     </div>
@@ -178,7 +186,7 @@ function UserDrawer({ id, onClose, onChanged }: { id: number; onClose: () => voi
           {u.status !== 'active' && <button type="button" className="ob-btn ob-btn-primary" disabled={!!busy} onClick={() => void patch({ status: 'active' }, 'approve')}>{busy === 'approve' ? <Loader2 className="ob-spin" size={16}/> : <Check size={16}/>} {u.status === 'pending' ? 'Aprovar' : 'Reativar'}</button>}
           {u.status === 'active' && u.role !== 'admin' && <button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void patch({ status: 'suspended' }, 'suspend')}>Suspender</button>}
           {u.role !== 'admin' && u.status !== 'blocked' && <button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void patch({ status: 'blocked' }, 'block')}>Bloquear</button>}
-          {u.role !== 'admin' && u.status !== 'deleted' && <button type="button" className="ob-btn ob-btn-danger" disabled={!!busy} onClick={() => { if (confirm('Excluir esta conta? Ela deixa de acessar a plataforma.')) void patch({ status: 'deleted' }, 'delete'); }}>Excluir</button>}
+          {u.role !== 'admin' && u.status !== 'deleted' && <button type="button" className="ob-btn ob-btn-danger" disabled={!!busy} onClick={() => { if (confirm('Excluir esta conta de forma definitiva? Os dados pessoais são apagados e fica só o registro no histórico. Para voltar, a pessoa terá de se cadastrar de novo.')) void patch({ status: 'deleted' }, 'delete'); }}>Excluir</button>}
         </div>
         {u.accountType === 'provider' && !data.profileComplete && <p className="adm-alert">Este profissional ainda não completou o cadastro obrigatório (logo, foto do rosto, fotos de trabalhos, documento e Pix). A aprovação fica bloqueada até lá.</p>}
         <ResetLink userId={u.id} disabled={u.role === 'admin'}/>
@@ -764,14 +772,121 @@ function CouponsSection() {
   </div>;
 }
 
+type AuditLog = { id: number; action: string; details: string; createdAt: string; actorId: number; actorName: string; actorEmail?: string; actorRole?: StaffRole; targetId?: number; targetName?: string };
+/** Nome amigável das ações registradas. */
+function actionLabel(action: string): string {
+  const http = /^http\.(\w+) (.*)$/.exec(action);
+  if (http) return `${({ POST: 'Enviou', PUT: 'Salvou', PATCH: 'Alterou', DELETE: 'Apagou', GET: 'Consultou' } as Record<string, string>)[http[1]] ?? http[1]} ${http[2]}`;
+  const names: Record<string, string> = { 'admin.login': 'Entrou na administração', 'admin.login_failed': 'Tentativa de login recusada', 'staff.created': 'Criou acesso da equipe', 'staff.updated': 'Alterou acesso da equipe', 'staff.password_reset': 'Gerou nova senha temporária', 'staff.first_password': 'Criou a própria senha', 'account.deleted': 'Conta excluída', 'proposal.edited': 'Editou proposta', 'admin.user_update': 'Alterou conta', 'admin.content_update': 'Editou textos do site', 'account.password_reset': 'Redefiniu a senha', 'account.password_change': 'Trocou a senha' };
+  return names[action] ?? action;
+}
+
 function AuditSection() {
-  const [logs, setLogs] = useState<Array<{ id: number; action: string; details: string; createdAt: string; actorId: number }> | null>(null);
-  useEffect(() => { api<{ logs: NonNullable<typeof logs> }>('/admin/audit').then(r => setLogs(r.logs)).catch(e => toast.error(errText(e))); }, []);
-  return <Card title="Últimas ações registradas">
-    {!logs ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !logs.length ? <Empty text="Nada registrado ainda."/> :
-      <div className="adm-audit">{logs.map(l => <div key={l.id}><time>{new Date(l.createdAt).toLocaleString('pt-BR')}</time><strong>{l.action}</strong><code>{l.details.slice(0, 200)}</code></div>)}</div>}
-    <a className="ob-btn ob-btn-outline" href="/api/gastro/report/pdf" target="_blank" rel="noopener noreferrer"><FileText size={16}/> Relatório em PDF</a>
+  const [logs, setLogs] = useState<AuditLog[] | null>(null);
+  const [q, setQ] = useState('');
+  const load = (query = q) => { setLogs(null); api<{ logs: AuditLog[] }>(`/admin/audit?limit=1000${query ? `&q=${encodeURIComponent(query)}` : ''}`).then(r => setLogs(r.logs)).catch(e => toast.error(errText(e))); };
+  useEffect(() => { load(''); }, []);
+  return <Card title="Histórico de tudo o que foi feito na plataforma" action={<a className="ob-btn ob-btn-outline" href="/api/gastro/report/pdf" target="_blank" rel="noopener noreferrer"><FileText size={16}/> Relatório em PDF</a>}>
+    <p className="adm-muted">Toda ação que altera dados fica registrada com quem fez, quando, o IP e o resultado. Ninguém da equipe consegue apagar este histórico.</p>
+    <form className="adm-search" onSubmit={e => { e.preventDefault(); load(); }}><Search size={16}/><input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nome, e-mail, ação (ex.: excluída, proposta, login)"/><button type="submit" className="ob-btn ob-btn-outline">Buscar</button></form>
+    {!logs ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : !logs.length ? <Empty text="Nada encontrado."/> :
+      <div className="adm-audit">{logs.map(l => { let details: any = {}; try { details = JSON.parse(l.details); } catch { details = {}; } return <div key={l.id}>
+        <time>{new Date(l.createdAt).toLocaleString('pt-BR')}</time>
+        <strong>{actionLabel(l.action)}</strong>
+        <span className="adm-audit-who">{l.actorName}{l.actorRole ? ` (${STAFF_ROLE_LABELS[l.actorRole]})` : ''}{l.targetName && l.targetId !== l.actorId ? ` → ${l.targetName}` : ''}{details.status ? ` · resultado ${details.status}` : ''}{details.ip ? ` · IP ${details.ip}` : ''}</span>
+        {!/^http\./.test(l.action) && l.details !== '{}' && <code>{l.details.slice(0, 300)}</code>}
+      </div>; })}</div>}
   </Card>;
+}
+
+type StaffRow = { id: number; name: string; email: string; role: StaffRole; permissions: Permission[]; status: string; mustChangePassword: boolean; lastSeenAt?: string };
+
+function PermissionPicker({ value, onChange, role, me }: { value: Permission[]; onChange: (v: Permission[]) => void; role: StaffRole; me: StaffMe }) {
+  if (isFullAccess(role)) return <p className="adm-muted">Administradores têm acesso a tudo, menos alterar o dono e outros administradores.</p>;
+  const groups = [...new Set(PERMISSIONS.map(p => p.group))];
+  const grantable = (p: Permission) => (isFullAccess(me.role) || me.permissions.includes(p)) && !(p === 'staff.manage' && (role === 'operator' || !isFullAccess(me.role)));
+  return <div className="adm-perms">{groups.map(g => <fieldset key={g}><legend>{g}</legend>{PERMISSIONS.filter(p => p.group === g).map(p => <label key={p.key} className={grantable(p.key) ? '' : 'is-disabled'}><input type="checkbox" disabled={!grantable(p.key)} checked={value.includes(p.key)} onChange={e => onChange(e.target.checked ? [...value, p.key] : value.filter(x => x !== p.key))}/> {p.label}</label>)}</fieldset>)}</div>;
+}
+
+function TempPasswordNotice({ result }: { result: { emailed: boolean; temporaryPassword?: string; mailError?: string } }) {
+  return result.emailed ? <div className="adm-ok"><Check size={16}/> Senha temporária enviada por e-mail. No primeiro acesso a pessoa cria a própria senha.</div>
+    : <div className="adm-warn"><AlertTriangle size={16}/><div><strong>O e-mail não foi enviado.</strong> {result.mailError} Passe esta senha temporária à pessoa por um canal seguro (ela só aparece agora): <code>{result.temporaryPassword}</code></div></div>;
+}
+
+/** Equipe e acessos: criar operadores, gerentes e administradores e decidir o que cada um pode fazer. */
+function StaffSection({ me }: { me: StaffMe }) {
+  const [list, setList] = useState<StaffRow[] | null>(null);
+  const roles = (['admin', 'manager', 'operator'] as StaffRole[]).filter(r => canManageRole(me.role, r));
+  const [form, setForm] = useState<{ name: string; email: string; role: StaffRole; permissions: Permission[] }>({ name: '', email: '', role: roles.includes('operator') ? 'operator' : roles[0], permissions: ROLE_DEFAULTS.operator });
+  const [editing, setEditing] = useState<{ id: number; role: StaffRole; permissions: Permission[] } | null>(null);
+  const [result, setResult] = useState<{ emailed: boolean; temporaryPassword?: string; mailError?: string } | null>(null);
+  const [busy, setBusy] = useState('');
+  const load = () => api<{ staff: StaffRow[] }>('/admin/staff').then(r => setList(r.staff)).catch(e => toast.error(errText(e)));
+  useEffect(() => { void load(); }, []);
+  const act = async (key: string, fn: () => Promise<unknown>, ok?: string) => { setBusy(key); try { await fn(); if (ok) toast.success(ok); await load(); return true; } catch (e) { toast.error(errText(e)); return false; } finally { setBusy(''); } };
+  const create = async () => {
+    if (form.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(form.email.trim())) { toast.error('Informe nome e e-mail.'); return; }
+    setBusy('create');
+    try { const r = await api<{ emailed: boolean; temporaryPassword?: string; mailError?: string }>('/admin/staff', { method: 'POST', body: JSON.stringify(form) }); setResult(r); setForm({ ...form, name: '', email: '' }); toast.success('Acesso criado.'); await load(); }
+    catch (e) { toast.error(errText(e)); } finally { setBusy(''); }
+  };
+  if (!roles.length) return <Card title="Equipe e acessos"><Empty text="Seu acesso não permite criar pessoas na equipe."/></Card>;
+  return <div className="adm-stack">
+    <Card title="Liberar novo acesso">
+      <p className="adm-muted">A pessoa recebe por e-mail uma senha temporária e cria a própria senha no primeiro acesso. Se esquecer a senha, ela mesma redefine em “Esqueci minha senha”. Você (dono) sempre tem acesso a tudo e ninguém pode alterar ou excluir a sua conta.</p>
+      <div className="adm-form-grid">
+        <label className="adm-content-field"><span className="adm-content-label">Nome</span><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} maxLength={160}/></label>
+        <label className="adm-content-field"><span className="adm-content-label">E-mail</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} maxLength={320}/></label>
+        <label className="adm-content-field"><span className="adm-content-label">Papel</span><select value={form.role} onChange={e => { const role = e.target.value as StaffRole; setForm({ ...form, role, permissions: role === 'admin' ? [] : ROLE_DEFAULTS[role as 'manager' | 'operator'] }); }}>{roles.map(r => <option key={r} value={r}>{STAFF_ROLE_LABELS[r]}</option>)}</select></label>
+      </div>
+      <span className="adm-content-label">O que esta pessoa pode ver e fazer</span>
+      <PermissionPicker value={form.permissions} onChange={permissions => setForm({ ...form, permissions })} role={form.role} me={me}/>
+      <button type="button" className="ob-btn ob-btn-primary" disabled={busy === 'create'} onClick={() => void create()}>{busy === 'create' ? <Loader2 className="ob-spin" size={16}/> : <UserPlus size={16}/>} Criar acesso e enviar senha</button>
+      {result && <TempPasswordNotice result={result}/>}
+    </Card>
+    <Card title="Equipe">
+      {!list ? <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div> : <div className="adm-staff">{list.map(m => { const locked = m.role === 'owner' || !canManageRole(me.role, m.role); return <article key={m.id} className="adm-staff-row">
+        <div><strong>{m.name}</strong> <span className={`adm-badge adm-role-${m.role}`}>{STAFF_ROLE_LABELS[m.role]}</span>{m.status !== 'active' && <span className="adm-badge adm-badge-off">Suspenso</span>}{m.mustChangePassword && <span className="adm-badge">Aguardando 1º acesso</span>}
+          <p className="adm-muted">{m.email}{m.lastSeenAt ? ` · último acesso ${new Date(m.lastSeenAt).toLocaleString('pt-BR')}` : ''}</p>
+          {!isFullAccess(m.role) && editing?.id !== m.id && <p className="adm-perm-summary">{m.permissions.length ? m.permissions.map(p => PERMISSIONS.find(x => x.key === p)?.label).join(' · ') : 'Sem permissões'}</p>}
+          {m.role === 'owner' && <p className="adm-perm-summary">Acesso total e permanente. Não pode ser alterado nem excluído.</p>}
+        </div>
+        {!locked && editing?.id !== m.id && <div className="adm-row-actions">
+          <button type="button" onClick={() => setEditing({ id: m.id, role: m.role, permissions: m.permissions })}><PenLine size={14}/> Permissões</button>
+          <button type="button" disabled={!!busy} onClick={() => void act(`st-${m.id}`, () => api(`/admin/staff/${m.id}`, { method: 'PATCH', body: JSON.stringify({ status: m.status === 'active' ? 'suspended' : 'active' }) }), m.status === 'active' ? 'Acesso suspenso.' : 'Acesso reativado.')}>{m.status === 'active' ? 'Suspender' : 'Reativar'}</button>
+          <button type="button" disabled={!!busy} onClick={() => { setBusy(`pw-${m.id}`); api<{ emailed: boolean; temporaryPassword?: string; mailError?: string }>(`/admin/staff/${m.id}/reset-password`, { method: 'POST' }).then(r => { setResult(r); toast.success('Nova senha temporária gerada.'); return load(); }).catch(e => toast.error(errText(e))).finally(() => setBusy('')); }}><KeyRound size={14}/> Nova senha</button>
+          <button type="button" className="danger" disabled={!!busy} onClick={() => { if (confirm(`Excluir o acesso de ${m.name}? Os dados pessoais são apagados e fica só o registro no histórico. Para voltar, a pessoa precisa de um acesso novo.`)) void act(`del-${m.id}`, () => api(`/admin/staff/${m.id}`, { method: 'DELETE' }), 'Acesso excluído.'); }}><Trash2 size={14}/> Excluir</button>
+        </div>}
+        {editing?.id === m.id && <div className="adm-staff-edit">
+          <label className="adm-content-field"><span className="adm-content-label">Papel</span><select value={editing.role} onChange={e => { const role = e.target.value as StaffRole; setEditing({ ...editing, role, permissions: role === 'admin' ? [] : editing.permissions }); }}>{roles.map(r => <option key={r} value={r}>{STAFF_ROLE_LABELS[r]}</option>)}</select></label>
+          <PermissionPicker value={editing.permissions} onChange={permissions => setEditing({ ...editing, permissions })} role={editing.role} me={me}/>
+          <div className="adm-row-actions"><button type="button" onClick={() => setEditing(null)}>Cancelar</button><button type="button" className="ob-btn ob-btn-primary" disabled={!!busy} onClick={() => void act(`ed-${m.id}`, () => api(`/admin/staff/${m.id}`, { method: 'PATCH', body: JSON.stringify({ role: editing.role, permissions: editing.permissions }) }), 'Permissões salvas.').then(ok => { if (ok) setEditing(null); })}>Salvar permissões</button></div>
+        </div>}
+      </article>; })}</div>}
+    </Card>
+  </div>;
+}
+
+/** Primeiro acesso de quem recebeu senha temporária: cria a própria senha. */
+function FirstPassword({ me, onDone, onLogout }: { me: StaffMe; onDone: () => void; onLogout: () => void }) {
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' });
+  const [busy, setBusy] = useState(false);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (form.next !== form.confirm) { toast.error('A confirmação não confere.'); return; }
+    setBusy(true);
+    try { await api('/admin/first-password', { method: 'POST', body: JSON.stringify({ current: form.current, next: form.next }) }); toast.success('Senha criada. Bem-vindo(a)!'); onDone(); }
+    catch (err) { toast.error(errText(err)); } finally { setBusy(false); }
+  };
+  return <main className="adm-page"><div className="adm-center"><form className="adm-card adm-first-password" onSubmit={save}>
+    <h2>Crie a sua senha</h2>
+    <p className="adm-muted">Olá, {me.name}. Você entrou com uma senha temporária como <strong>{STAFF_ROLE_LABELS[me.role]}</strong>. Crie agora a sua própria senha (10+ caracteres, com maiúscula, minúscula, número e símbolo).</p>
+    <label className="adm-content-field"><span className="adm-content-label">Senha temporária (do e-mail)</span><input type="password" autoComplete="current-password" value={form.current} onChange={e => setForm({ ...form, current: e.target.value })}/></label>
+    <label className="adm-content-field"><span className="adm-content-label">Nova senha</span><input type="password" autoComplete="new-password" value={form.next} onChange={e => setForm({ ...form, next: e.target.value })}/></label>
+    <label className="adm-content-field"><span className="adm-content-label">Repita a nova senha</span><input type="password" autoComplete="new-password" value={form.confirm} onChange={e => setForm({ ...form, confirm: e.target.value })}/></label>
+    <button className="ob-btn ob-btn-primary" type="submit" disabled={busy}>{busy ? <Loader2 className="ob-spin" size={16}/> : <KeyRound size={16}/>} Salvar e entrar</button>
+    <button type="button" className="ob-link-danger" onClick={onLogout}>Sair</button>
+  </form></div></main>;
 }
 
 function AccountSection() {

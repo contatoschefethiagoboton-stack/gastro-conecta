@@ -17,6 +17,7 @@ import { later, notifyAdmin, notifyUser } from "./notify";
 import { cancelPreapproval, createPixPayment, createPreapproval, getAuthorizedPayment, getPayment, getPreapproval, mpConfigured, mpWebhookSecret, refreshMpSettings, verifyWebhookSignature } from "./mercadopago";
 import { parsePaymentReference, paymentDescription, paymentReference, subscriberCode } from "@shared/payments";
 import { promotionWindowEnd, type Promotion } from "@shared/promotions";
+import { requireStaff, type StaffContext } from "./staff";
 
 const router = Router();
 const HOUR = 60 * 60 * 1000;
@@ -340,10 +341,9 @@ router.delete("/subscription/auto", wrap(async (req, res) => {
 
 // ------------------------------------------------------------------ administração
 
-async function adminCtx(req: Request) {
-  const context = await requireAuth(req);
-  if (!(await isOwner(context))) throw new HttpError(403, "Acesso reservado à administração");
-  return context;
+/** Equipe da administração: a permissão exigida vem do endereço (ver @shared/staff). */
+async function adminCtx(req: Request): Promise<StaffContext> {
+  return requireStaff(req);
 }
 
 router.get("/admin/subscriptions", wrap(async (req, res) => {

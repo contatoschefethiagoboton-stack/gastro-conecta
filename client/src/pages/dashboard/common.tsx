@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleAlert, Download, ExternalLink, FileText, Instagram, KeyRound, Loader2, Lock, Star } from "lucide-react";
+import { Check, CircleAlert, ClipboardList, Download, ExternalLink, FileText, Instagram, KeyRound, Loader2, Lock, Star } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useSite } from "@/lib/site";
@@ -21,7 +21,8 @@ export type EventItem = {
 };
 export type Proposal = {
   id: number; eventId: number; providerId: number; amountCents: number; costCents: number; message: string; status: string; scope: "labor" | "full"; paymentTerms: string; eventTime?: string;
-  createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean;
+  createdAt: string; providerName?: string; eventTitle?: string; eventStatus?: string; closedWith?: string; whatsappUrl?: string; providerRating?: { average: number; count: number }; clientView?: boolean; hasShoppingList?: boolean; breakdown?: Record<string, any> | null;
+  shoppingListFee?: { feeCents: number; courtesy: boolean };
 };
 export type PendingReview = { eventId: number; title: string; completedAt: string; targets: Array<{ id: number; name: string }> };
 export type ReviewsResponse = { pending: PendingReview[]; overdue: number; average: number; count: number; reviews: Array<{ id: number; eventTitle: string; reviewerName: string; targetName: string; rating: number; feedback: string; createdAt: string; mine: boolean }> };
@@ -107,6 +108,11 @@ export async function downloadFile(path: string, fileName: string) {
 
 export function ContractButton({ id, label = "Contrato PDF" }: { id: number; label?: string }) {
   return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/contracts/${id}/pdf`, `contrato-eventosconecta-${id}.pdf`)}><Download size={14}/> {label}</button>;
+}
+
+/** Lista de compras da proposta (só mão de obra) em PDF, com o aviso ao cliente. */
+export function ShoppingListButton({ proposalId, label = "Lista de compras (PDF)" }: { proposalId: number; label?: string }) {
+  return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/proposals/${proposalId}/shopping-list/pdf`, `lista-de-compras-${proposalId}.pdf`)}><ClipboardList size={14}/> {label}</button>;
 }
 
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
@@ -207,5 +213,26 @@ export function SecurityPanel({ user }: { user: DashboardUser }) {
         <Field label="Repita a nova senha" type="password" value={form.confirm} onChange={v => setForm(f => ({ ...f, confirm: v }))} required/>
       </div><PasswordRules value={form.next}/><SubmitButton loading={busy === "password"} label="Salvar nova senha"/></form>
     </section>
+    <DeleteAccountCard/>
   </div>;
+}
+
+/** O usuário sai do site: os dados pessoais são apagados e fica só o registro no histórico. */
+function DeleteAccountCard() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const { busy, run } = useAction();
+  const remove = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const ok = await run("delete-account", () => post("/account/delete", { password, confirm: confirmText.trim().toUpperCase() }), "Conta excluída. Até logo!");
+    if (ok) window.location.assign("/");
+  };
+  return <section className="dash-card dash-danger-card"><div className="dash-card-heading"><div><span className="dash-eyebrow">Zona de risco</span><h3>Excluir minha conta</h3><p className="dash-muted">Seus dados pessoais são apagados e você sai do site. Fica só um registro no histórico, e contratos já assinados são guardados por obrigação legal. Para voltar, será preciso fazer um cadastro novo do zero.</p></div></div>
+    {!open ? <button type="button" className="dash-outline-button dash-danger-button" onClick={() => setOpen(true)}>Quero excluir minha conta</button>
+      : <form className="dash-form" onSubmit={remove}><div className="dash-form-grid">
+        <Field label="Sua senha" type="password" value={password} onChange={setPassword} required/>
+        <Field label='Digite EXCLUIR para confirmar' value={confirmText} onChange={setConfirmText} required/>
+      </div><div className="cp-actions"><button type="button" className="dash-outline-button" onClick={() => setOpen(false)}>Cancelar</button><button type="submit" className="dash-primary-button dash-danger-button" disabled={busy === "delete-account" || confirmText.trim().toUpperCase() !== "EXCLUIR"}>Excluir definitivamente</button></div></form>}
+  </section>;
 }
