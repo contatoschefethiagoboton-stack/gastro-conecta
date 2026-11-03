@@ -108,7 +108,7 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   const content = await getSiteContent();
   const status = notifySettingsStatus();
   const template = await templateSummary(true);
-  const wa = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "Teste do GastroConecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`);
+  const wa = await sendWhatsappDetailed(content["contact.whatsapp"] ?? "", "Teste do Eventos Conecta", "Se você recebeu esta mensagem, os avisos por WhatsApp estão funcionando.", `${status.origin}/admin/painel`);
   const whatsapp = wa.ok;
   // Diagnóstico: se o modelo foi recusado, testa o modelo padrão da Meta (hello_world) para separar
   // problema de token/número de problema no modelo.
@@ -122,7 +122,7 @@ router.post("/admin/notifications/test", wrap(async (req, res) => {
   }
   // Mesmo destino dos avisos reais: a lista da seção Notificações ou o e-mail de login do admin.
   const to = (status.email.adminEmails || context.user.email || "").split(/[,;\s]+/).find(e => /@/.test(e)) ?? "";
-  const mail = to ? await sendMailDetailed(to, "[GastroConecta] Teste de notificação", "<p>Os avisos por e-mail do GastroConecta estão funcionando.</p>") : { ok: false, error: "Nenhum e-mail de destino: preencha o e-mail da administração nesta seção." };
+  const mail = to ? await sendMailDetailed(to, "[Eventos Conecta] Teste de notificação", "<p>Os avisos por e-mail do Eventos Conecta estão funcionando.</p>") : { ok: false, error: "Nenhum e-mail de destino: preencha o e-mail da administração nesta seção." };
   res.json({
     whatsapp, email: mail.ok, emailTo: to,
     ...(mail.error ? { emailError: mail.error } : {}),
@@ -300,7 +300,7 @@ router.post("/admin/marketing/ai", wrap(async (req, res) => {
   if (!base || !key) throw new HttpError(503, "IA não configurada no servidor (OPENAI_API_KEY). As sugestões automáticas acima continuam funcionando.");
   const report = await marketingReport(30);
   const summary = { totals: report.totals, sources: report.sources.slice(0, 10), bestHours: report.hours.filter(h => h.visits + h.requests > 0).sort((a, b) => b.visits - a.visits).slice(0, 5), weekdays: report.weekdays, terms: report.terms, requested: report.requested, cities: report.cities, critical: report.critical };
-  const system = "Você é o estrategista de marketing do GastroConecta, plataforma que conecta clientes (grátis) a chefs, garçons, barmans, limpeza e jardinagem (profissionais pagam assinatura fixa, sem comissão). Responda em português do Brasil, em tópicos curtos e práticos. Use somente os números recebidos; não invente dados. Entregue: 1) diagnóstico em 3 linhas; 2) plano orgânico da semana (Instagram/Facebook/Google Meu Negócio) com dias e horários; 3) plano patrocinado (Google Ads e Meta Ads) com público, palavras-chave, verba inicial sugerida e página de destino; 4) ações para atrair fornecedores; 5) ações para clientes e fornecedores divulgarem a plataforma; 6) 3 métricas para acompanhar.";
+  const system = "Você é o estrategista de marketing do Eventos Conecta, plataforma que conecta clientes (grátis) a chefs, garçons, barmans, limpeza e jardinagem (profissionais pagam assinatura fixa, sem comissão). Responda em português do Brasil, em tópicos curtos e práticos. Use somente os números recebidos; não invente dados. Entregue: 1) diagnóstico em 3 linhas; 2) plano orgânico da semana (Instagram/Facebook/Google Meu Negócio) com dias e horários; 3) plano patrocinado (Google Ads e Meta Ads) com público, palavras-chave, verba inicial sugerida e página de destino; 4) ações para atrair fornecedores; 5) ações para clientes e fornecedores divulgarem a plataforma; 6) 3 métricas para acompanhar.";
   const response = await fetch(resolveCopilotEndpoint(base), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(45_000), body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: `Dados dos últimos 30 dias: ${JSON.stringify(summary)}` }], ...(model.startsWith("gpt-5") ? {} : { temperature: 0.4 }) }) }).catch(() => null);
   if (!response?.ok) throw new HttpError(503, "A IA não respondeu agora. Tente de novo em instantes.");
   const data = await response.json().catch(() => null) as any;

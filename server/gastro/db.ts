@@ -60,7 +60,7 @@ export async function ensureDatabaseExists(): Promise<void> {
     connection = await mysql.createConnection({ ...config, connectTimeout: 15000 });
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\``);
   } catch (error) {
-    console.warn("[GastroConecta] Aviso ao criar o banco:", error instanceof Error ? error.message : String(error));
+    console.warn("[Eventos Conecta] Aviso ao criar o banco:", error instanceof Error ? error.message : String(error));
   } finally {
     await connection?.end().catch(() => undefined);
   }

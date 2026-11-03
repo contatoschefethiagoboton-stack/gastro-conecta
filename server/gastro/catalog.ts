@@ -50,7 +50,7 @@ export async function loadProfessionals(): Promise<Professional[]> {
     const count = Number(row.ratingCount ?? 0);
     const professional: Professional = {
       id: `user-${Number(row.id)}`,
-      name: String(d.tradeName || (d.documentType === "cnpj" ? d.companyName : "") || row.name || "Profissional GastroConecta"),
+      name: String(d.tradeName || (d.documentType === "cnpj" ? d.companyName : "") || row.name || "Profissional Eventos Conecta"),
       type: services[0]?.group ?? "Profissional",
       categoryIds: [...new Set(services.map(s => s.categoryId))],
       category: specialty || services[0]?.label || "Profissional",

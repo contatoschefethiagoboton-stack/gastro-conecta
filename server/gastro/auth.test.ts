@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hashPassword, passwordIsStrong, tokenHash, verifyPassword } from "./auth";
 
-describe("GastroConecta authentication", () => {
+describe("Eventos Conecta authentication", () => {
   it("requires a strong password and verifies the scrypt record", async () => {
     const password = "Gastro!Connecta2026";
     expect(passwordIsStrong(password)).toBe(true);

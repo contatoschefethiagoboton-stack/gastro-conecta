@@ -170,7 +170,7 @@ export async function resolveAuth(req: Request): Promise<AuthContext | null> {
   const localToken = cookies[GC_COOKIE];
   const local = await fromGcSession(localToken);
   if (local) return local;
-  // A present but invalid/expired GastroConecta cookie is an explicit local
+  // A present but invalid/expired Eventos Conecta cookie is an explicit local
   // logout/expiry state; do not turn it into an unexpected Manus session.
   if (localToken) return null;
   // Login Manus só existe na hospedagem Manus; fora dela (Render), ignora.

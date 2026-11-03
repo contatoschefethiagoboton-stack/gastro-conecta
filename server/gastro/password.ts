@@ -33,7 +33,7 @@ export function explainMailError(status: number, message: string, from: string):
   if (status === 401 || status === 403 && /api key/.test(m) || /api key is invalid|invalid api key|missing api key/.test(m)) return "A chave RESEND_API_KEY no Render está errada ou foi apagada. Gere uma nova em resend.com → API Keys e cole no Render.";
   if (/only send testing emails to your own email/.test(m)) return `O Resend está em modo de teste: sem domínio verificado ele só entrega para o e-mail dono da conta Resend. Verifique seu domínio em resend.com → Domains e use um remetente desse domínio em MAIL_FROM (ex.: avisos@seudominio.com.br).`;
   if (/domain is not verified|not verified|verify a domain/.test(m)) return /gmail|hotmail|outlook|yahoo|icloud|live\./.test(domain) ? `MAIL_FROM usa ${domain}, que não pode ser remetente no Resend. Use um domínio seu verificado (ex.: avisos@seudominio.com.br) ou, só para teste, onboarding@resend.dev.` : `O domínio ${domain || "do remetente"} ainda não foi verificado no Resend. Em resend.com → Domains, adicione os registros DNS indicados e aguarde ficar "Verified".`;
-  if (/invalid `from`|from field|invalid from/.test(m)) return `MAIL_FROM está em formato inválido ("${from}"). Use, por exemplo: GastroConecta <avisos@seudominio.com.br>.`;
+  if (/invalid `from`|from field|invalid from/.test(m)) return `MAIL_FROM está em formato inválido ("${from}"). Use, por exemplo: Eventos Conecta <avisos@seudominio.com.br>.`;
   if (/invalid `to`|to field/.test(m)) return "O e-mail de destino é inválido. Confira o e-mail da administração na seção Notificações.";
   if (status === 429) return "Limite de envios do Resend atingido. Aguarde alguns minutos ou confira seu plano no Resend.";
   return `O Resend recusou o envio (${status}): ${message || "sem detalhes"}.`;
@@ -70,8 +70,8 @@ router.post("/password/forgot", wrap(async (req, res) => {
   const found = await getUserByEmail(input.email);
   if (found && found.user.role !== "admin" && !["deleted", "blocked"].includes(found.profile.status)) {
     const link = await createResetLink(req, found.user.id);
-    const sent = await sendMail(found.user.email ?? input.email, "Redefinição de senha - GastroConecta", `<p>Olá, ${String(found.user.name ?? "").replace(/[<>&]/g, "")}.</p><p>Para criar uma nova senha, acesse o link abaixo (válido por 1 hora):</p><p><a href="${link}">${link}</a></p><p>Se você não pediu a troca, ignore este e-mail.</p>`);
-    if (!sent && process.env.NODE_ENV !== "production") console.log(`[GastroConecta] Link de redefinição (desenvolvimento) para ${found.user.email}: ${link}`);
+    const sent = await sendMail(found.user.email ?? input.email, "Redefinição de senha - Eventos Conecta", `<p>Olá, ${String(found.user.name ?? "").replace(/[<>&]/g, "")}.</p><p>Para criar uma nova senha, acesse o link abaixo (válido por 1 hora):</p><p><a href="${link}">${link}</a></p><p>Se você não pediu a troca, ignore este e-mail.</p>`);
+    if (!sent && process.env.NODE_ENV !== "production") console.log(`[Eventos Conecta] Link de redefinição (desenvolvimento) para ${found.user.email}: ${link}`);
   }
   // Resposta sempre igual: não revela se o e-mail existe.
   res.json({ ok: true, message: mailConfigured() ? "Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha." : "Se o e-mail estiver cadastrado, o link de redefinição será enviado. Se não receber em alguns minutos, use o Fale Conosco para que a administração envie o link." });

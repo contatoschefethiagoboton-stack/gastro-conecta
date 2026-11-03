@@ -1,8 +1,8 @@
 // Valores padrão de contato. O administrador altera tudo isso pelo painel
 // (Conteúdo do site → Contato); estes valores só valem até a primeira edição.
 export const businessDefaults = {
-  name: 'GastroConecta',
-  company: 'GastroConecta',
+  name: 'Eventos Conecta',
+  company: 'Eventos Conecta',
   region: 'Campinas e região',
   whatsappNumber: '5519993984529', // DDI + DDD + número, só dígitos
   whatsappDisplay: '(19) 99398-4529',

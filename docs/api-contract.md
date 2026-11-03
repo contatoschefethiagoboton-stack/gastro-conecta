@@ -1,4 +1,4 @@
-# Contrato de API — GastroConecta
+# Contrato de API — Eventos Conecta
 
 Base `/api/gastro`, JSON, sessão cookie `gc_session` opaca (hash no banco). Erros `{error:string}` e status HTTP adequados. Frontend usa `credentials: include`. Sem usuários simulados.
 

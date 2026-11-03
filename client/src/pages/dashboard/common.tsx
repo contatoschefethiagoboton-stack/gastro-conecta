@@ -106,7 +106,7 @@ export async function downloadFile(path: string, fileName: string) {
 }
 
 export function ContractButton({ id, label = "Contrato PDF" }: { id: number; label?: string }) {
-  return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/contracts/${id}/pdf`, `contrato-gastroconecta-${id}.pdf`)}><Download size={14}/> {label}</button>;
+  return <button className="dash-small-button" type="button" onClick={() => void downloadFile(`/contracts/${id}/pdf`, `contrato-eventosconecta-${id}.pdf`)}><Download size={14}/> {label}</button>;
 }
 
 export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
@@ -134,7 +134,7 @@ export function ReviewLockBanner({ user, onGo }: { user: DashboardUser; onGo: ()
   return <div className={`dash-alert ${user.reviewLock ? "dash-alert-error" : "dash-alert-warning"}`} role="alert"><Lock size={17}/> {user.reviewLock ? "Avaliação pendente há mais de 24h: pedidos, propostas e aceites estão bloqueados até você avaliar." : `Você tem ${user.pendingReviews} avaliação(ões) obrigatória(s). Avalie em até 24h após a conclusão para não ter ações bloqueadas.`}<button type="button" className="dash-small-button" onClick={onGo}>Avaliar agora</button></div>;
 }
 
-/** Convite para avaliar a GastroConecta no Google e seguir o Instagram. */
+/** Convite para avaliar a Eventos Conecta no Google e seguir o Instagram. */
 export function GrowthPrompt({ user }: { user: DashboardUser }) {
   const site = useSite();
   const { run } = useAction();
@@ -143,7 +143,7 @@ export function GrowthPrompt({ user }: { user: DashboardUser }) {
   const flags = user.growthFlags ?? [];
   if (!user.growthPrompt || (!google && !instagram)) return null;
   const ack = (flag: "google" | "instagram") => void run(`growth-${flag}`, () => post("/growth/ack", { flag }));
-  return <section className="dash-card dash-growth-card"><div><span className="dash-eyebrow">Ajude a comunidade a crescer</span><h3>Sua opinião faz diferença</h3><p>Leva 1 minuto: avalie a GastroConecta no Google e siga nosso Instagram para novidades e oportunidades.</p></div><div className="dash-growth-actions">
+  return <section className="dash-card dash-growth-card"><div><span className="dash-eyebrow">Ajude a comunidade a crescer</span><h3>Sua opinião faz diferença</h3><p>Leva 1 minuto: avalie a Eventos Conecta no Google e siga nosso Instagram para novidades e oportunidades.</p></div><div className="dash-growth-actions">
     {google && !flags.includes("google") && <a className="dash-primary-button" href={google} target="_blank" rel="noopener noreferrer" onClick={() => ack("google")}><Star size={16}/> Avaliar no Google <ExternalLink size={13}/></a>}
     {instagram && !flags.includes("instagram") && <a className="dash-outline-button" href={instagram} target="_blank" rel="noopener noreferrer" onClick={() => ack("instagram")}><Instagram size={16}/> Seguir no Instagram</a>}
   </div></section>;
@@ -164,7 +164,7 @@ export function ReviewsPanel() {
   const data = query.data;
   return <div className="dash-stack">
     <SectionIntro eyebrow="Avaliação 360°" title="Avaliações obrigatórias." text="Depois de cada serviço concluído, cliente e profissional avaliam um ao outro. Pendências com mais de 24h bloqueiam novos pedidos, propostas e aceites."/>
-    {thanks && (site.c("growth.googleReviewUrl") || site.c("contact.instagram")) && <section className="dash-card dash-growth-card"><div><span className="dash-eyebrow">Obrigado!</span><h3>Que tal avaliar a GastroConecta também?</h3><p>Sua avaliação no Google e seu follow no Instagram ajudam mais pessoas a encontrar bons profissionais.</p></div><div className="dash-growth-actions">{site.c("growth.googleReviewUrl") && <a className="dash-primary-button" href={site.c("growth.googleReviewUrl")} target="_blank" rel="noopener noreferrer" onClick={() => void post("/growth/ack", { flag: "google" })}><Star size={16}/> Avaliar no Google</a>}{site.c("contact.instagram") && <a className="dash-outline-button" href={site.c("contact.instagram")} target="_blank" rel="noopener noreferrer" onClick={() => void post("/growth/ack", { flag: "instagram" })}><Instagram size={16}/> Seguir no Instagram</a>}</div></section>}
+    {thanks && (site.c("growth.googleReviewUrl") || site.c("contact.instagram")) && <section className="dash-card dash-growth-card"><div><span className="dash-eyebrow">Obrigado!</span><h3>Que tal avaliar a Eventos Conecta também?</h3><p>Sua avaliação no Google e seu follow no Instagram ajudam mais pessoas a encontrar bons profissionais.</p></div><div className="dash-growth-actions">{site.c("growth.googleReviewUrl") && <a className="dash-primary-button" href={site.c("growth.googleReviewUrl")} target="_blank" rel="noopener noreferrer" onClick={() => void post("/growth/ack", { flag: "google" })}><Star size={16}/> Avaliar no Google</a>}{site.c("contact.instagram") && <a className="dash-outline-button" href={site.c("contact.instagram")} target="_blank" rel="noopener noreferrer" onClick={() => void post("/growth/ack", { flag: "instagram" })}><Instagram size={16}/> Seguir no Instagram</a>}</div></section>}
     <section className="dash-card"><div className="dash-card-heading"><div><span className="dash-eyebrow">Pendências</span><h3>Avalie agora</h3></div><Star size={20}/></div>
       {query.isLoading ? <LoadingState/> : !data?.pending.length ? <EmptyState title="Nenhuma avaliação pendente" detail="Quando um serviço for concluído, a avaliação aparece aqui."/> : <div className="dash-review-list">{data.pending.map(pending => <div className="dash-review-event" key={pending.eventId}><strong>{pending.title}</strong>{pending.targets.map(target => {
         const key = `${pending.eventId}-${target.id}`; const values = forms[key] ?? { rating: 0, feedback: "" };

@@ -26,7 +26,7 @@ describe("identificação no Mercado Pago", () => {
   it("referência e descrição identificam a plataforma e o assinante", () => {
     expect(paymentReference("ASSINATURA", 12, 45)).toBe("GASTROCONECTA-ASSINATURA-U12-P45");
     expect(subscriberCode(12)).toBe("GC-00012");
-    expect(paymentDescription("PROMOCAO", 12, "Ana Chef", "“Natal”")).toBe("GastroConecta · Adicional de promoção “Natal” · GC-00012 · Ana Chef");
+    expect(paymentDescription("PROMOCAO", 12, "Ana Chef", "“Natal”")).toBe("Eventos Conecta · Adicional de promoção “Natal” · GC-00012 · Ana Chef");
   });
   it("lê referências novas e antigas e ignora as de outras plataformas", () => {
     expect(parsePaymentReference("GASTROCONECTA-ASSINATURA-AUTO-U7")).toEqual({ kind: "ASSINATURA-AUTO", userId: 7 });

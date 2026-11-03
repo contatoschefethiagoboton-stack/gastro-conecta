@@ -1,4 +1,4 @@
-# GastroConecta — entregas
+# Eventos Conecta — entregas
 
 - [x] Versão independente (Render): MySQL externo por `DATABASE_URL` com SSL automático; migrações e dados iniciais na inicialização; arquivos (fotos, currículos, imagens do site) guardados no banco; login Manus removido do fluxo; admin criado por código nos logs ou `ADMIN_EMAIL`/`ADMIN_PASSWORD`; link discreto "Administração" no rodapé.
 - [x] Cadastro obrigatório: parceiro (foto, 5+ fotos, CNPJ, razão social, responsável, telefone, endereço, redes sociais, site opcional) e freelancer (currículo, dados pessoais, CPF, endereço, conta e Pix); aprovação manual; Pix visível ao contratante após aceite.

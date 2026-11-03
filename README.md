@@ -1,10 +1,12 @@
-# GastroConecta
+# Eventos Conecta (eventosconecta.com.br)
 
 Marketplace responsivo (celular, tablet e computador) que conecta clientes a profissionais — chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem. Site público, PWA instalável, painéis de cliente e profissional e painel de administração. React, TypeScript, Express e MySQL.
 
 Funciona de forma independente (ex.: Render): banco MySQL externo via `DATABASE_URL`, arquivos e imagens guardados no próprio banco, migrações automáticas na inicialização e acesso de administrador criado pelo código exibido nos logs.
 
 ## Colocar no ar
+
+Domínio próprio e Google: veja `docs/SEO.md`.
 
 Siga `docs/MANUAL-PLATAFORMA.md` (também em PDF), seção 2. Resumo:
 

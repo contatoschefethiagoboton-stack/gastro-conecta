@@ -1,4 +1,4 @@
-# GastroConecta — plano de implementação
+# Eventos Conecta — plano de implementação
 
 ## Produto e entrega
 

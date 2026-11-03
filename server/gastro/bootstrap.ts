@@ -43,9 +43,9 @@ function issueSetupCode() {
   const code = `${raw.slice(0, 5)}-${raw.slice(5)}`;
   setupCodeHash = digest(code);
   console.log("==================================================================");
-  console.log("[GastroConecta] Nenhum administrador cadastrado ainda.");
-  console.log(`[GastroConecta] Código de configuração do admin: ${code}`);
-  console.log("[GastroConecta] Abra /admin no site e use este código para criar o acesso.");
+  console.log("[Eventos Conecta] Nenhum administrador cadastrado ainda.");
+  console.log(`[Eventos Conecta] Código de configuração do admin: ${code}`);
+  console.log("[Eventos Conecta] Abra /admin no site e use este código para criar o acesso.");
   console.log("==================================================================");
 }
 
@@ -54,10 +54,10 @@ async function adminFromEnv() {
   const email = process.env.ADMIN_EMAIL ? normalizeEmail(process.env.ADMIN_EMAIL) : "";
   const password = process.env.ADMIN_PASSWORD ?? "";
   if (!email || !password) return;
-  if (!passwordIsStrong(password)) { console.warn("[GastroConecta] ADMIN_PASSWORD ignorada: use 10+ caracteres com maiúscula, minúscula, número e símbolo."); return; }
+  if (!passwordIsStrong(password)) { console.warn("[Eventos Conecta] ADMIN_PASSWORD ignorada: use 10+ caracteres com maiúscula, minúscula, número e símbolo."); return; }
   const passwordHash = await hashPassword(password);
   await createOrPromoteAdmin({ email, name: process.env.ADMIN_NAME || "Administrador", passwordHash });
-  console.log(`[GastroConecta] Administrador sincronizado a partir de ADMIN_EMAIL (${email}).`);
+  console.log(`[Eventos Conecta] Administrador sincronizado a partir de ADMIN_EMAIL (${email}).`);
 }
 
 export async function createOrPromoteAdmin(input: { email: string; name: string; passwordHash: string }): Promise<number> {
@@ -90,22 +90,35 @@ async function seedPromotions() {
   await setInternalFlag("promotionsSeeded", new Date().toISOString());
 }
 
+/**
+ * Troca única do nome antigo (GastroConecta) pelo novo (Eventos Conecta) nos textos
+ * que o administrador já salvou no painel. Não mexe em configurações internas.
+ */
+async function renameBrandInContent() {
+  if (await getInternalFlag("brandRenamed.eventosConecta")) return;
+  for (const oldName of ["GastroConecta", "Gastro Conecta"]) {
+    await execute("UPDATE gc_site_content SET `value` = REPLACE(`value`, ?, 'Eventos Conecta') WHERE `key` NOT LIKE 'internal.%' AND `value` LIKE ?", [oldName, `%${oldName}%`]);
+  }
+  await setInternalFlag("brandRenamed.eventosConecta", new Date().toISOString());
+}
+
 /** Roda na inicialização: migrações, dados iniciais e acesso do administrador. */
 export async function bootstrapDatabase() {
   if (!dbConfigured()) {
     dbState.error = "DATABASE_URL não configurado";
-    console.warn("[GastroConecta] DATABASE_URL não configurado: cadastro, login e painel ficam indisponíveis até configurar o banco.");
+    console.warn("[Eventos Conecta] DATABASE_URL não configurado: cadastro, login e painel ficam indisponíveis até configurar o banco.");
     return;
   }
   try {
     const cfg = buildMysqlConfig(process.env.DATABASE_URL ?? "");
-    console.log(`[GastroConecta] Conectando ao banco "${cfg.database}" em ${cfg.host}:${cfg.port} (SSL ${cfg.ssl ? "ligado" : "desligado"}).`);
+    console.log(`[Eventos Conecta] Conectando ao banco "${cfg.database}" em ${cfg.host}:${cfg.port} (SSL ${cfg.ssl ? "ligado" : "desligado"}).`);
     await ensureDatabaseExists();
     const folder = findMigrationsFolder();
     if (!folder) throw new Error("pasta drizzle/ com as migrações não encontrada");
     await migrate(drizzle(getGastroPool()), { migrationsFolder: folder });
-    console.log("[GastroConecta] Banco de dados atualizado (migrações aplicadas).");
+    console.log("[Eventos Conecta] Banco de dados atualizado (migrações aplicadas).");
     await seedPromotions();
+    await renameBrandInContent();
     await refreshMpSettings();
     await refreshNotifySettings();
     await refreshPricing();
@@ -119,6 +132,6 @@ export async function bootstrapDatabase() {
     // O drizzle esconde o motivo real em error.cause (ex.: senha errada, sem permissão, SSL).
     const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
     dbState.error = cause || message;
-    console.error("[GastroConecta] Falha ao preparar o banco de dados:", message, cause ? `| Motivo: ${cause}` : "");
+    console.error("[Eventos Conecta] Falha ao preparar o banco de dados:", message, cause ? `| Motivo: ${cause}` : "");
   }
 }

@@ -230,7 +230,7 @@ router.get("/events", wrap(async (req, res) => {
       let whatsappUrl = "";
       if (row.providerId && (row.status === "booked" || row.status === "completed")) {
         const { details } = await loadDetails(Number(row.providerId));
-        whatsappUrl = waLink(details?.phone, `Olá, ${row.providerName ?? ""}! Aceitei sua proposta no GastroConecta para "${row.title}". Vamos alinhar os detalhes?`);
+        whatsappUrl = waLink(details?.phone, `Olá, ${row.providerName ?? ""}! Aceitei sua proposta no Eventos Conecta para "${row.title}". Vamos alinhar os detalhes?`);
       }
       out.push({ ...mapEvent(row), pendingProposals: Number(row.pendingProposals ?? 0), ...(row.providerName ? { providerName: row.providerName } : {}), ...(whatsappUrl ? { whatsappUrl } : {}), ...(row.contractId ? { contractId: Number(row.contractId) } : {}) });
     }
@@ -258,7 +258,7 @@ router.get("/events", wrap(async (req, res) => {
   for (const row of mine) {
     const { details } = await loadDetails(Number(row.clientId));
     const clientName = (await query<any[]>("SELECT name FROM users WHERE id = ?", [row.clientId]))[0]?.name ?? "";
-    own.push({ ...mapEvent(row), ...tagClient(row), clientName, ...(row.contractId ? { contractId: Number(row.contractId) } : {}), whatsappUrl: waLink(details?.phone, `Olá, ${clientName}! Sou o profissional do GastroConecta para "${row.title}". Vamos alinhar os detalhes?`) });
+    own.push({ ...mapEvent(row), ...tagClient(row), clientName, ...(row.contractId ? { contractId: Number(row.contractId) } : {}), whatsappUrl: waLink(details?.phone, `Olá, ${clientName}! Sou o profissional do Eventos Conecta para "${row.title}". Vamos alinhar os detalhes?`) });
   }
   res.json({ radar, events: own, closed: closed.map(row => ({ id: Number(row.id), title: row.title, city: row.city, date: isoDate(row.eventDate) ?? undefined, closedWith: row.providerName ?? "outro profissional" })) });
 }));
@@ -378,7 +378,7 @@ router.get("/proposals", wrap(async (req, res) => {
     if (row.status === "accepted") {
       const otherId = isProvider ? Number(row.clientId) : Number(row.providerId);
       const { details } = await loadDetails(otherId);
-      extra.whatsappUrl = waLink(details?.phone, isProvider ? `Olá, ${row.clientName}! Sobre "${row.eventTitle}" no GastroConecta.` : `Olá, ${row.providerName}! Aceitei sua proposta no GastroConecta para "${row.eventTitle}".`);
+      extra.whatsappUrl = waLink(details?.phone, isProvider ? `Olá, ${row.clientName}! Sobre "${row.eventTitle}" no Eventos Conecta.` : `Olá, ${row.providerName}! Aceitei sua proposta no Eventos Conecta para "${row.eventTitle}".`);
     }
     if (!isProvider) {
       const rating = await query<any[]>("SELECT AVG(rating) average, COUNT(*) total FROM gastro_reviews WHERE targetId = ?", [row.providerId]);
@@ -481,7 +481,7 @@ router.post("/proposals/:id/accept", wrap(async (req, res) => {
   const providerId = Number((await query<any[]>("SELECT providerId FROM gastro_proposals WHERE id = ?", [proposalId]))[0]?.providerId ?? 0);
   if (providerId) later(() => notifyUser(providerId, { type: "proposal.accepted", title: "Proposta aceita!", body: `${context.user.name ?? "O cliente"} aceitou sua proposta para “${result.title}”. O contrato foi gerado; combine os detalhes pelo WhatsApp.`, path: "/painel?aba=jobs" }));
   later(() => notifyAdmin({ type: "proposal.accepted", title: "Serviço fechado", body: `${context.user.name ?? "Cliente"} fechou “${result.title}” com ${result.providerName}. Contrato nº ${result.contractId}.` }));
-  res.json({ ok: true, contractId: result.contractId, whatsappUrl: waLink(result.phone, `Olá! Aceitei sua proposta no GastroConecta para "${result.title}". Vamos alinhar os detalhes?`) });
+  res.json({ ok: true, contractId: result.contractId, whatsappUrl: waLink(result.phone, `Olá! Aceitei sua proposta no Eventos Conecta para "${result.title}". Vamos alinhar os detalhes?`) });
 }));
 
 // ------------------------------------------------------------------ avaliações
@@ -546,7 +546,7 @@ router.get("/contracts/:id/pdf", wrap(async (req, res) => {
   const payload = json(rows[0].payload);
   const pdf = payload.version === 2 ? contractPdf(payload as ContractPayload) : legacyContractPdf(rows[0].title, payload);
   if (await isOwner(context)) await audit(context.user.id, "admin.contract_download", { contractId }, contractId);
-  res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=contrato-gastroconecta-${contractId}.pdf`, "Cache-Control": "private, no-store" }).send(pdf);
+  res.type("application/pdf").set({ "Content-Disposition": `attachment; filename=contrato-eventosconecta-${contractId}.pdf`, "Cache-Control": "private, no-store" }).send(pdf);
 }));
 
 // ------------------------------------------------------------------ financeiro do profissional
@@ -650,7 +650,7 @@ async function callCopilot(history: Array<{ role: "user" | "assistant"; content:
   const { base, key, model } = copilotProvider();
   if (!base || !key) throw new HttpError(503, "Copilot indisponível: credencial de IA não configurada");
   const catalogContext = catalog.slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, topRated: item.topRated, demo: item.demo }));
-  const system = `Você é o Copilot do GastroConecta. Perfil atual: ${accountType === "provider" ? "profissional" : "cliente"}. Clientes usam a plataforma de graça; profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem) pagam só uma assinatura mensal fixa e recebem 100% do valor negociado, sem comissão. Ajude profissionais a calcular ingredientes, porções, brigada, custos de marmitas, limpeza e jardinagem, preço e margem; sempre lembre que os valores são estimativas editáveis. Ajude clientes a descrever pedidos e escolher profissionais do catálogo abaixo. Não exponha e-mails, documentos ou IDs internos. Portfólios demo são ilustrativos e não contratáveis. Não invente avaliações, disponibilidade ou garantias jurídicas. Catálogo: ${JSON.stringify(catalogContext)}`;
+  const system = `Você é o Copilot do Eventos Conecta. Perfil atual: ${accountType === "provider" ? "profissional" : "cliente"}. Clientes usam a plataforma de graça; profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem) pagam só uma assinatura mensal fixa e recebem 100% do valor negociado, sem comissão. Ajude profissionais a calcular ingredientes, porções, brigada, custos de marmitas, limpeza e jardinagem, preço e margem; sempre lembre que os valores são estimativas editáveis. Ajude clientes a descrever pedidos e escolher profissionais do catálogo abaixo. Não exponha e-mails, documentos ou IDs internos. Portfólios demo são ilustrativos e não contratáveis. Não invente avaliações, disponibilidade ou garantias jurídicas. Catálogo: ${JSON.stringify(catalogContext)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -731,10 +731,10 @@ async function announceNewProvider(providerId: number) {
   const rows = await query<any[]>("SELECT u.name, p.city, p.specialty FROM users u JOIN account_profiles p ON p.userId = u.id WHERE u.id = ? LIMIT 1", [providerId]);
   const provider = rows[0];
   if (!provider) return;
-  await notifyUser(providerId, { type: "account.approved", title: "Cadastro aprovado!", body: "Seu cadastro no GastroConecta foi aprovado. Ative a assinatura para aparecer no catálogo e receber pedidos.", path: "/painel?aba=subscription" });
+  await notifyUser(providerId, { type: "account.approved", title: "Cadastro aprovado!", body: "Seu cadastro no Eventos Conecta foi aprovado. Ative a assinatura para aparecer no catálogo e receber pedidos.", path: "/painel?aba=subscription" });
   const city = String(provider.city ?? "").split(/[-,]/)[0].trim();
   const clients = await query<any[]>("SELECT userId FROM account_profiles WHERE accountType = 'client' AND status = 'active' AND notifyOptIn = 1 AND (? = '' OR city LIKE ?) LIMIT 300", [city, `%${city}%`]);
-  for (const client of clients) await notifyUser(Number(client.userId), { type: "provider.new", title: "Novo profissional na sua região", body: `${provider.name}${provider.specialty ? ` (${provider.specialty})` : ""} acabou de entrar no GastroConecta. Veja o perfil e peça um orçamento.`, path: `/profissionais/user-${providerId}` });
+  for (const client of clients) await notifyUser(Number(client.userId), { type: "provider.new", title: "Novo profissional na sua região", body: `${provider.name}${provider.specialty ? ` (${provider.specialty})` : ""} acabou de entrar no Eventos Conecta. Veja o perfil e peça um orçamento.`, path: `/profissionais/user-${providerId}` });
 }
 
 router.get("/admin/overview", wrap(async (req, res) => {
@@ -766,13 +766,13 @@ router.get("/report/pdf", wrap(async (req, res) => {
   const logs = await query<any[]>("SELECT action, actorId, targetId, createdAt FROM gastro_audit_logs ORDER BY createdAt DESC LIMIT 200");
   await audit(context.user.id, "admin.report_pdf", { users, events, contracts });
   const pdf = buildPdf([
-    { kind: "title", text: "Relatório de auditoria - GastroConecta" },
+    { kind: "title", text: "Relatório de auditoria - Eventos Conecta" },
     { kind: "pair", label: "Gerado em", value: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) },
     { kind: "pair", label: "Usuários", value: String(users) }, { kind: "pair", label: "Profissionais", value: String(providers) },
     { kind: "pair", label: "Assinaturas vigentes", value: String(activeSubs) }, { kind: "pair", label: "Pedidos", value: String(events) }, { kind: "pair", label: "Contratos gerados", value: String(contracts) },
     { kind: "heading", text: "Últimas ações registradas" },
     ...logs.map(log => ({ kind: "text" as const, text: `${new Date(log.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} - ${log.action} - ator #${log.actorId}${log.targetId ? ` - alvo #${log.targetId}` : ""}` })),
-  ], "GastroConecta - Auditoria");
+  ], "Eventos Conecta - Auditoria");
   res.type("application/pdf").set("Content-Disposition", "attachment; filename=gastro-relatorio.pdf").send(pdf);
 }));
 

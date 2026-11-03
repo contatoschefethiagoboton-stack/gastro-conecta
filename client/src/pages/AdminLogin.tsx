@@ -33,7 +33,7 @@ export default function AdminLogin() {
   return <main className="adm-login-page">
     <form className="adm-login-card" onSubmit={submit}>
       <span className="adm-login-icon">{status?.setupRequired ? <KeyRound size={22}/> : <Lock size={22}/>}</span>
-      <span className="adm-kicker">GastroConecta · gestão</span>
+      <span className="adm-kicker">Eventos Conecta · gestão</span>
       <h1>{status?.setupRequired ? 'Criar acesso de administrador' : 'Acesso da administração'}</h1>
       {!status && <p className="adm-muted"><Loader2 className="ob-spin" size={16}/> Verificando…</p>}
       {status?.database === 'missing' && <p className="adm-alert">O banco de dados ainda não foi configurado. Defina a variável DATABASE_URL no Render.</p>}

@@ -20,6 +20,6 @@ describe("origem das visitas", () => {
   });
   it("direto e o próprio site", () => {
     expect(classifySource({})).toEqual({ source: "direto", medium: "direto" });
-    expect(classifySource({ referrer: "https://gastroconecta.com.br/sobre", ownHost: "gastroconecta.com.br" })).toEqual({ source: "direto", medium: "direto" });
+    expect(classifySource({ referrer: "https://eventosconecta.com.br/sobre", ownHost: "eventosconecta.com.br" })).toEqual({ source: "direto", medium: "direto" });
   });
 });
