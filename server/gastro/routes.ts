@@ -23,6 +23,7 @@ import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLin
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
 import { buildPdf, type PdfBlock } from "./pdf";
 import { rankCandidates, type MatchCandidate } from "@shared/matching";
+import { copilotAllowed } from "@shared/content";
 import { seoCitiesFrom } from "@shared/seo";
 import { getSiteContent } from "./content";
 import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListFeeLabel } from "@shared/shoppingList";
@@ -766,6 +767,8 @@ async function callCopilot(history: Array<{ role: "user" | "assistant"; content:
 
 router.post("/copilot", wrap(async (req, res) => {
   const context = await auth(req);
+  // Quem pode usar o Copilot é definido no painel (Textos do site → Contato e marca).
+  if (!copilotAllowed((await getSiteContent())["copilot.visibility"], { accountType: context.profile.accountType, role: context.user.role })) throw new HttpError(403, "O Copilot não está disponível para a sua conta.");
   limit(`copilot:${clientIp(req)}`, 12, 60_000, "Copilot temporariamente limitado; tente novamente mais tarde");
   const input = body(req, z.object({ message: z.string().trim().min(1).max(4000) }));
   const previous = await query<any[]>("SELECT role, content FROM gastro_messages WHERE userId = ? ORDER BY createdAt DESC, id DESC LIMIT 20", [context.user.id]);
