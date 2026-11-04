@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { BadgePercent, ShieldCheck, UserPlus, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2, BriefcaseBusiness } from 'lucide-react';
+import { Bot, BadgePercent, ShieldCheck, UserPlus, Check, ChevronRight, Copy, CreditCard, Download, ExternalLink, FileSignature, FileText, Gift, ScanFace, Image as ImageIcon, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Megaphone, PenLine, Plus, RotateCcw, ScrollText, Search, Trash2, Upload, Users, Wallet, X, TrendingUp, PlugZap, EyeOff, Bell, Sparkles, AlertTriangle, Lightbulb, Link2, BriefcaseBusiness } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { uploadFile } from '@/lib/upload';
@@ -16,9 +16,10 @@ import { demosFrom, type DemoProfessional, type Professional } from '@shared/cat
 import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import { canManageRole, isFullAccess, PERMISSIONS, ROLE_DEFAULTS, STAFF_ROLE_LABELS, type Permission, type StaffRole } from '@shared/staff';
 import { draftServiceFromName, draftToCategory, findServiceArea, type ServiceDraft } from '@shared/serviceAreas';
+import { AutomationSection } from './admin/AutomationSection';
 import '../admin.css';
 
-type Section = 'overview' | 'notifications' | 'marketing' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'staff' | 'account';
+type Section = 'overview' | 'notifications' | 'marketing' | 'automation' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'staff' | 'account';
 type StaffMe = { name: string; email: string; role: StaffRole; permissions: Permission[]; mustChangePassword: boolean };
 type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string; code?: string; specialty?: string; whatsapp?: string; source?: string; subscriptionFree?: boolean; requestCount?: number };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
@@ -29,6 +30,7 @@ const NAV: Array<{ id: Section; label: string; icon: typeof Users; perm?: Permis
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard, perm: 'overview.view' },
   { id: 'notifications', label: 'Notificações', icon: Bell },
   { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp, perm: 'marketing.view' },
+  { id: 'automation', label: 'Automação e Google', icon: Bot, perm: 'marketing.view' },
   { id: 'providers', label: 'Fornecedores (profissionais)', icon: BriefcaseBusiness, perm: 'users.view' },
   { id: 'clients', label: 'Clientes', icon: Users, perm: 'users.view' },
   { id: 'subscriptions', label: 'Assinaturas', icon: CreditCard, perm: 'subscriptions.view' },
@@ -85,6 +87,7 @@ export default function AdminConsole() {
           {current.id === 'clients' && <UsersSection key="clients" kind="client"/>}
           {current.id === 'notifications' && <NotificationsSection/>}
           {current.id === 'marketing' && <MarketingSection/>}
+          {current.id === 'automation' && <AutomationSection/>}
           {current.id === 'subscriptions' && <SubscriptionsSection/>}
           {current.id === 'payments' && <PaymentsSection/>}
           {current.id === 'contracts' && <ContractsSection/>}

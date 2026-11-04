@@ -7,7 +7,7 @@ import { ArrowRight, ArrowUpRight, CheckCircle2, MapPin, Radar, Calculator, Wall
 import type { Professional } from '@shared/catalog';
 import { allServices } from '@shared/services';
 import {
-  JOBS_BASE, SERVICES_BASE, SITE_NAME, seoCatalogFrom,
+  JOBS_BASE, SERVICES_BASE, SITE_NAME, seoCatalogFrom, cityPath, serviceCityPath, jobCityPath, normalizeCityName,
   matchProfessionals, nearbyCities, resolveSeoRoute, seoCitiesFrom, type Faq, type SeoCity, type Crumb,
 } from '@shared/seo';
 import { api } from '@/lib/api';
@@ -32,14 +32,17 @@ function LinkCloud({ title, links }: { title: string; links: Array<{ href: strin
 }
 
 export default function SeoLanding() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const site = useSite();
   const cities = seoCitiesFrom(site.content);
   const seo = seoCatalogFrom(site.serviceCatalog);
   const route = resolveSeoRoute(location, cities, seo);
-  const pros = useQuery({ queryKey: ['gastro-professionals'], queryFn: () => api<{ professionals: Professional[] }>('/professionals'), retry: false, enabled: Boolean(route && (route.kind === 'service' || route.kind === 'job')) });
-  useEffect(() => { if (route) document.title = route.page.title; }, [route?.page.title]);
+  const pros = useQuery({ queryKey: ['gastro-professionals'], queryFn: () => api<{ professionals: Professional[] }>('/professionals'), retry: false, enabled: Boolean(route && (route.kind === 'service' || route.kind === 'job' || route.kind === 'cityHub')) });
+  const redirectTo = route?.kind === 'redirect' ? route.to : null;
+  useEffect(() => { if (redirectTo) navigate(redirectTo, { replace: true }); }, [redirectTo]);
+  useEffect(() => { if (route && route.kind !== 'redirect') document.title = route.page.title; }, [route && route.kind !== 'redirect' ? route.page.title : '']);
 
+  if (route?.kind === 'redirect') return null;
   if (!route) return <main className="wrap info-page empty-state"><span className="eyebrow">404</span><h1>Essa página<br/>não foi encontrada.</h1><p>Veja todos os serviços para eventos.</p><Link href={SERVICES_BASE} className="btn btn-primary">Ver serviços</Link></main>;
   const { page } = route;
   const all = pros.data?.professionals ?? [];
@@ -50,8 +53,20 @@ export default function SeoLanding() {
     const items = isJobs ? seo.professions.map(p => ({ href: `${JOBS_BASE}/${p.slug}`, title: p.name, text: p.intro })) : seo.services.map(s => ({ href: `${SERVICES_BASE}/${s.slug}`, title: s.name, text: s.intro }));
     return <main className="wrap info-page seo-page"><Crumbs crumbs={page.crumbs}/><span className="eyebrow">{isJobs ? 'PARA PROFISSIONAIS DE EVENTOS' : 'PROFISSIONAIS PARA EVENTOS'}</span><h1>{page.h1}</h1><p className="lead">{page.lead}</p>
       <div className="seo-cards">{items.map(i => <Link key={i.href} href={i.href} className="seo-card"><h2>{i.title}</h2><p>{i.text}</p><span>Ver mais <ArrowUpRight size={15}/></span></Link>)}</div>
-      {!isJobs && <LinkCloud title="Cidades atendidas" links={cities.map(c => ({ href: `${SERVICES_BASE}/chef-para-evento/${c.slug}`, label: `${c.name}/${c.uf}` }))}/>}
+      {!isJobs && <LinkCloud title="Cidades atendidas" links={cities.map(c => ({ href: cityPath(c), label: `${c.name}/${c.uf}` }))}/>}
       <div className="catalog-cta"><div><h3>{isJobs ? 'Comece a receber pedidos' : 'Peça orçamento grátis'}</h3><p>{isJobs ? 'Cadastro com CPF ou CNPJ. Sem comissão: você recebe 100% do valor.' : 'Conte sua ocasião e receba propostas de profissionais da sua região.'}</p></div><Link href={isJobs ? '/conta?cadastro=profissional' : '/orcamento'} className="btn btn-primary">{isJobs ? 'Cadastrar como profissional' : 'Pedir orçamento'} <ArrowRight size={18}/></Link></div>
+      <Faqs faqs={page.faqs}/></main>;
+  }
+
+  if (route.kind === 'cityHub') {
+    const { city } = route;
+    const local = all.filter(p => !p.demo && normalizeCityName(p.city) === normalizeCityName(city.name)).slice(0, 12);
+    return <main className="wrap info-page seo-page"><Crumbs crumbs={page.crumbs}/><span className="eyebrow">{city.name.toUpperCase()} E REGIÃO</span><h1>{page.h1}</h1><p className="lead">{page.lead}</p>
+      <div className="seo-actions"><Link href={`/orcamento?cidade=${encodeURIComponent(`${city.name}, ${city.uf}`)}`} className="btn btn-primary">Pedir orçamento grátis <ArrowRight size={18}/></Link></div>
+      <div className="seo-cards">{seo.services.map(s => <Link key={s.slug} href={serviceCityPath(s, city)} className="seo-card"><h2>{s.name} em {city.name}</h2><p>{s.intro}</p><span>Ver mais <ArrowUpRight size={15}/></span></Link>)}</div>
+      {local.length > 0 && <><h2 className="info-heading">Profissionais em {city.name}</h2><div className="professional-grid">{local.map(p => <ProfessionalCard key={p.id} professional={p}/>)}</div></>}
+      <LinkCloud title={`Para profissionais de ${city.name}`} links={seo.professions.map(p => ({ href: jobCityPath(p, city, seo), label: p.name }))}/>
+      <LinkCloud title="Cidades próximas" links={nearbyCities(cities, city).map(c => ({ href: cityPath(c), label: `${c.name}/${c.uf}` }))}/>
       <Faqs faqs={page.faqs}/></main>;
   }
 
@@ -62,15 +77,15 @@ export default function SeoLanding() {
     const where = city ? ` em ${city.name}` : '';
     const catalogHref = `/profissionais?tipo=${encodeURIComponent(service.categoryId)}${city ? `&cidade=${encodeURIComponent(city.name)}` : ''}`;
     return <main className="wrap info-page seo-page"><Crumbs crumbs={page.crumbs}/><span className="eyebrow">ORÇAMENTO GRÁTIS · CONTRATO EM PDF</span><h1>{page.h1}</h1><p className="lead">{page.lead}</p>
-      <div className="seo-actions"><Link href="/orcamento" className="btn btn-primary">Pedir orçamento grátis <ArrowRight size={18}/></Link><Link href={catalogHref} className="btn btn-outline">Ver profissionais <ArrowUpRight size={16}/></Link></div>
+      <div className="seo-actions"><Link href={`/orcamento?servico=${encodeURIComponent(service.slug)}${city ? `&cidade=${encodeURIComponent(`${city.name}, ${city.uf}`)}` : ''}`} className="btn btn-primary">Pedir orçamento grátis <ArrowRight size={18}/></Link><Link href={catalogHref} className="btn btn-outline">Ver profissionais <ArrowUpRight size={16}/></Link></div>
       {city && <p className="seo-intro">{service.intro}</p>}
       <div className="seo-grid"><Checklist title={`Ocasiões para contratar ${service.short}`} items={service.occasions}/><Checklist title="O que costuma incluir" items={service.includes}/><Checklist title="Dicas para contratar bem" items={service.tips}/></div>
       <h2 className="info-heading">Profissionais{where}</h2>
       {matches.length ? <div className="professional-grid">{matches.map(p => <ProfessionalCard key={p.id} professional={p}/>)}</div>
         : <div className="notice"><MapPin size={20}/><p>Publique o seu pedido e receba propostas de {service.plural} que atendem {city ? city.name : 'a sua região'}. É grátis e você só fecha se quiser.</p></div>}
       <Faqs faqs={page.faqs}/>
-      {city ? <><LinkCloud title={`${service.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: `${SERVICES_BASE}/${service.slug}/${c.slug}`, label: `${service.name} em ${c.name}` }))}/><LinkCloud title={`Outros serviços em ${city.name}`} links={seo.services.filter(s => s.slug !== service.slug).map(s => ({ href: `${SERVICES_BASE}/${s.slug}/${city.slug}`, label: s.name }))}/></>
-        : <LinkCloud title={`${service.name} por cidade`} links={cities.map(c => ({ href: `${SERVICES_BASE}/${service.slug}/${c.slug}`, label: `${c.name}/${c.uf}` }))}/>}
+      {city ? <><LinkCloud title={`${service.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: serviceCityPath(service, c), label: `${service.name} em ${c.name}` }))}/><LinkCloud title={`Outros serviços em ${city.name}`} links={seo.services.filter(s => s.slug !== service.slug).map(s => ({ href: serviceCityPath(s, city), label: s.name }))}/></>
+        : <LinkCloud title={`${service.name} por cidade`} links={cities.map(c => ({ href: serviceCityPath(service, c), label: `${c.name}/${c.uf}` }))}/>}
       <div className="catalog-cta"><div><h3>{service.name}{where}</h3><p>Conte a data, o local e o número de convidados. Os profissionais enviam propostas para você.</p></div><Link href="/orcamento" className="btn btn-primary">Pedir orçamento <ArrowRight size={18}/></Link></div>
     </main>;
   }
@@ -86,8 +101,8 @@ export default function SeoLanding() {
     <div className="seo-grid"><Checklist title={`Quem contrata ${profession.plural}`} items={profession.clients}/></div>
     {count > 0 && <p className="seo-intro">{count} {count === 1 ? 'profissional já atende' : 'profissionais já atendem'}{city ? ` em ${city.name}` : ''} pela plataforma.</p>}
     <Faqs faqs={page.faqs}/>
-    {city ? <LinkCloud title={`${profession.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: `${JOBS_BASE}/${profession.slug}/${c.slug}`, label: `${profession.name} em ${c.name}` }))}/>
-      : <LinkCloud title={`${profession.name} por cidade`} links={cities.map(c => ({ href: `${JOBS_BASE}/${profession.slug}/${c.slug}`, label: `${c.name}/${c.uf}` }))}/>}
+    {city ? <LinkCloud title={`${profession.name} em cidades próximas`} links={nearbyCities(cities, city).map(c => ({ href: jobCityPath(profession, c, seo), label: `${profession.name} em ${c.name}` }))}/>
+      : <LinkCloud title={`${profession.name} por cidade`} links={cities.map(c => ({ href: jobCityPath(profession, c, seo), label: `${c.name}/${c.uf}` }))}/>}
     <div className="catalog-cta"><div><h3>Comece a receber pedidos</h3><p>Cadastro com CPF ou CNPJ, fotos dos seus trabalhos e chave Pix.</p></div><Link href="/conta?cadastro=profissional" className="btn btn-primary">Cadastrar agora <ArrowRight size={18}/></Link></div>
   </main>;
 }

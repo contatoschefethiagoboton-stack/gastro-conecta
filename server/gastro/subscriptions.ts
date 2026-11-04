@@ -79,6 +79,7 @@ export async function grantTrial(userId: number, actorId: number, settings: Tria
   if (!force && current && current >= end) return null;
   const periodEnd = current && current > end ? current : end;
   await execute("UPDATE gc_provider_subscriptions SET periodEnd = ?, trialUntil = ?, trialGrantedAt = CURRENT_TIMESTAMP, trialWarnedAt = NULL, trialEndedAt = NULL, autoFailed = 0, autoAttemptedFor = NULL WHERE userId = ?", [periodEnd, end, userId]);
+  later(async () => { const { indexProvider } = await import("./indexing"); await indexProvider(userId); });
   await audit(actorId, "subscription.trial_granted", { duration: trialLabel(t), until: end.toISOString(), manual: force }, userId);
   later(() => notifyUser(userId, { type: "subscription.trial", title: "Período de teste liberado!", body: `Você tem ${trialLabel(t)} grátis para receber pedidos e enviar propostas (até ${end.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}). Depois disso, pague a assinatura via Pix para continuar visível.`, path: "/painel?aba=subscription" }));
   return end;
@@ -178,6 +179,7 @@ export async function applyApprovedPayment(paymentRowId: number) {
   const value = (Number(row.amountCents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const what = purpose === "promotion" ? "adicional de promoção" : purpose === "benefit" ? "benefício extra" : "assinatura";
   later(() => notifyAdmin({ type: `payment.${purpose}`, title: `Pagamento recebido: ${what}`, body: `${row.name ?? "Profissional"} pagou ${value} (${what}).`, path: "/admin/painel?secao=payments" }));
+  if (purpose === "subscription") later(async () => { const { indexProvider } = await import("./indexing"); await indexProvider(Number(row.userId)); });
   later(() => notifyUser(Number(row.userId), { type: `payment.${purpose}`, title: "Pagamento confirmado", body: `Recebemos seu pagamento de ${value} (${what}). Obrigado!`, path: purpose === "subscription" ? "/painel?aba=subscription" : "/painel?aba=growth" }));
 }
 

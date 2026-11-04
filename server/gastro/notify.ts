@@ -190,6 +190,27 @@ export async function sendWhatsappDetailed(phone: string, title: string, text: s
   }
 }
 
+/**
+ * Resposta em texto livre no WhatsApp (só vale até 24 h depois da última mensagem da pessoa,
+ * regra da Meta). Usada pelo robô para responder quem escreveu para o número da empresa.
+ */
+export async function sendWhatsappText(phone: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  const to = String(phone ?? "").replace(/\D/g, "");
+  if (!waToken() || !waPhoneId()) return { ok: false, error: "WhatsApp Business ainda não configurado (token e ID do número)." };
+  if (!to) return { ok: false, error: "Número de destino inválido." };
+  try {
+    const response = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(waPhoneId())}/messages`, {
+      method: "POST", headers: { Authorization: `Bearer ${waToken()}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: text.slice(0, 4000), preview_url: true } }),
+    });
+    if (response.ok) return { ok: true };
+    const data = await response.json().catch(() => ({})) as { error?: { code?: number; message?: string } };
+    return { ok: false, error: explainWhatsappError(Number(data.error?.code ?? 0), String(data.error?.message ?? ""), `+${to}`) };
+  } catch {
+    return { ok: false, error: "Não foi possível falar com a Meta agora." };
+  }
+}
+
 const escapeHtml = (v: string) => v.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
 /** Telefone de WhatsApp do usuário: o do cadastro ou o dos dados completos. */

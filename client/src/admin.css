@@ -384,3 +384,21 @@ div.adm-ok svg, div.adm-warn svg { flex-shrink:0; margin-top:2px; }
 .adm-trial-inline { flex-basis:100%; margin-top:10px; }
 .adm-row:has(.adm-trial-inline) { flex-wrap:wrap; }
 .adm-tag-btn { cursor:pointer; border:1px dashed var(--ob-orange); color:var(--ob-orange); background:#fff; font:inherit; }
+
+/* Automação e Google */
+.adm-auto-title { display:flex; align-items:center; gap:8px; }
+.adm-auto-title svg { color:var(--ob-orange); }
+.adm-check { display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px; cursor:pointer; }
+.adm-check input { accent-color:var(--ob-orange); width:18px; height:18px; }
+.adm-auto-log { display:flex; flex-direction:column; max-height:360px; overflow-y:auto; border-top:1px solid #f0ebe1; }
+.adm-auto-log > div { display:grid; grid-template-columns:120px auto minmax(0,1fr); gap:10px; align-items:start; padding:8px 0; border-bottom:1px solid #f0ebe1; font-size:12.5px; }
+.adm-auto-log time { color:var(--ob-muted); }
+.adm-auto-log code { word-break:break-word; white-space:pre-wrap; }
+.adm-auto-log small { grid-column:2 / -1; color:#a33b33; }
+.adm-auto-preview { background:var(--ob-soft); border-radius:9px; padding:12px; font-size:13px; line-height:1.5; display:flex; flex-direction:column; gap:6px; word-break:break-word; }
+.adm-auto-posts { display:flex; flex-direction:column; gap:14px; }
+.adm-auto-post { display:grid; grid-template-columns:140px minmax(0,1fr); gap:14px; border:1px solid var(--ob-line); border-radius:12px; padding:12px; }
+.adm-auto-post img, .adm-auto-noimg { width:140px; height:140px; object-fit:cover; border-radius:9px; background:var(--ob-soft); display:grid; place-items:center; color:var(--ob-muted); font-size:12px; }
+.adm-auto-post > div { display:flex; flex-direction:column; gap:8px; }
+.adm-auto-post textarea { width:100%; border:1px solid var(--ob-line); border-radius:9px; padding:10px; font:13px/1.5 'Inter',sans-serif; resize:vertical; }
+@media (max-width: 720px) { .adm-auto-log > div { grid-template-columns:minmax(0,1fr); gap:3px; } .adm-auto-log small { grid-column:auto; } .adm-auto-post { grid-template-columns:minmax(0,1fr); } .adm-auto-post img, .adm-auto-noimg { width:100%; height:180px; } }

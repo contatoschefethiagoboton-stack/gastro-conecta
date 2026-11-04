@@ -17,11 +17,14 @@ import { VISIBLE_SUBSCRIPTION_SQL } from "./subscriptions";
 import { PROVIDER_SCHEMA_VERSION } from "./profiles";
 import { assertOrigin, body, clientIp, errorHandler, limit, parse, wrap } from "./http";
 import { clearGcSession, createGcSession, createLocalUser, gcCookieOptions, getUserByEmail, isOwner, passwordIsStrong, publicUser, requireAuth, resolveAuth, verifyPassword, type AccountType, type AuthContext } from "./auth";
-import { calculateIntentScore, isoDate } from "./rules";
+import { calculateIntentScore, isoDate, isTopRated } from "./rules";
 import { assertSubscriptionActive, grantTrial, phaseFor, subscriptionSummary } from "./subscriptions";
 import { clientContractDataComplete, loadDetails, providerDetailsComplete, waLink } from "./profiles";
 import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayload } from "./contracts";
 import { buildPdf, type PdfBlock } from "./pdf";
+import { rankCandidates, type MatchCandidate } from "@shared/matching";
+import { seoCitiesFrom } from "@shared/seo";
+import { getSiteContent } from "./content";
 import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListFeeLabel } from "@shared/shoppingList";
 import { mpConfigured } from "./mercadopago";
 import { mailConfigured } from "./password";
@@ -311,20 +314,35 @@ router.post("/events", wrap(async (req, res) => {
   res.status(201).json({ event: mapEvent(created) });
 }));
 
-/** Avisa os profissionais compatíveis (radar) sobre um novo pedido, com link que abre o radar. */
+/**
+ * Matching: ranqueia os profissionais compatíveis (serviço, cidade/região, agenda livre, reputação e
+ * agilidade) e avisa em ordem. Os primeiros recebem também WhatsApp; os demais, aviso no painel e e-mail.
+ */
 async function notifyMatchingProviders(event: any, catalog: Awaited<ReturnType<typeof getServiceCatalog>>, preferredProviderId: number | null) {
-  const providers = await query<any[]>(`SELECT u.id, d.details FROM users u JOIN account_profiles p ON p.userId = u.id JOIN gc_profile_details d ON d.userId = u.id AND d.completedAt IS NOT NULL
-    WHERE p.accountType = 'provider' AND p.status = 'active' AND ${VISIBLE_SUBSCRIPTION_SQL} ${preferredProviderId ? "AND u.id = ?" : ""} LIMIT 500`, preferredProviderId ? [preferredProviderId] : []);
-  const target = json(event.details);
-  let sent = 0;
-  for (const row of providers) {
+  const eventDate = isoDate(event.eventDate);
+  const providers = await query<any[]>(`SELECT u.id, p.city profileCity, p.featured, d.details,
+      (SELECT AVG(r.rating) FROM gastro_reviews r WHERE r.targetId = u.id) ratingAverage,
+      (SELECT COUNT(*) FROM gastro_reviews r WHERE r.targetId = u.id) ratingCount,
+      (SELECT COUNT(*) FROM gastro_proposals pr WHERE pr.providerId = u.id AND pr.createdAt > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)) recentProposals,
+      ${eventDate ? "(SELECT COUNT(*) FROM gastro_events be WHERE be.providerId = u.id AND be.status = 'booked' AND be.eventDate = ?)" : "0"} busy
+    FROM users u JOIN account_profiles p ON p.userId = u.id JOIN gc_profile_details d ON d.userId = u.id AND d.completedAt IS NOT NULL
+    WHERE p.accountType = 'provider' AND p.status = 'active' AND ${VISIBLE_SUBSCRIPTION_SQL} ${preferredProviderId ? "AND u.id = ?" : ""} LIMIT 2000`,
+    [...(eventDate ? [eventDate] : []), ...(preferredProviderId ? [preferredProviderId] : [])]);
+  const candidates: MatchCandidate[] = providers.flatMap(row => {
     const details = json(row.details);
-    if (details.schemaVersion !== PROVIDER_SCHEMA_VERSION) continue;
-    const services = Array.isArray(details.services) ? details.services : [];
-    if (!serviceMatchesRequest(services, (event.category ?? "event") as RequestCategory, catalog, target)) continue;
-    await notifyUser(Number(row.id), { type: "event.new", title: "Novo pedido de orçamento no seu radar", body: `“${event.title}” em ${event.city} · ${Number(event.guests)} pessoa(s). Envie sua proposta.`, path: "/painel?aba=radar" });
-    if (++sent >= 200) break;
+    if (details.schemaVersion !== PROVIDER_SCHEMA_VERSION) return [];
+    const average = Math.round(Number(row.ratingAverage ?? 0) * 10) / 10, count = Number(row.ratingCount ?? 0);
+    return [{ userId: Number(row.id), city: String(details.city || row.profileCity || ""), services: Array.isArray(details.services) ? details.services : [], ratingAverage: average, ratingCount: count, topRated: isTopRated(average, count), featured: Boolean(row.featured), busyOnDate: Number(row.busy) > 0, recentProposals: Number(row.recentProposals ?? 0) }];
+  });
+  const region = seoCitiesFrom(await getSiteContent()).map(c => c.name);
+  const ranked = rankCandidates({ category: (event.category ?? "event") as RequestCategory, city: String(event.city ?? ""), date: eventDate, target: json(event.details) }, candidates, catalog, region);
+  const limit = Math.max(1, Number(process.env.MATCH_NOTIFY_LIMIT ?? 30));
+  const whatsappLimit = Math.max(0, Number(process.env.MATCH_WHATSAPP_LIMIT ?? 10));
+  const chosen = ranked.slice(0, limit);
+  for (const [index, match] of chosen.entries()) {
+    await notifyUser(match.userId, { type: "event.new", title: "Novo pedido de orçamento no seu radar", body: `“${event.title}” em ${event.city}${eventDate ? ` em ${eventDate.split("-").reverse().join("/")}` : ""} · ${Number(event.guests)} pessoa(s). Envie sua proposta.`, path: "/painel?aba=radar", whatsapp: index < whatsappLimit });
   }
+  await audit(0, "event.matched", { eventId: Number(event.id), compatible: ranked.length, notified: chosen.length, whatsapp: Math.min(chosen.length, whatsappLimit), top: chosen.slice(0, 5).map(m => ({ userId: m.userId, score: m.score, reasons: m.reasons })) });
 }
 
 router.post("/events/:id/cancel", wrap(async (req, res) => {
@@ -810,6 +828,7 @@ router.patch("/admin/users/:id", wrap(async (req, res) => {
     // Aprovado: libera o período de teste definido pelo dono (uma vez por profissional).
     await grantTrial(targetId, context.user.id).catch(() => null);
     later(() => announceNewProvider(targetId));
+    later(async () => { const { indexProvider } = await import("./indexing"); await indexProvider(targetId); });
   }
   res.json({ ok: true });
 }));

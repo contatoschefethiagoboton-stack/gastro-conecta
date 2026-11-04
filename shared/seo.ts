@@ -293,6 +293,34 @@ export function nearbyCities(cities: SeoCity[], current: SeoCity, count = 8): Se
   return rest.slice(0, count);
 }
 
+// ---------- Endereços locais: /{uf}/{cidade}/{serviço} (ex.: /sp/campinas/personal-chef) ----------
+
+/** Trecho da cidade no endereço ("Santa Bárbara d'Oeste" → "santa-barbara-d-oeste"). */
+export const citySegment = (city: SeoCity) => slugify(city.name);
+/** Página da cidade: /sp/campinas. */
+export const cityPath = (city: SeoCity) => `/${city.uf.toLowerCase()}/${citySegment(city)}`;
+/** Página de um serviço na cidade: /sp/campinas/personal-chef. */
+export const serviceCityPath = (service: Pick<SeoService, 'slug'>, city: SeoCity) => `${cityPath(city)}/${service.slug}`;
+
+/** Endereço local da página do profissional; se o nome coincidir com um serviço, ganha o prefixo "trabalhe-como-". */
+export function jobLocalSlug(profession: Pick<SeoProfession, 'slug'>, seo: SeoCatalog = DEFAULT_SEO_CATALOG): string {
+  return seo.services.some(s => s.slug === profession.slug) ? `trabalhe-como-${profession.slug}` : profession.slug;
+}
+export const jobCityPath = (profession: Pick<SeoProfession, 'slug'>, city: SeoCity, seo: SeoCatalog = DEFAULT_SEO_CATALOG) => `${cityPath(city)}/${jobLocalSlug(profession, seo)}`;
+
+/** Apelidos que as pessoas digitam ou que circulam em links antigos → serviço oficial (redirecionamento 301). */
+export const SERVICE_ALIASES: Record<string, string> = {
+  'buffet-eventos': 'buffet-para-festa', 'buffet-para-eventos': 'buffet-para-festa', 'buffet-festa': 'buffet-para-festa',
+  'garcom': 'garcom-para-evento', 'garcons': 'garcom-para-evento', 'garcom-para-festa': 'garcom-para-evento',
+  'barman': 'barman-para-evento', 'bartender': 'barman-para-evento', 'barman-para-festa': 'barman-para-evento',
+  'chef': 'chef-para-evento', 'chef-de-cozinha-para-evento': 'chef-para-evento', 'chef-em-casa': 'chef-para-evento',
+  'cozinheiro': 'cozinheiro-para-evento', 'cozinheira': 'cozinheiro-para-evento',
+  'limpeza': 'limpeza-pos-evento', 'faxina': 'diarista', 'jardinagem': 'jardineiro', 'paisagismo': 'jardineiro',
+};
+
+export const findCityByPath = (cities: SeoCity[], uf: string, segment: string) =>
+  cities.find(c => c.uf.toLowerCase() === uf.toLowerCase() && citySegment(c) === segment);
+
 export type Crumb = { name: string; path: string };
 export type SeoPage = {
   path: string;
@@ -306,9 +334,10 @@ export type SeoPage = {
 
 export function servicePage(service: SeoService, city?: SeoCity): SeoPage {
   const where = city ? ` em ${city.name}` : '';
-  const path = city ? `${SERVICES_BASE}/${service.slug}/${city.slug}` : `${SERVICES_BASE}/${service.slug}`;
-  const crumbs: Crumb[] = [{ name: 'Início', path: '/' }, { name: 'Serviços', path: SERVICES_BASE }, { name: service.name, path: `${SERVICES_BASE}/${service.slug}` }];
-  if (city) crumbs.push({ name: cityLabel(city), path });
+  const path = city ? serviceCityPath(service, city) : `${SERVICES_BASE}/${service.slug}`;
+  const crumbs: Crumb[] = city
+    ? [{ name: 'Início', path: '/' }, { name: cityLabel(city), path: cityPath(city) }, { name: service.name, path }]
+    : [{ name: 'Início', path: '/' }, { name: 'Serviços', path: SERVICES_BASE }, { name: service.name, path }];
   const lead = city
     ? `Precisa de ${service.short}${where}? Peça orçamento grátis e receba propostas de ${service.plural} que atendem ${city.name} e região. Compare perfis, fotos e avaliações e feche com contrato em PDF.`
     : service.intro;
@@ -328,11 +357,12 @@ export function servicePage(service: SeoService, city?: SeoCity): SeoPage {
   };
 }
 
-export function professionPage(profession: SeoProfession, city?: SeoCity): SeoPage {
+export function professionPage(profession: SeoProfession, city?: SeoCity, seo: SeoCatalog = DEFAULT_SEO_CATALOG): SeoPage {
   const where = city ? ` em ${city.name}` : '';
-  const path = city ? `${JOBS_BASE}/${profession.slug}/${city.slug}` : `${JOBS_BASE}/${profession.slug}`;
-  const crumbs: Crumb[] = [{ name: 'Início', path: '/' }, { name: 'Para profissionais', path: JOBS_BASE }, { name: profession.name, path: `${JOBS_BASE}/${profession.slug}` }];
-  if (city) crumbs.push({ name: cityLabel(city), path });
+  const path = city ? jobCityPath(profession, city, seo) : `${JOBS_BASE}/${profession.slug}`;
+  const crumbs: Crumb[] = city
+    ? [{ name: 'Início', path: '/' }, { name: cityLabel(city), path: cityPath(city) }, { name: profession.name, path }]
+    : [{ name: 'Início', path: '/' }, { name: 'Para profissionais', path: JOBS_BASE }, { name: profession.name, path }];
   const n = profession.neutral;
   const lead = city
     ? n ? `Trabalha com ${profession.role}${where}? Receba pedidos de clientes de ${city.name} e região, envie propostas com o seu preço e receba 100% do valor, sem comissão.`
@@ -370,17 +400,31 @@ export const jobsHubPage = (): SeoPage => ({
   crumbs: [{ name: 'Início', path: '/' }, { name: 'Para profissionais', path: JOBS_BASE }],
 });
 
+/** Página da cidade (/sp/campinas): todos os serviços e oportunidades daquela cidade. */
+export const cityHubPage = (city: SeoCity): SeoPage => ({
+  path: cityPath(city),
+  title: titleOf(`Profissionais para eventos em ${city.name}/${city.uf}`, 'Chef, garçom, buffet'),
+  description: clip(`Chef, personal chef, buffet, garçom, barman, limpeza e jardinagem em ${city.name}/${city.uf}. Peça orçamento grátis e receba propostas de profissionais da região.`, 160),
+  h1: `Profissionais para eventos em ${city.name}`,
+  lead: `Encontre quem atende ${city.name} e região: escolha o serviço, publique o pedido de graça e receba propostas com contrato em PDF.`,
+  faqs: clientFaqs('profissionais'),
+  crumbs: [{ name: 'Início', path: '/' }, { name: 'Serviços', path: SERVICES_BASE }, { name: `${city.name}/${city.uf}`, path: cityPath(city) }],
+});
+
 /** Todas as páginas públicas de SEO (para o sitemap). */
 export function seoPaths(cities: SeoCity[], seo: SeoCatalog = DEFAULT_SEO_CATALOG): string[] {
   return [
     SERVICES_BASE,
-    ...seo.services.flatMap(s => [`${SERVICES_BASE}/${s.slug}`, ...cities.map(c => `${SERVICES_BASE}/${s.slug}/${c.slug}`)]),
+    ...cities.map(cityPath),
+    ...seo.services.flatMap(s => [`${SERVICES_BASE}/${s.slug}`, ...cities.map(c => serviceCityPath(s, c))]),
     JOBS_BASE,
-    ...seo.professions.flatMap(p => [`${JOBS_BASE}/${p.slug}`, ...cities.map(c => `${JOBS_BASE}/${p.slug}/${c.slug}`)]),
+    ...seo.professions.flatMap(p => [`${JOBS_BASE}/${p.slug}`, ...cities.map(c => jobCityPath(p, c, seo))]),
   ];
 }
 
 export type ResolvedSeoRoute =
+  | { kind: 'redirect'; to: string }
+  | { kind: 'cityHub'; page: SeoPage; city: SeoCity }
   | { kind: 'servicesHub'; page: SeoPage }
   | { kind: 'jobsHub'; page: SeoPage }
   | { kind: 'service'; page: SeoPage; service: SeoService; city?: SeoCity }
@@ -388,7 +432,22 @@ export type ResolvedSeoRoute =
 
 /** Interpreta um caminho de SEO. Devolve null para caminhos desconhecidos (404). */
 export function resolveSeoRoute(path: string, cities: SeoCity[], seo: SeoCatalog = DEFAULT_SEO_CATALOG): ResolvedSeoRoute | null {
-  const parts = path.replace(/\/+$/, '').split('/').filter(Boolean);
+  const parts = path.replace(/\/+$/, '').split('/').filter(Boolean).map(p => p.toLowerCase());
+  // Endereços locais: /sp/campinas e /sp/campinas/personal-chef
+  if (LOCAL_RE.test(`/${parts.join('/')}`)) {
+    const city = findCityByPath(cities, parts[0]!, parts[1]!);
+    if (!city) return null;
+    if (parts.length === 2) return { kind: 'cityHub', city, page: cityHubPage(city) };
+    const slug = parts[2]!;
+    const service = findSeoService(slug, seo);
+    if (service) return { kind: 'service', service, city, page: servicePage(service, city) };
+    const profession = seo.professions.find(p => jobLocalSlug(p, seo) === slug);
+    if (profession) return { kind: 'job', profession, city, page: professionPage(profession, city, seo) };
+    const alias = SERVICE_ALIASES[slug] ? findSeoService(SERVICE_ALIASES[slug]!, seo) : undefined;
+    if (alias) return { kind: 'redirect', to: serviceCityPath(alias, city) };
+    const legacyJob = findSeoProfession(slug, seo);
+    return legacyJob ? { kind: 'redirect', to: jobCityPath(legacyJob, city, seo) } : null;
+  }
   const base = `/${parts[0] ?? ''}`;
   if (base !== SERVICES_BASE && base !== JOBS_BASE) return null;
   if (parts.length === 1) return base === SERVICES_BASE ? { kind: 'servicesHub', page: servicesHubPage() } : { kind: 'jobsHub', page: jobsHubPage() };
@@ -396,11 +455,17 @@ export function resolveSeoRoute(path: string, cities: SeoCity[], seo: SeoCatalog
   const city = parts[2] ? cities.find(c => c.slug === parts[2]) : undefined;
   if (parts[2] && !city) return null;
   if (base === SERVICES_BASE) {
-    const service = findSeoService(parts[1]!, seo);
-    return service ? { kind: 'service', service, city, page: servicePage(service, city) } : null;
+    const service = findSeoService(parts[1]!, seo) ?? (SERVICE_ALIASES[parts[1]!] ? findSeoService(SERVICE_ALIASES[parts[1]!]!, seo) : undefined);
+    if (!service) return null;
+    // Endereço antigo com cidade (/servicos/x/campinas-sp) ou apelido: redireciona para o oficial.
+    if (city) return { kind: 'redirect', to: serviceCityPath(service, city) };
+    if (service.slug !== parts[1]) return { kind: 'redirect', to: `${SERVICES_BASE}/${service.slug}` };
+    return { kind: 'service', service, page: servicePage(service) };
   }
   const profession = findSeoProfession(parts[1]!, seo);
-  return profession ? { kind: 'job', profession, city, page: professionPage(profession, city) } : null;
+  if (!profession) return null;
+  if (city) return { kind: 'redirect', to: jobCityPath(profession, city, seo) };
+  return { kind: 'job', profession, page: professionPage(profession, undefined, seo) };
 }
 
 /** Profissionais reais (não demonstrativos) que atendem a categoria/profissão e, se houver, a cidade. */
@@ -410,4 +475,7 @@ export function matchProfessionals(all: Professional[], categoryIds: string[], s
     && (!city || normalizeCityName(p.city) === normalizeCityName(city.name))).slice(0, 12);
 }
 
-export const isSeoPath = (path: string) => path === SERVICES_BASE || path === JOBS_BASE || path.startsWith(`${SERVICES_BASE}/`) || path.startsWith(`${JOBS_BASE}/`);
+/** /sp/campinas ou /sp/campinas/personal-chef (a UF tem sempre 2 letras). */
+const LOCAL_RE = /^\/[a-z]{2}\/[a-z0-9-]+(\/[a-z0-9-]+)?$/;
+
+export const isSeoPath = (path: string) => path === SERVICES_BASE || path === JOBS_BASE || path.startsWith(`${SERVICES_BASE}/`) || path.startsWith(`${JOBS_BASE}/`) || LOCAL_RE.test(path.replace(/\/+$/, '').toLowerCase());
