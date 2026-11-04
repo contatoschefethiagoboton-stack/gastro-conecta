@@ -379,6 +379,7 @@ router.put("/admin/content", wrap(async (req, res) => {
     }
     if (field.type === "url" && value && !isValidHttpUrl(value)) throw new HttpError(400, `${field.label}: link inválido`);
     if (field.type === "boolean" && !["true", "false"].includes(value)) throw new HttpError(400, `${field.label}: valor inválido`);
+    if (field.type === "select" && !(field.options ?? []).some(([v]) => v === value)) throw new HttpError(400, `${field.label}: opção inválida`);
     if (field.type === "image" && value && !/^(\/api\/gastro\/media\/\d+|\/img\/[\w.-]+|https:\/\/\S+)$/.test(value)) throw new HttpError(400, `${field.label}: imagem inválida`);
     if (/^level\.(alto|medio)Min(Average|Reviews)$/.test(key) && !(/^\d+([.,]\d+)?$/.test(value) && Number(value.replace(",", ".")) <= (key.endsWith("Average") ? 5 : 1000))) throw new HttpError(400, `${field.label}: use um número${key.endsWith("Average") ? " de 0 a 5" : ""}`);
     if (key === "contact.whatsapp" && value && !/^\d{12,13}$/.test(value)) throw new HttpError(400, "WhatsApp: use só números com 55 + DDD (ex.: 5519999999999)");

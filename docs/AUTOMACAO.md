@@ -145,3 +145,21 @@ Quando um cliente publica um pedido, o site ranqueia os profissionais compatíve
 | `MATCH_NOTIFY_LIMIT`, `MATCH_WHATSAPP_LIMIT` | ajuste do matching | `30`, `10` |
 
 Sem essas variáveis, cada parte só fica desligada: o restante do site funciona normalmente.
+
+## Copilot vendedor (tempo integral)
+
+O Copilot trabalha para fechar negócios. Em cada conversa ele tem um objetivo, calculado pela situação real da pessoa (`shared/copilotGoals.ts`):
+
+| Quem | Objetivo | Próximo passo |
+|---|---|---|
+| Visitante sem conta | descobrir se quer contratar ou trabalhar | `/orcamento` já preenchido (serviço, cidade, data) ou `/conta?cadastro=profissional` |
+| Cliente sem pedido | publicar o pedido | `/orcamento` |
+| Cliente com propostas | escolher e aceitar (contrato em PDF) | `/painel?aba=requests` |
+| Profissional com perfil incompleto | completar o perfil | `/painel?aba=profile` |
+| Profissional sem assinatura | ativar a assinatura (mostra quantos pedidos já esperam) | `/painel?aba=subscription` |
+| Profissional ativo | responder os pedidos do radar / reforçar propostas | `/painel?aba=radar` |
+
+- **Balão proativo:** depois de 6 s o Copilot puxa a conversa com o próximo passo (uma vez por situação, por sessão). Desliga em *Textos do site → Contato e marca → "Copilot puxa conversa sozinho"*.
+- **Funciona sem IA:** sem chave configurada (ou se a IA falhar), ele responde por regras e continua levando ao próximo passo. Com IA (ex.: Groq grátis), as respostas ficam mais naturais e usam a mesma meta.
+- **Visitantes:** conversam sem conta; o histórico fica só no navegador (nada é gravado), com limite de 60 mensagens por dia por IP.
+- Quem vê o Copilot continua sendo escolhido em *"Quem vê o Copilot"*.

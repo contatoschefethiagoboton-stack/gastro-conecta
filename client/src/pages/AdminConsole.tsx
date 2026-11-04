@@ -449,6 +449,7 @@ function ContentSection() {
       <div className="adm-content-fields">{visible.filter(f => f.group === group).map(f => <div className="adm-content-field" key={f.key}>
         <div className="adm-content-label"><span>{f.label}</span>{values[f.key] !== f.default && <button type="button" title="Voltar ao texto original" onClick={() => void reset(f.key)}><RotateCcw size={13}/> original</button>}</div>
         {f.type === 'textarea' ? <textarea rows={f.key.startsWith('legal.') ? 14 : 3} value={values[f.key] ?? ''} onChange={e => setValues({ ...values, [f.key]: e.target.value })}/>
+          : f.type === 'select' ? <select className="adm-select" value={values[f.key] ?? f.default} onChange={e => setValues({ ...values, [f.key]: e.target.value })}>{(f.options ?? []).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>
           : f.type === 'boolean' ? <label className="adm-switch"><input type="checkbox" checked={values[f.key] === 'true'} onChange={e => setValues({ ...values, [f.key]: e.target.checked ? 'true' : 'false' })}/> {values[f.key] === 'true' ? 'Ligado' : 'Desligado'}</label>
           : f.type === 'image' ? <ImagePicker value={values[f.key] ?? ''} onChange={url => setValues({ ...values, [f.key]: url })}/>
           : f.type === 'showcase' ? <ShowcaseEditor value={values[f.key] ?? ''} onChange={v => setValues({ ...values, [f.key]: v })}/>

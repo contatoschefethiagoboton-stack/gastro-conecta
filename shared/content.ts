@@ -1,8 +1,8 @@
 // Textos e imagens editáveis pelo painel de administração.
 // Cada chave tem um valor padrão; o que o administrador salvar substitui o padrão.
-export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'services' | 'demos' | 'showcase';
+export type ContentFieldType = 'text' | 'textarea' | 'image' | 'url' | 'boolean' | 'select' | 'services' | 'demos' | 'showcase';
 /** hidden: chave aceita e salva, mas sem campo próprio no painel (ex.: capas antigas, hoje dentro do catálogo de serviços). */
-export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string; hidden?: boolean };
+export type ContentField = { key: string; group: string; label: string; type: ContentFieldType; default: string; hidden?: boolean; options?: Array<[value: string, label: string]> };
 
 export const contentFields: ContentField[] = [
  {
@@ -53,6 +53,22 @@ export const contentFields: ContentField[] = [
   "label": "Nome no rodapé (razão social ou marca)",
   "type": "text",
   "default": "Eventos Conecta"
+ },
+ {
+  "key": "copilot.visibility",
+  "group": "Contato e marca",
+  "label": "Quem vê o Copilot (chat de IA no canto do site)",
+  "type": "select",
+  "default": "all",
+  "options": [["all", "Todos (inclusive visitantes sem conta)"], ["logged", "Só quem está logado (clientes e profissionais)"], ["providers", "Só profissionais"], ["staff", "Só eu (dono) e a equipe da administração"], ["off", "Desligado para todos"]]
+ },
+ {
+  "key": "copilot.proactive",
+  "group": "Contato e marca",
+  "label": "Copilot puxa conversa sozinho (balão com o próximo passo para fechar negócio)",
+  "type": "select",
+  "default": "on",
+  "options": [["on", "Ligado: chama visitantes, clientes e profissionais"], ["off", "Desligado: só responde quando abrem o chat"]]
  },
  {
   "key": "whatsapp.enabled",
@@ -520,6 +536,18 @@ export const contentFields: ContentField[] = [
 ];
 
 export type SiteContent = Record<string, string>;
+
+export type CopilotVisibility = 'all' | 'logged' | 'providers' | 'staff' | 'off';
+/** Quem pode ver e usar o Copilot, conforme a escolha do painel. user = null para visitantes. */
+export function copilotAllowed(visibility: string | undefined, user: { accountType?: string; role?: string } | null): boolean {
+  const v = (visibility || 'all') as CopilotVisibility;
+  if (v === 'off') return false;
+  const staff = user?.role === 'admin';
+  if (v === 'staff') return staff;
+  if (v === 'providers') return staff || user?.accountType === 'provider';
+  if (v === 'logged') return Boolean(user);
+  return true;
+}
 
 export const contentDefaults: SiteContent = Object.fromEntries(contentFields.map(field => [field.key, field.default]));
 export const contentKeys = new Set(contentFields.map(field => field.key));
