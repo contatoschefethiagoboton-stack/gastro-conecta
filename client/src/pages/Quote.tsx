@@ -1,3 +1,4 @@
+import { findSeoService, seoCatalogFrom } from '@shared/seo';
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ArrowLeft, ArrowRight, Check, CalendarDays, MapPin, Users, Utensils, PartyPopper, BriefcaseBusiness, Heart, Coffee, Loader2, CheckCircle2, ShieldCheck, MessageCircle, Flame, Calculator } from 'lucide-react';
@@ -31,6 +32,15 @@ export default function Quote() {
     const cat = params.get('categoria') || params.get('tipo');
     const chosen = cat ? known.find(c => c.id === cat) ?? known.find(c => c.calculator === cat) : undefined;
     if (chosen) draft = { ...draft, ...pickCategory(chosen) };
+    // Vindo das páginas de SEO ou do robô do Instagram/WhatsApp: ?servico=garcom-para-evento&cidade=Campinas, SP
+    const seoSlug = params.get('servico');
+    const seoService = seoSlug ? findSeoService(seoSlug, seoCatalogFrom(known)) : undefined;
+    const seoCategory = seoService ? findCategory(known, seoService.categoryId) : undefined;
+    if (seoCategory) draft = { ...draft, ...pickCategory(seoCategory), ...(seoService!.serviceIds.length === 1 && seoCategory.services.some(sv => sv.id === seoService!.serviceIds[0]) ? { serviceId: seoService!.serviceIds[0] } : {}) };
+    const cityParam = params.get('cidade');
+    if (cityParam) draft = { ...draft, city: cityParam.slice(0, 100) };
+    const dateParam = params.get('data');
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) draft = { ...draft, date: dateParam };
     const preset = params.get('ocasiao');
     if (preset && eventTypes.some(t => t.name === preset)) {
       const eventCategory = findCategory(known, draft.serviceCategoryId)?.calculator === 'event' ? findCategory(known, draft.serviceCategoryId) : known.find(c => c.calculator === 'event');

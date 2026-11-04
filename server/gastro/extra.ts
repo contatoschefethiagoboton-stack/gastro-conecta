@@ -362,11 +362,13 @@ router.put("/admin/content", wrap(async (req, res) => {
   const context = await adminCtx(req);
   const input = body(req, z.object({ values: z.record(z.string(), z.string().max(MAX_CONTENT_LENGTH)) }));
   const entries = Object.entries(input.values).filter(([key]) => contentKeys.has(key));
+  let catalogBefore: Awaited<ReturnType<typeof getServiceCatalog>> | null = null;
   if (!entries.length) throw new HttpError(400, "Nada para salvar");
   for (const entry of entries) {
     const [key, value] = entry;
     const field = contentFields.find(f => f.key === key)!;
     if (field.type === "services" && value) {
+      catalogBefore = await getServiceCatalog();
       try { entry[1] = JSON.stringify(normalizeServiceCatalog(JSON.parse(value))); }
       catch (error) { throw new HttpError(400, error instanceof Error && !(error instanceof SyntaxError) ? error.message : "Catálogo de serviços inválido"); }
     }
@@ -386,6 +388,8 @@ router.put("/admin/content", wrap(async (req, res) => {
   });
   invalidateSiteContent();
   await audit(context.user.id, "admin.content_update", { keys: entries.map(([key]) => key) });
+  // Serviços ou profissões novos: avisa os buscadores das páginas criadas.
+  if (catalogBefore) { const before = catalogBefore; later(async () => { const { indexNewServices } = await import("./indexing"); const { seoCatalogFrom } = await import("@shared/seo"); await indexNewServices(seoCatalogFrom(before), seoCatalogFrom(await getServiceCatalog())); }); }
   res.json({ values: await getSiteContent() });
 }));
 

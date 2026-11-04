@@ -16,6 +16,9 @@ import { registerEngageRoutes } from "../gastro/engage";
 import { registerPasswordRoutes } from "../gastro/password";
 import { registerStaffRoutes } from "../gastro/staff";
 import { registerAuditTrail } from "../gastro/auditTrail";
+import { registerIndexingRoutes } from "../gastro/indexing";
+import { registerSocialRoutes } from "../gastro/social";
+import { registerSocialPostRoutes, startSocialScheduler } from "../gastro/socialPosts";
 import { robotsTxt, sitemapXml } from "../publicSeo";
 
 async function startServer() {
@@ -36,7 +39,8 @@ async function startServer() {
     next();
   });
   // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
+  // O webhook da Meta precisa do corpo original para conferir a assinatura (X-Hub-Signature-256).
+  app.use(express.json({ limit: "50mb", verify: (req, _res, buf) => { if (req.url?.startsWith("/api/gastro/webhooks/meta")) (req as typeof req & { rawBody?: Buffer }).rawBody = Buffer.from(buf); } }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // Histórico de tudo o que é feito na plataforma (antes de qualquer rota da API).
   registerAuditTrail(app);
@@ -52,9 +56,13 @@ async function startServer() {
   if (process.env.MANUS_OAUTH_API_URL) registerOAuthRoutes(app);
   // REST contract must be mounted before Vite's catch-all/static handling.
   // Webhook do Mercado Pago (sem cabeçalho Origin) precisa vir antes das rotas com proteção CSRF.
+  // Webhooks sem cabeçalho Origin (Meta) vêm antes das rotas com proteção CSRF.
+  registerSocialRoutes(app);
   registerSubscriptionRoutes(app);
   registerPasswordRoutes(app);
   registerStaffRoutes(app);
+  registerIndexingRoutes(app);
+  registerSocialPostRoutes(app);
   registerExtraRoutes(app);
   registerGrowthRoutes(app);
   registerEngageRoutes(app);
@@ -79,6 +87,7 @@ async function startServer() {
   server.on("error", error => { console.error("Server failed:", error.message); process.exit(1); });
   server.listen(port, "0.0.0.0", () => console.log(`Server listening on port ${port}`));
   startBillingScheduler();
+  startSocialScheduler();
 }
 
 startServer().catch(error => { console.error(error); process.exit(1); });

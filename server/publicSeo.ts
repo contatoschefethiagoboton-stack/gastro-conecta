@@ -5,7 +5,7 @@ import { businessDefaults, whatsappLink } from '../shared/business';
 import { getSiteContent } from './gastro/content';
 import {
   DEFAULT_ORIGIN, JOBS_BASE, SERVICES_BASE, SITE_NAME, seoCatalogFrom,
-  isSeoPath, matchProfessionals, nearbyCities, resolveSeoRoute, seoCitiesFrom, seoPaths,
+  cityPath, isSeoPath, jobCityPath, matchProfessionals, nearbyCities, normalizeCityName, resolveSeoRoute, seoCitiesFrom, seoPaths, serviceCityPath,
   type Crumb, type Faq, type ResolvedSeoRoute, type SeoCatalog, type SeoCity,
 } from '../shared/seo';
 
@@ -46,14 +46,35 @@ const faqHtml = (faqs: Faq[]) => `<h2>Perguntas frequentes</h2>${faqs.map(([q, a
 const listHtml = (items: string[]) => `<ul>${items.map(i => `<li>${escape(i)}</li>`).join('')}</ul>`;
 const proCard = (p: Professional) => `<article><h3><a href="/profissionais/${escape(p.id)}">${escape(p.name)}</a></h3><p>${escape(p.category)} · ${escape(p.city)}${p.rating?.count ? ` · nota ${p.rating.average.toFixed(1)} (${p.rating.count} avaliações)` : ''}</p><p>${escape(p.description.slice(0, 220))}</p></article>`;
 
-async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content: Record<string, string>, seo: SeoCatalog): Promise<{ body: string; ld: unknown[] }> {
+/** LocalBusiness (com nota média, quando houver avaliações reais) para um profissional do catálogo. */
+function localBusinessLd(p: Professional) {
+  const [locality, region] = p.city.split(',').map(x => x.trim());
+  return {
+    '@type': 'LocalBusiness', '@id': abs(`/profissionais/${p.id}#negocio`), name: p.name, url: abs(`/profissionais/${p.id}`),
+    ...(p.description ? { description: p.description.slice(0, 300) } : {}), ...(p.image ? { image: abs(p.image) } : {}),
+    ...(locality ? { address: { '@type': 'PostalAddress', addressLocality: locality, ...(region ? { addressRegion: region } : {}), addressCountry: 'BR' } } : {}),
+    ...(p.rating && p.rating.count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: p.rating.average, reviewCount: p.rating.count, bestRating: 5, worstRating: 1 } } : {}),
+  };
+}
+
+type SeoPageRoute = Exclude<ResolvedSeoRoute, { kind: 'redirect' }>;
+
+async function seoRouteHtml(route: SeoPageRoute, cities: SeoCity[], content: Record<string, string>, seo: SeoCatalog): Promise<{ body: string; ld: unknown[] }> {
   const { page } = route;
   const ld: unknown[] = [breadcrumbLd(page.crumbs), faqLd(page.faqs)];
   let main = '';
   if (route.kind === 'servicesHub') {
-    main = `<h2>Serviços</h2>${seo.services.map(s => `<h3><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></h3><p>${escape(s.intro)}</p>`).join('')}<h2>Cidades atendidas</h2><ul>${cities.map(c => `<li>${escape(c.name)}/${escape(c.uf)}: ${seo.services.slice(0, 4).map(s => `<a href="${SERVICES_BASE}/${s.slug}/${c.slug}">${escape(s.name)}</a>`).join(', ')}</li>`).join('')}</ul>`;
+    main = `<h2>Serviços</h2>${seo.services.map(s => `<h3><a href="${SERVICES_BASE}/${s.slug}">${escape(s.name)}</a></h3><p>${escape(s.intro)}</p>`).join('')}<h2>Cidades atendidas</h2><ul>${cities.map(c => `<li><a href="${cityPath(c)}">${escape(c.name)}/${escape(c.uf)}</a>: ${seo.services.slice(0, 4).map(s => `<a href="${serviceCityPath(s, c)}">${escape(s.name)}</a>`).join(', ')}</li>`).join('')}</ul>`;
   } else if (route.kind === 'jobsHub') {
     main = `<h2>Profissões</h2>${seo.professions.map(p => `<h3><a href="${JOBS_BASE}/${p.slug}">${escape(p.name)}</a></h3><p>${escape(p.intro)}</p>`).join('')}<p><a href="/conta?cadastro=profissional">Cadastrar como profissional</a></p>`;
+  } else if (route.kind === 'cityHub') {
+    const { city } = route;
+    const all = (await loadProfessionals().catch(() => [] as Professional[])).filter(p => !p.demo && normalizeCityName(p.city) === normalizeCityName(city.name));
+    main = `<h2>Serviços em ${escape(city.name)}</h2><ul>${seo.services.map(s => `<li><a href="${serviceCityPath(s, city)}">${escape(s.name)} em ${escape(city.name)}</a> · ${escape(s.intro.slice(0, 140))}</li>`).join('')}</ul>`
+      + (all.length ? `<h2>Profissionais em ${escape(city.name)}</h2>${all.slice(0, 12).map(proCard).join('')}` : '')
+      + `<h2>Para profissionais de ${escape(city.name)}</h2><ul>${seo.professions.map(p => `<li><a href="${jobCityPath(p, city, seo)}">${escape(p.name)} em ${escape(city.name)}</a></li>`).join('')}</ul>`
+      + `<h2>Cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${cityPath(c)}">${escape(c.name)}/${escape(c.uf)}</a></li>`).join('')}</ul>`;
+    if (all.length) ld.push({ '@context': 'https://schema.org', '@type': 'ItemList', name: page.h1, itemListElement: all.slice(0, 12).map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: localBusinessLd(p) })) });
   } else {
     const catalog = serviceCatalogFrom(content);
     const all = await loadProfessionals().catch(() => [] as Professional[]);
@@ -62,12 +83,15 @@ async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content:
       const labels = catalog.flatMap(c => c.services).filter(s => service.serviceIds.includes(s.id)).map(s => s.label);
       const pros = matchProfessionals(all, [service.categoryId], labels, city);
       const where = city ? ` em ${city.name}` : '';
+      const quoteHref = `/orcamento?servico=${encodeURIComponent(service.slug)}${city ? `&amp;cidade=${encodeURIComponent(`${city.name}, ${city.uf}`)}` : ''}`;
       main = `${city ? `<p>${escape(service.intro)}</p>` : ''}<h2>Para quais ocasiões contratar ${escape(service.short)}${escape(where)}</h2>${listHtml(service.occasions)}<h2>O que o serviço costuma incluir</h2>${listHtml(service.includes)}<h2>Dicas para contratar bem</h2>${listHtml(service.tips)}`
         + `<h2>Profissionais${escape(where)}</h2>${pros.length ? pros.map(proCard).join('') : `<p>Publique o seu pedido e receba propostas de ${escape(service.plural)} que atendem ${escape(city ? city.name : 'a sua região')}.</p>`}`
-        + `<p><a href="/orcamento">Pedir orçamento grátis</a> · <a href="/profissionais?tipo=${encodeURIComponent(service.categoryId)}${city ? `&amp;cidade=${encodeURIComponent(city.name)}` : ''}">Ver profissionais</a></p>`
-        + (city ? `<h2>${escape(service.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${SERVICES_BASE}/${service.slug}/${c.slug}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul><h2>Outros serviços em ${escape(city.name)}</h2><ul>${seo.services.filter(s => s.slug !== service.slug).map(s => `<li><a href="${SERVICES_BASE}/${s.slug}/${city.slug}">${escape(s.name)} em ${escape(city.name)}</a></li>`).join('')}</ul>`
-          : `<h2>${escape(service.name)} por cidade</h2><ul>${cities.map(c => `<li><a href="${SERVICES_BASE}/${service.slug}/${c.slug}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`);
-      ld.push({ '@context': 'https://schema.org', '@type': 'Service', name: page.h1, serviceType: service.name, description: page.description, url: abs(page.path), provider: organization(), areaServed: city ? { '@type': 'City', name: `${city.name}, ${city.uf}` } : cities.map(c => ({ '@type': 'City', name: `${c.name}, ${c.uf}` })), offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL', description: 'Pedido de orçamento grátis para quem contrata' } });
+        + `<p><a href="${quoteHref}">Pedir orçamento grátis</a> · <a href="/profissionais?tipo=${encodeURIComponent(service.categoryId)}${city ? `&amp;cidade=${encodeURIComponent(city.name)}` : ''}">Ver profissionais</a></p>`
+        + (city ? `<h2>${escape(service.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${serviceCityPath(service, c)}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul><h2>Outros serviços em ${escape(city.name)}</h2><ul>${seo.services.filter(s => s.slug !== service.slug).map(s => `<li><a href="${serviceCityPath(s, city)}">${escape(s.name)} em ${escape(city.name)}</a></li>`).join('')}</ul><p><a href="${cityPath(city)}">Todos os serviços em ${escape(city.name)}</a></p>`
+          : `<h2>${escape(service.name)} por cidade</h2><ul>${cities.map(c => `<li><a href="${serviceCityPath(service, c)}">${escape(service.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`);
+      ld.push({ '@context': 'https://schema.org', '@type': 'Service', name: page.h1, serviceType: service.name, description: page.description, url: abs(page.path), provider: organization(), areaServed: city ? { '@type': 'City', name: `${city.name}, ${city.uf}`, containedInPlace: { '@type': 'State', name: city.uf } } : cities.map(c => ({ '@type': 'City', name: `${c.name}, ${c.uf}` })), offers: { '@type': 'Offer', price: '0', priceCurrency: 'BRL', description: 'Pedido de orçamento grátis para quem contrata' } });
+      // Profissionais reais da página (com nota média quando há avaliações): ajuda o Google a mostrar estrelas.
+      if (pros.length) ld.push({ '@context': 'https://schema.org', '@type': 'ItemList', name: `${service.name}${where}`, itemListElement: pros.map((p, i) => ({ '@type': 'ListItem', position: i + 1, item: localBusinessLd(p) })) });
     } else {
       const { profession, city } = route;
       const labels = catalog.flatMap(c => c.services).filter(s => profession.serviceIds.includes(s.id)).map(s => s.label);
@@ -77,8 +101,8 @@ async function seoRouteHtml(route: ResolvedSeoRoute, cities: SeoCity[], content:
         + `<h2>Por que usar o ${SITE_NAME}</h2>${listHtml(['Zero comissão: você recebe 100% do valor direto no seu Pix', 'Radar de pedidos da sua região com score de intenção do cliente', 'Copilot com calculadoras de ingredientes, equipe, custos e lucro', 'Contrato em PDF gerado automaticamente a cada serviço fechado', 'Avaliações e selo Top Rated para ganhar destaque'])}`
         + (count ? `<p>${count} ${count === 1 ? 'profissional já atende' : 'profissionais já atendem'}${city ? ` em ${escape(city.name)}` : ''} pela plataforma.</p>` : '')
         + `<p><a href="/conta?cadastro=profissional">Cadastrar como ${escape(profession.role)}</a> · <a href="/para-profissionais">Como funciona para profissionais</a></p>`
-        + (city ? `<h2>${escape(profession.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${JOBS_BASE}/${profession.slug}/${c.slug}">${escape(profession.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`
-          : `<h2>${escape(profession.name)} por cidade</h2><ul>${cities.map(c => `<li><a href="${JOBS_BASE}/${profession.slug}/${c.slug}">${escape(profession.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`);
+        + (city ? `<h2>${escape(profession.name)} em cidades próximas</h2><ul>${nearbyCities(cities, city).map(c => `<li><a href="${jobCityPath(profession, c, seo)}">${escape(profession.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`
+          : `<h2>${escape(profession.name)} por cidade</h2><ul>${cities.map(c => `<li><a href="${jobCityPath(profession, c, seo)}">${escape(profession.name)} em ${escape(c.name)}</a></li>`).join('')}</ul>`);
     }
   }
   const body = `<main>${breadcrumbHtml(page.crumbs)}<h1>${escape(page.h1)}</h1><p>${escape(page.lead)}</p>${main}${faqHtml(page.faqs)}</main>`;
@@ -98,15 +122,19 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
   let detail = '';
   let customBody = '';
   let demoProfile = false;
+  let geo: SeoCity | undefined;
   const ld: unknown[] = [];
 
   if (isSeoPath(path)) {
     const route = resolveSeoRoute(path, cities, seo);
+    // Endereço antigo ou apelido: redirecionamento permanente (301) para o endereço oficial.
+    if (route?.kind === 'redirect') return { html: '', status: 301, redirect: route.to + (originalUrl.includes('?') ? originalUrl.slice(originalUrl.indexOf('?')) : '') };
     if (route) {
       const html = await seoRouteHtml(route, cities, site, seo);
       page = { title: route.page.title, description: route.page.description, heading: route.page.h1, body: route.page.lead };
       customBody = html.body;
       ld.push(...html.ld);
+      if ('city' in route && route.city) geo = route.city;
     }
   }
 
@@ -141,7 +169,10 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
     const canonical = abs(path);
     head += `<link rel="canonical" href="${escape(canonical)}"/><meta property="og:url" content="${escape(canonical)}"/>`;
   }
-  head += `<meta property="og:image" content="${escape(abs('/icon-512.png'))}"/><meta name="twitter:image" content="${escape(abs('/icon-512.png'))}"/>`;
+  head += `<meta property="og:type" content="website"/><meta property="og:locale" content="pt_BR"/><meta property="og:site_name" content="${SITE_NAME}"/>`;
+  // SEO local: região e cidade da página.
+  if (geo) head += `<meta name="geo.region" content="BR-${escape(geo.uf)}"/><meta name="geo.placename" content="${escape(geo.name)}"/>`;
+  head += `<meta property="og:image" content=""${escape(abs('/icon-512.png'))}"/><meta name="twitter:image" content="${escape(abs('/icon-512.png'))}"/>`;
   const verification = (site['seo.googleVerification'] || process.env.GOOGLE_SITE_VERIFICATION || '').trim();
   if (/^[\w-]{10,100}$/.test(verification)) head += `<meta name="google-site-verification" content="${escape(verification)}"/>`;
 
@@ -169,10 +200,10 @@ export async function applyPublicSeo(template: string, originalUrl: string) {
     : `<main><h1>${escape(page.heading)}</h1><p>${escape(page.body)}</p>${detail}${NAV}${contact}${serviceLinks}${cards}</main>`;
   const html = template
     .replace(/<title>[\s\S]*?<\/title>/, '')
-    .replace(/<meta (?:name="(?:description|robots|twitter:title|twitter:description)"|property="(?:og:title|og:description)")[^>]*>/g, '')
+    .replace(/<meta (?:name="(?:description|robots|twitter:title|twitter:description)"|property="(?:og:title|og:description|og:type|og:site_name|og:locale)")[^>]*>/g, '')
     .replace('</head>', head + '</head>')
     .replace(/<div id="root">[\s\S]*?<\/div>/, `<div id="root">${body}</div>`);
-  return { html, status };
+  return { html, status, redirect: undefined as string | undefined };
 }
 
 /** robots.txt: libera o site público e aponta o sitemap. */

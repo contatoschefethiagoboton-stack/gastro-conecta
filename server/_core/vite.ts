@@ -41,6 +41,7 @@ export async function setupVite(app: Express, server: Server) {
       );
       const page = await vite.transformIndexHtml(url, template);
       const result = await applyPublicSeo(page, url);
+      if (result.redirect) { res.redirect(301, result.redirect); return; }
       res.status(result.status).set({ "Content-Type": "text/html", "Cache-Control": "no-store" }).end(result.html);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
@@ -67,6 +68,7 @@ export function serveStatic(app: Express) {
     try {
       const template = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
       const result = await applyPublicSeo(template, req.originalUrl);
+      if (result.redirect) { res.redirect(301, result.redirect); return; }
       res.status(result.status).set({ "Content-Type": "text/html", "Cache-Control": "no-store" }).end(result.html);
     } catch (error) { next(error); }
   });

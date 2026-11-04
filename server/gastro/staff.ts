@@ -97,6 +97,7 @@ export async function anonymizeAccount(userId: number, actorId: number, reason: 
     await connection.execute("UPDATE gastro_proposals SET status = 'withdrawn' WHERE providerId = ? AND status = 'pending'", [userId]);
     await connection.execute("UPDATE gastro_events SET status = 'cancelled' WHERE clientId = ? AND status = 'open'", [userId]);
   });
+  if (row.accountType === "provider" && row.role !== "admin") { const { unindexProvider } = await import("./indexing"); unindexProvider(userId); }
   await audit(actorId, "account.deleted", { reason, name: row.name, email: row.email, accountType: row.accountType, staffRole: row.staffRole ?? undefined }, userId);
 }
 

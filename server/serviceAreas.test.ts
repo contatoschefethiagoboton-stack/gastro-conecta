@@ -57,12 +57,12 @@ describe('páginas do Google para serviços novos', () => {
   it('cria página do serviço novo e de cada profissão nova', () => {
     expect(seo.services.map(s => s.slug)).toEqual(expect.arrayContaining(['confeitaria-para-evento', 'limpeza-de-piscina']));
     expect(seo.professions.map(p => p.slug)).toEqual(expect.arrayContaining(['confeiteiro-a', 'bolo-personalizado', 'piscineiro']));
-    const r = resolveSeoRoute('/servicos/confeitaria-para-evento/campinas-sp', cities, seo)!;
+    const r = resolveSeoRoute('/sp/campinas/confeitaria-para-evento', cities, seo) as any;
     expect(r.page.h1).toBe('Confeitaria para evento em Campinas');
-    const j = resolveSeoRoute('/trabalhe-como/bolo-personalizado/valinhos-sp', cities, seo)!;
+    const j = resolveSeoRoute('/sp/valinhos/bolo-personalizado', cities, seo) as any;
     expect(j.page.h1).toBe('Bolo personalizado em Valinhos: receba pedidos de clientes');
     expect(j.page.title.length).toBeLessThanOrEqual(70);
-    expect(seoPaths(cities, seo)).toContain('/servicos/confeitaria-para-evento/campinas-sp');
+    expect(seoPaths(cities, seo)).toContain('/sp/campinas/confeitaria-para-evento');
   });
   it('mantém as páginas padrão e não duplica endereços', () => {
     expect(seo.services.map(s => s.slug)).toContain('garcom-para-evento');
