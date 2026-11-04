@@ -60,7 +60,15 @@ export const contentFields: ContentField[] = [
   "label": "Quem vê o Copilot (chat de IA no canto do site)",
   "type": "select",
   "default": "all",
-  "options": [["all", "Todos (inclusive visitantes; para conversar precisa entrar)"], ["logged", "Só quem está logado (clientes e profissionais)"], ["providers", "Só profissionais"], ["staff", "Só eu (dono) e a equipe da administração"], ["off", "Desligado para todos"]]
+  "options": [["all", "Todos (inclusive visitantes sem conta)"], ["logged", "Só quem está logado (clientes e profissionais)"], ["providers", "Só profissionais"], ["staff", "Só eu (dono) e a equipe da administração"], ["off", "Desligado para todos"]]
+ },
+ {
+  "key": "copilot.proactive",
+  "group": "Contato e marca",
+  "label": "Copilot puxa conversa sozinho (balão com o próximo passo para fechar negócio)",
+  "type": "select",
+  "default": "on",
+  "options": [["on", "Ligado: chama visitantes, clientes e profissionais"], ["off", "Desligado: só responde quando abrem o chat"]]
  },
  {
   "key": "whatsapp.enabled",

@@ -2,7 +2,7 @@ import { Router, type Express, type Request } from "express";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { HttpError } from "@shared/_core/errors";
-import { findCategory, findService, serviceMatchesRequest, type RequestCategory } from "@shared/services";
+import { findCategory, findService, serviceCatalogFrom, serviceMatchesRequest, type RequestCategory } from "@shared/services";
 import { platformEstimateCents } from "@shared/copilot";
 import { conversionRate } from "@shared/copilot";
 import { getSessionCookieOptions } from "../_core/cookies";
@@ -24,7 +24,8 @@ import { buildContractPayload, contractPdf, legacyContractPdf, type ContractPayl
 import { buildPdf, type PdfBlock } from "./pdf";
 import { rankCandidates, type MatchCandidate } from "@shared/matching";
 import { copilotAllowed } from "@shared/content";
-import { seoCitiesFrom } from "@shared/seo";
+import { copilotNudge, goalPrompt, ruleReply, type CopilotState } from "@shared/copilotGoals";
+import { seoCatalogFrom, seoCitiesFrom } from "@shared/seo";
 import { getSiteContent } from "./content";
 import { formatQuantity, normalizeShoppingList, SHOPPING_LIST_NOTICE, shoppingListFeeLabel } from "@shared/shoppingList";
 import { mpConfigured } from "./mercadopago";
@@ -742,15 +743,18 @@ export function copilotProvider() {
   return { base, key, model: process.env.COPILOT_MODEL || "gpt-4o-mini" };
 }
 
-async function callCopilot(history: Array<{ role: "user" | "assistant"; content: string }>, accountType: AccountType, catalog: Awaited<ReturnType<typeof loadProfessionals>>) {
+async function callCopilot(history: Array<{ role: "user" | "assistant"; content: string }>, state: CopilotState, catalog: Awaited<ReturnType<typeof loadProfessionals>>) {
   const { base, key, model } = copilotProvider();
   if (!base || !key) throw new HttpError(503, "Copilot indisponível: credencial de IA não configurada");
-  const catalogContext = catalog.slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, topRated: item.topRated, demo: item.demo }));
-  const system = `Você é o Copilot do Eventos Conecta. Perfil atual: ${accountType === "provider" ? "profissional" : "cliente"}. Clientes usam a plataforma de graça; profissionais (chefs, personal chefs, cozinheiros, auxiliares, barmans, garçons, limpeza e jardinagem) pagam só uma assinatura mensal fixa e recebem 100% do valor negociado, sem comissão. Ajude profissionais a calcular ingredientes, porções, brigada, custos de marmitas, limpeza e jardinagem, preço e margem; sempre lembre que os valores são estimativas editáveis. Ajude clientes a descrever pedidos e escolher profissionais do catálogo abaixo. Não exponha e-mails, documentos ou IDs internos. Portfólios demo são ilustrativos e não contratáveis. Não invente avaliações, disponibilidade ou garantias jurídicas. Catálogo: ${JSON.stringify(catalogContext)}`;
+  const catalogContext = catalog.filter(item => !item.demo).slice(0, 30).map(item => ({ id: item.id, name: item.name, type: item.type, category: item.category, city: item.city, topRated: item.topRated, link: `/profissionais/${item.id}` }));
+  const helper = state.audience === "provider"
+    ? "Também ajude o profissional a calcular ingredientes, porções, brigada, custos de marmitas, limpeza e jardinagem, preço e margem (valores são estimativas editáveis) e a escrever propostas que convencem."
+    : "Também ajude a pessoa a descrever o pedido e a escolher profissionais do catálogo abaixo (indique o link do perfil).";
+  const system = `${goalPrompt(state)}\n${helper}\nNão exponha e-mails, documentos ou IDs internos. Catálogo de profissionais ativos: ${JSON.stringify(catalogContext)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetch(resolveCopilotEndpoint(base), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal: controller.signal, body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...history], ...(model.startsWith("gpt-5") ? {} : { temperature: 0.2 }) }) });
+    const response = await fetch(resolveCopilotEndpoint(base), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, signal: controller.signal, body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...history], ...(model.startsWith("gpt-5") ? {} : { temperature: 0.3 }) }) });
     if (!response.ok) throw new HttpError(503, "Copilot indisponível no provedor de IA");
     const data = await response.json() as any;
     const reply = data?.choices?.[0]?.message?.content;
@@ -765,20 +769,76 @@ async function callCopilot(history: Array<{ role: "user" | "assistant"; content:
   }
 }
 
+/** Situação comercial da pessoa: é o que define o objetivo do Copilot. */
+async function copilotState(context: AuthContext | null): Promise<CopilotState> {
+  if (!context) return { audience: "visitor" };
+  const me = context.user.id;
+  const { details, completedAt } = await loadDetails(me);
+  if (context.profile.accountType === "provider") {
+    const services = await providerServices(me);
+    const catalog = await getServiceCatalog();
+    const open = await query<any[]>(`SELECT e.category, e.details FROM gastro_events e WHERE e.status = 'open' AND e.providerId IS NULL AND (e.preferredProviderId IS NULL OR e.preferredProviderId = ?)
+      AND NOT EXISTS (SELECT 1 FROM gc_event_dismissals d WHERE d.eventId = e.id AND d.userId = ?) AND NOT EXISTS (SELECT 1 FROM gastro_proposals p WHERE p.eventId = e.id AND p.providerId = ?) LIMIT 300`, [me, me, me]);
+    const radarOpen = open.filter(row => serviceMatchesRequest(services, (row.category ?? "event") as RequestCategory, catalog, json(row.details))).length;
+    const pending = await query<any[]>("SELECT COUNT(*) n FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId WHERE p.providerId = ? AND p.status = 'pending' AND e.status = 'open'", [me]);
+    return { audience: "provider", name: context.user.name ?? undefined, provider: { profileComplete: providerDetailsComplete(details, completedAt), phase: await phaseFor(me), radarOpen, pendingProposals: Number(pending[0]?.n ?? 0) } };
+  }
+  const [events, proposals] = await Promise.all([
+    query<any[]>("SELECT COUNT(*) n FROM gastro_events WHERE clientId = ? AND status = 'open'", [me]),
+    query<any[]>("SELECT COUNT(*) n FROM gastro_proposals p JOIN gastro_events e ON e.id = p.eventId WHERE e.clientId = ? AND e.status = 'open' AND p.status = 'pending'", [me]),
+  ]);
+  return { audience: "client", name: context.user.name ?? undefined, client: { openEvents: Number(events[0]?.n ?? 0), pendingProposals: Number(proposals[0]?.n ?? 0), contractDataComplete: clientContractDataComplete(details) } };
+}
+
+/** Responde com IA quando houver; sem IA (ou se ela falhar) responde pelas regras e continua vendendo. */
+async function copilotReply(history: Array<{ role: "user" | "assistant"; content: string }>, state: CopilotState) {
+  try {
+    return { reply: await callCopilot(history, state, await loadProfessionals()), source: "ai" as const };
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error;
+    const content = await getSiteContent();
+    const last = history[history.length - 1]?.content ?? "";
+    return { reply: ruleReply(last, state, seoCatalogFrom(serviceCatalogFrom(content)), seoCitiesFrom(content)), source: "rules" as const };
+  }
+}
+
+async function assertCopilotVisible(context: AuthContext | null) {
+  const visibility = (await getSiteContent())["copilot.visibility"];
+  if (!copilotAllowed(visibility, context ? { accountType: context.profile.accountType, role: context.user.role } : null)) throw new HttpError(403, "O Copilot não está disponível para a sua conta.");
+}
+
+/** Abordagem proativa: o Copilot puxa a conversa com o próximo passo de fechamento. */
+router.get("/copilot/nudge", wrap(async (req, res) => {
+  const context = await resolveAuth(req);
+  await assertCopilotVisible(context);
+  const proactive = (await getSiteContent())["copilot.proactive"] !== "off";
+  res.set("Cache-Control", "no-store").json({ nudge: copilotNudge(await copilotState(context)), proactive });
+}));
+
+const historySchema = z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(2000) })).max(12);
+
 router.post("/copilot", wrap(async (req, res) => {
-  const context = await auth(req);
+  const context = await resolveAuth(req);
   // Quem pode usar o Copilot é definido no painel (Textos do site → Contato e marca).
-  if (!copilotAllowed((await getSiteContent())["copilot.visibility"], { accountType: context.profile.accountType, role: context.user.role })) throw new HttpError(403, "O Copilot não está disponível para a sua conta.");
+  await assertCopilotVisible(context);
   limit(`copilot:${clientIp(req)}`, 12, 60_000, "Copilot temporariamente limitado; tente novamente mais tarde");
-  const input = body(req, z.object({ message: z.string().trim().min(1).max(4000) }));
+  const input = body(req, z.object({ message: z.string().trim().min(1).max(4000), history: historySchema.optional() }));
+  const state = await copilotState(context);
+  if (!context) {
+    // Visitante sem conta: histórico fica no navegador; nada é gravado no banco.
+    limit(`copilot-visitor:${clientIp(req)}`, 60, 24 * 60 * 60_000, "Limite diário do assistente atingido. Crie sua conta grátis para continuar.");
+    const history = [...(input.history ?? []), { role: "user" as const, content: input.message }];
+    res.json(await copilotReply(history, state));
+    return;
+  }
   const previous = await query<any[]>("SELECT role, content FROM gastro_messages WHERE userId = ? ORDER BY createdAt DESC, id DESC LIMIT 20", [context.user.id]);
   const history = [...previous.reverse().map(row => ({ role: row.role as "user" | "assistant", content: row.content })), { role: "user" as const, content: input.message }];
-  const reply = await callCopilot(history, context.profile.accountType, await loadProfessionals());
+  const { reply, source } = await copilotReply(history, state);
   await withTransaction(async connection => {
     await connection.execute("INSERT INTO gastro_messages (userId, role, content) VALUES (?, 'user', ?)", [context.user.id, input.message]);
     await connection.execute("INSERT INTO gastro_messages (userId, role, content) VALUES (?, 'assistant', ?)", [context.user.id, reply]);
   });
-  res.json({ reply });
+  res.json({ reply, source });
 }));
 
 router.get("/integrations", wrap(async (_req, res) => {
