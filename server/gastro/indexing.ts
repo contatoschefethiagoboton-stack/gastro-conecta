@@ -202,8 +202,13 @@ export function registerIndexingRoutes(app: Express) {
 
 router.get("/admin/indexing", wrap(async (req, res) => {
   await requireStaff(req);
-  const rows = await query<any[]>("SELECT url, engine, type, status, detail, createdAt FROM gc_index_log ORDER BY id DESC LIMIT 100");
-  res.json({ ...indexingStatus(), googleSentToday: await googleSentToday(), queued: queue.size, log: rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) });
+  // Lista: Google primeiro (são poucos) e os últimos envios do IndexNow, para o Google não sumir no meio de mil linhas.
+  const google = await query<any[]>("SELECT url, engine, type, status, detail, createdAt FROM gc_index_log WHERE engine = 'google' ORDER BY id DESC LIMIT 50");
+  const others = await query<any[]>("SELECT url, engine, type, status, detail, createdAt FROM gc_index_log WHERE engine <> 'google' ORDER BY id DESC LIMIT 50");
+  const today = await query<any[]>("SELECT status, COUNT(*) total FROM gc_index_log WHERE engine = 'google' AND createdAt >= CURRENT_DATE GROUP BY status");
+  const lastError = await query<any[]>("SELECT detail FROM gc_index_log WHERE engine = 'google' AND status = 'error' AND createdAt >= CURRENT_DATE ORDER BY id DESC LIMIT 1");
+  const count = (status: string) => Number(today.find(r => r.status === status)?.total ?? 0);
+  res.json({ ...indexingStatus(), googleSentToday: await googleSentToday(), googleToday: { ok: count("ok"), error: count("error"), skipped: count("skipped"), lastError: lastError[0]?.detail ?? "" }, queued: queue.size, log: [...google, ...others].map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) });
 }));
 
 /** Envia todas as páginas do site: IndexNow recebe tudo; o Google, as mais importantes (por causa da cota). */

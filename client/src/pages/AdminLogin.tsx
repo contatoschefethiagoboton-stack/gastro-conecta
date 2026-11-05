@@ -11,6 +11,7 @@ export default function AdminLogin() {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ code: '', name: '', email: '', password: '' });
+  const ended = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sessao') === 'encerrada';
   const set = (key: keyof typeof form, value: string) => setForm(f => ({ ...f, [key]: value }));
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export default function AdminLogin() {
       <span className="adm-login-icon">{status?.setupRequired ? <KeyRound size={22}/> : <Lock size={22}/>}</span>
       <span className="adm-kicker">Eventos Conecta · gestão</span>
       <h1>{status?.setupRequired ? 'Criar acesso de administrador' : 'Acesso da administração'}</h1>
+      {ended && <p className="adm-alert">Sua sessão foi encerrada porque você entrou em outro aparelho (ou ela expirou). Entre de novo para continuar. O dono e a equipe podem ficar conectados em até 2 aparelhos ao mesmo tempo.</p>}
       {!status && <p className="adm-muted"><Loader2 className="ob-spin" size={16}/> Verificando…</p>}
       {status?.database === 'missing' && <p className="adm-alert">O banco de dados ainda não foi configurado. Defina a variável DATABASE_URL no Render.</p>}
       {status?.database === 'error' && <p className="adm-alert">Não foi possível conectar ao banco de dados. Confira a DATABASE_URL e os logs do Render.</p>}

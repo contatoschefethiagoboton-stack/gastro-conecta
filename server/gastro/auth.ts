@@ -130,14 +130,26 @@ export async function getUserByEmail(email: string): Promise<{ user: User; profi
   return { user: user as User, profile: { userId, accountType, status, city, bio, specialty, vip, discountPercent, featured, passwordHash } };
 }
 
+export const STAFF_MAX_SESSIONS = 2;
+/** Quantos aparelhos podem ficar conectados ao mesmo tempo nesta conta. */
+export function maxSessionsFor(role: string | null | undefined): number {
+  return role === "admin" ? STAFF_MAX_SESSIONS : 1;
+}
+
 export async function createGcSession(userId: number): Promise<string> {
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + SESSION_TTL_MS);
   await withTransaction(async connection => {
-    // A single active session is an account invariant, not a client-side convention.
-    const [users] = await connection.execute<any[]>("SELECT id FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId]);
+    // Sessões por conta: clientes e profissionais têm 1; o dono e a equipe da administração
+    // têm até STAFF_MAX_SESSIONS aparelhos (ex.: celular + notebook). A mais antiga sai.
+    const [users] = await connection.execute<any[]>("SELECT id, role FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId]);
     if (!users[0]) throw new HttpError(404, "Usuário não encontrado");
-    await connection.execute("DELETE FROM gc_sessions WHERE userId = ?", [userId]);
+    const keep = maxSessionsFor(users[0].role) - 1;
+    if (keep > 0) {
+      await connection.execute(`DELETE FROM gc_sessions WHERE userId = ? AND (expiresAt <= CURRENT_TIMESTAMP OR id NOT IN (SELECT id FROM (SELECT id FROM gc_sessions WHERE userId = ? AND expiresAt > CURRENT_TIMESTAMP ORDER BY lastSeenAt DESC, id DESC LIMIT ${keep}) recent))`, [userId, userId]);
+    } else {
+      await connection.execute("DELETE FROM gc_sessions WHERE userId = ?", [userId]);
+    }
     await connection.execute("INSERT INTO gc_sessions (userId, tokenHash, expiresAt) VALUES (?, ?, ?)", [userId, tokenHash(token), expires]);
   });
   return token;

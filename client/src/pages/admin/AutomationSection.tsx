@@ -13,7 +13,7 @@ function Card({ title, icon, action, children }: { title: string; icon: ReactNod
 const Spinner = () => <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div>;
 const Status = ({ ok, label }: { ok: boolean; label: string }) => <span className={`adm-tag ${ok ? 'adm-ok' : 'adm-warn'}`}>{ok ? '✓' : '•'} {label}{ok ? '' : ': não configurado'}</span>;
 
-type IndexInfo = { google: boolean; indexNow: boolean; googleDailyQuota: number; googleSentToday: number; queued: number; log: Array<{ url: string; engine: string; type: string; status: string; detail?: string; createdAt: string }> };
+type IndexInfo = { google: boolean; indexNow: boolean; googleDailyQuota: number; googleSentToday: number; googleToday?: { ok: number; error: number; skipped: number; lastError: string }; queued: number; log: Array<{ url: string; engine: string; type: string; status: string; detail?: string; createdAt: string }> };
 function IndexingCard() {
   const [data, setData] = useState<IndexInfo | null>(null);
   const [busy, setBusy] = useState('');
@@ -27,7 +27,8 @@ function IndexingCard() {
   return <Card title="Indexação rápida (Google e Bing)" icon={<Globe size={18}/>}>
     {!data ? <Spinner/> : <div className="adm-content-fields">
       <p className="adm-muted">Quando um profissional é aprovado, paga, ganha teste ou um serviço novo é criado, o site avisa os buscadores na hora. O <strong>sitemap.xml</strong> continua sendo enviado normalmente pelo Search Console.</p>
-      <div className="adm-row-tags"><Status ok={data.google} label="Google Indexing API"/><Status ok={data.indexNow} label="IndexNow (Bing, Yandex)"/>{data.google && <span className="adm-tag">Google hoje: {data.googleSentToday}/{data.googleDailyQuota}</span>}{data.queued > 0 && <span className="adm-tag">{data.queued} na fila</span>}</div>
+      <div className="adm-row-tags adm-status-tags"><Status ok={data.google} label="Google Indexing API"/><Status ok={data.indexNow} label="IndexNow (Bing, Yandex)"/>{data.google && <span className="adm-tag">Google hoje: {data.googleSentToday}/{data.googleDailyQuota}</span>}{data.googleToday && data.googleToday.ok > 0 && <span className="adm-tag adm-ok">✓ Google aceitou {data.googleToday.ok}</span>}{data.googleToday && data.googleToday.error > 0 && <span className="adm-tag adm-warn">Google recusou {data.googleToday.error}</span>}{data.queued > 0 && <span className="adm-tag">{data.queued} na fila</span>}</div>
+      {data.googleToday?.error ? <p className="adm-alert">Motivo informado pelo Google: {data.googleToday.lastError || 'sem detalhe'}{/permission|owner|forbidden|403/i.test(data.googleToday.lastError) ? ' — adicione o e-mail da conta de serviço como Proprietário no Search Console.' : ''}</p> : null}
       <div className="adm-trial-row">
         <button type="button" className="ob-btn ob-btn-primary" disabled={!!busy || (!data.google && !data.indexNow)} onClick={() => void submit('main')}>{busy === 'main' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar páginas principais</button>
         <button type="button" className="ob-btn ob-btn-outline" disabled={!!busy || !data.indexNow} onClick={() => void submit('all')}>{busy === 'all' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar o site inteiro (IndexNow)</button>
@@ -53,7 +54,7 @@ function SocialCard() {
   return <Card title="Robô do Instagram, Facebook e WhatsApp" icon={<Bot size={18}/>}>
     {!data ? <Spinner/> : <div className="adm-content-fields">
       <p className="adm-muted">Quem comenta ou manda mensagem procurando um serviço (ex.: “preciso de garçom para sábado”) recebe na hora o link do orçamento já preenchido com serviço, cidade e data. Quem diz que é profissional recebe o link de cadastro. Conversas que não são pedido são ignoradas, e cada pessoa recebe no máximo 1 resposta a cada 12 horas.</p>
-      <div className="adm-row-tags"><Status ok={data.webhook} label="Webhook da Meta"/><Status ok={data.pages} label="Página do Facebook / Instagram"/>{Object.entries(data.stats).map(([k, v]) => <span key={k} className="adm-tag">{STATUS_LABEL[k] ?? k}: {v}</span>)}</div>
+      <div className="adm-row-tags adm-status-tags"><Status ok={data.webhook} label="Webhook da Meta"/><Status ok={data.pages} label="Página do Facebook / Instagram"/>{Object.entries(data.stats).map(([k, v]) => <span key={k} className="adm-tag">{STATUS_LABEL[k] ?? k}: {v}</span>)}</div>
       <label className="adm-check"><input type="checkbox" checked={data.autoReply} onChange={e => void toggle(e.target.checked)}/> Responder automaticamente</label>
       <div className="adm-content-field"><span className="adm-content-label">Simular uma mensagem (não envia nada)</span>
         <div className="adm-svc-add"><input value={text} onChange={e => setText(e.target.value)} maxLength={1000}/><button type="button" className="ob-btn ob-btn-outline" disabled={busy === 'sim'} onClick={() => void simulate()}>{busy === 'sim' ? <Loader2 className="ob-spin" size={16}/> : <Sparkles size={16}/>} Simular</button></div>
@@ -77,12 +78,12 @@ function PostsCard() {
   return <Card title="Posts automáticos" icon={<Megaphone size={18}/>} action={<button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void act('gen', () => api('/admin/social/posts/generate', { method: 'POST' }), 'Rascunhos atualizados.')}>{busy === 'gen' ? <Loader2 className="ob-spin" size={16}/> : <Sparkles size={16}/>} Gerar agora</button>}>
     {!data ? <Spinner/> : <div className="adm-content-fields">
       <p className="adm-muted">A cada 6 horas o site monta posts de <strong>boas-vindas</strong> aos profissionais novos e de <strong>depoimentos</strong> (nota 4+; só o primeiro nome de quem avaliou), com foto do profissional e link rastreado. Revise e publique com um clique, ou ligue a publicação automática (no máximo 2 por dia).</p>
-      <div className="adm-row-tags"><Status ok={data.facebook} label="Facebook"/><Status ok={data.instagram} label="Instagram"/></div>
+      <div className="adm-row-tags adm-status-tags"><Status ok={data.facebook} label="Facebook"/><Status ok={data.instagram} label="Instagram"/></div>
       <label className="adm-check"><input type="checkbox" checked={data.autoPublish} onChange={e => void act('auto', () => api('/admin/social/posts-settings', { method: 'PUT', body: JSON.stringify({ autoPublish: e.target.checked }) }), e.target.checked ? 'Publicação automática ligada.' : 'Publicação automática desligada.')}/> Publicar automaticamente (até 2 por dia)</label>
       {!data.posts.length ? <p className="adm-muted">Nenhum post ainda. Eles aparecem quando houver profissionais novos ou depoimentos.</p> : <div className="adm-auto-posts">{data.posts.map(p => <article key={p.id} className="adm-auto-post">
         {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy"/> : <div className="adm-auto-noimg">Sem foto</div>}
         <div>
-          <div className="adm-row-tags"><span className="adm-tag">{p.kind === 'testimonial' ? 'Depoimento' : 'Boas-vindas'}</span><span className={`adm-tag ${p.status === 'published' ? 'adm-ok' : p.status === 'failed' ? 'adm-warn' : ''}`}>{POST_STATUS[p.status] ?? p.status}{p.publishedAt ? ` em ${when(p.publishedAt)}` : ''}</span></div>
+          <div className="adm-row-tags adm-status-tags"><span className="adm-tag">{p.kind === 'testimonial' ? 'Depoimento' : 'Boas-vindas'}</span><span className={`adm-tag ${p.status === 'published' ? 'adm-ok' : p.status === 'failed' ? 'adm-warn' : ''}`}>{POST_STATUS[p.status] ?? p.status}{p.publishedAt ? ` em ${when(p.publishedAt)}` : ''}</span></div>
           <textarea rows={6} value={edits[p.id] ?? p.caption} disabled={p.status === 'published'} onChange={e => setEdits(x => ({ ...x, [p.id]: e.target.value }))}/>
           {p.error && <small className="adm-muted">{p.error}</small>}
           {p.status !== 'published' && <div className="adm-row-actions">
