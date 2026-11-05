@@ -18,6 +18,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     const error = body as { error?: string };
     const failure = new Error(error.error || 'Não foi possível concluir esta ação.') as Error & {status: number};
     failure.status = response.status;
+    // Painel da administração: sessão encerrada (entrou em outro aparelho ou expirou) → volta ao login.
+    if (response.status === 401 && typeof window !== 'undefined' && window.location.pathname.startsWith('/admin/')) {
+      window.location.replace('/admin?sessao=encerrada');
+      failure.message = 'Sua sessão foi encerrada. Entre de novo.';
+    }
     throw failure;
   }
   return body as T;

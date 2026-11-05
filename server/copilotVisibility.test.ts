@@ -17,3 +17,13 @@ describe('quem vê o Copilot', () => {
     expect(field.options?.map(([v]) => v)).toEqual(['all', 'logged', 'providers', 'staff', 'off']);
   });
 });
+
+import { maxSessionsFor, STAFF_MAX_SESSIONS } from "./gastro/auth";
+describe("aparelhos conectados ao mesmo tempo", () => {
+  it("dono e equipe: até 2; clientes e profissionais: 1", () => {
+    expect(STAFF_MAX_SESSIONS).toBe(2);
+    expect(maxSessionsFor("admin")).toBe(2);
+    expect(maxSessionsFor("user")).toBe(1);
+    expect(maxSessionsFor(undefined)).toBe(1);
+  });
+});
