@@ -120,16 +120,21 @@ Quando um cliente publica um pedido, o site ranqueia os profissionais compatíve
 - **Por onde:** todos recebem o aviso no painel e por e-mail; os 10 primeiros (`MATCH_WHATSAPP_LIMIT`) também recebem o **WhatsApp** pelo modelo aprovado.
 - **Histórico:** cada rodada fica registrada como `event.matched`, com os 5 primeiros e o motivo de cada um.
 
-## 6. Posts automáticos
+## 6. Artes para os profissionais divulgarem
 
-- **A cada 6 horas**, o site gera rascunhos de:
+A plataforma monta as artes e quem publica é o **próprio profissional**, nas redes dele. Não é preciso app nem aprovação da Meta.
+
+- **A cada 6 horas**, o site gera artes de:
   - **boas-vindas** aos profissionais que entraram nos últimos 30 dias;
-  - **depoimentos** com nota 4 ou mais e comentário, mostrando só o primeiro nome de quem avaliou.
-
-  Cada rascunho leva a foto do profissional, o link rastreado (`utm_campaign`) e hashtags da cidade e dos serviços.
-- **No painel**, você edita a legenda, publica com um clique ou descarta.
-- **"Publicar automaticamente":** publica até **2 posts por dia**, começando pelos mais antigos.
-- **Onde publica:** no Facebook, na Página com foto; no Instagram, só quando a foto é **JPEG**, que é uma exigência da API do Instagram.
+  - **depoimento** quando um cliente avalia com nota 4 ou mais e comentário (só o primeiro nome de quem avaliou).
+- **Envio:** cada arte vai para o profissional dono dela, com aviso no painel e no WhatsApp ("Sua arte de divulgação está pronta"). Fica ligado por padrão; desligando, você revisa e envia uma a uma em *Automação e Google*.
+- **Kit para todos:** o botão **Enviar kit de divulgação** avisa todos os profissionais ativos, no máximo 1 vez por semana para cada um.
+- **No painel do profissional, aba "Divulgar meu perfil":**
+  - arte pronta a qualquer hora, em **feed (4:5)** ou **story/status (9:16)**, com foto, nome, serviços, cidade, nota e a chamada "Peça seu orçamento grátis";
+  - **Compartilhar** (no celular abre direto o Instagram ou o WhatsApp, com a legenda já copiada), **Baixar imagem**, **Copiar legenda** e **Copiar link**;
+  - o link leva ao perfil dele, com `utm_source=profissional&utm_medium=redes`.
+- **Acompanhamento:** quando o profissional baixa ou compartilha, a arte aparece como "Publicada pelo profissional" no painel do dono.
+- **Robô da Meta (opcional):** continua no código, recolhido em *Automação e Google*, para quando houver app aprovado pela Meta.
 
 ## 7. Variáveis de ambiente (Render → Environment)
 

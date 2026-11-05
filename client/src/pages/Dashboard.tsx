@@ -1,7 +1,8 @@
+import { PromoPanel } from "./dashboard/PromoPanel";
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Building2, Calculator, CalendarDays, ChevronRight, Clock3, CreditCard, FileText, Home, KeyRound, LayoutDashboard, Loader2, LogOut, Menu, Send, ShieldCheck, Star, TrendingUp, UserCircle2, Wallet, X } from "lucide-react";
+import { Activity, Building2, Calculator, CalendarDays, ChevronRight, Clock3, CreditCard, FileText, Home, KeyRound, LayoutDashboard, Loader2, LogOut, Megaphone, Menu, Send, ShieldCheck, Star, TrendingUp, UserCircle2, Wallet, X } from "lucide-react";
 import { api } from "@/lib/api";
 import "../dashboard.css";
 import Onboarding from "@/components/Onboarding";
@@ -33,6 +34,7 @@ const PROVIDER_TABS: Tab[] = [
   { id: "finance", label: "Financeiro", icon: Wallet },
   { id: "contracts", label: "Contratos", icon: FileText },
   { id: "reviews", label: "Avaliações", icon: Star },
+  { id: "divulgar", label: "Divulgar meu perfil", icon: Megaphone },
   { id: "growth", label: "Nível e promoções", icon: TrendingUp },
   { id: "subscription", label: "Assinatura", icon: CreditCard },
   { id: "profile", label: "Meu perfil", icon: UserCircle2 },
@@ -62,6 +64,7 @@ export default function Dashboard() {
       case "jobs": return <ProviderJobs/>;
       case "calculators": return <CalculatorsPanel/>;
       case "finance": return <FinancePanel/>;
+      case "divulgar": return <PromoPanel/>;
       case "growth": return <GrowthPanel/>;
       case "subscription": return <SubscriptionPanel/>;
       case "profile": return <Onboarding mode="edit" onDone={() => void me.refetch()}/>;

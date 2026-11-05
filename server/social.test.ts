@@ -69,19 +69,19 @@ describe('webhook da Meta', () => {
 });
 
 import { testimonialCaption, welcomeCaption } from './gastro/socialPosts';
-describe('posts automáticos', () => {
+describe('artes para o profissional divulgar', () => {
   const p = { id: 'user-7', name: 'Buffet Sabor', city: 'Campinas, SP', category: 'Buffet', services: ['Buffet', 'Garçom / garçonete'] };
   it('boas-vindas com link rastreado e hashtags da cidade', () => {
     const { caption, link } = welcomeCaption(p);
-    expect(link).toBe('https://eventosconecta.com.br/profissionais/user-7?utm_source=instagram&utm_medium=post&utm_campaign=boas-vindas');
-    expect(caption).toContain('Boas-vindas ao Eventos Conecta, Buffet Sabor!');
+    expect(link).toBe('https://eventosconecta.com.br/profissionais/user-7?utm_source=profissional&utm_medium=redes&utm_campaign=boas-vindas');
+    expect(caption).toContain('Agora estou no Eventos Conecta!');
     expect(caption).toContain('#campinas');
     expect(caption).toContain('#garcomgarconete');
   });
   it('depoimento usa só o primeiro nome e as estrelas da nota', () => {
     const { caption } = testimonialCaption({ rating: 5, feedback: 'Atendimento impecável, todos elogiaram!', reviewerName: 'Carla Souza Lima' }, p);
     expect(caption.startsWith('⭐⭐⭐⭐⭐')).toBe(true);
-    expect(caption).toContain('— Carla, sobre Buffet Sabor (Campinas)');
+    expect(caption).toContain('— Carla, cliente em Campinas');
     expect(caption).not.toContain('Souza');
   });
 });
