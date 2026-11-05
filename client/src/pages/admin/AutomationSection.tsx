@@ -65,32 +65,36 @@ function SocialCard() {
   </Card>;
 }
 
-type Post = { id: number; kind: string; caption: string; imageUrl?: string; status: string; error?: string; createdAt: string; publishedAt?: string | null };
-type PostsInfo = { autoPublish: boolean; facebook: boolean; instagram: boolean; posts: Post[] };
-const POST_STATUS: Record<string, string> = { draft: 'Rascunho', approved: 'Aprovado (sai na próxima rodada)', published: 'Publicado', failed: 'Falhou', discarded: 'Descartado' };
+type Post = { id: number; kind: string; caption: string; imageUrl?: string; status: string; error?: string; createdAt: string; publishedAt?: string | null; sentAt?: string | null; sharedAt?: string | null; providerName?: string | null };
+type PostsInfo = { autoSend: boolean; autoPublish: boolean; facebook: boolean; instagram: boolean; posts: Post[] };
+const POST_STATUS: Record<string, string> = { draft: 'Aguardando envio', approved: 'Aguardando envio', sent: 'Enviada ao profissional', published: 'Publicada pela página', failed: 'Falhou', discarded: 'Descartada' };
 function PostsCard() {
   const [data, setData] = useState<PostsInfo | null>(null);
   const [edits, setEdits] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState('');
   const load = () => api<PostsInfo>('/admin/social/posts').then(setData).catch(e => toast.error(errText(e)));
   useEffect(() => { void load(); }, []);
-  const act = async (key: string, fn: () => Promise<unknown>, ok: string) => { setBusy(key); try { await fn(); toast.success(ok); await load(); } catch (e) { toast.error(errText(e)); } finally { setBusy(''); } };
-  return <Card title="Posts automáticos" icon={<Megaphone size={18}/>} action={<button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void act('gen', () => api('/admin/social/posts/generate', { method: 'POST' }), 'Rascunhos atualizados.')}>{busy === 'gen' ? <Loader2 className="ob-spin" size={16}/> : <Sparkles size={16}/>} Gerar agora</button>}>
+  const act = async (key: string, fn: () => Promise<unknown>, ok: string | ((r: any) => string)) => { setBusy(key); try { const r = await fn(); toast.success(typeof ok === 'function' ? ok(r) : ok); await load(); } catch (e) { toast.error(errText(e)); } finally { setBusy(''); } };
+  const shared = data?.posts.filter(p => p.sharedAt).length ?? 0;
+  const sent = data?.posts.filter(p => p.sentAt).length ?? 0;
+  return <Card title="Artes para os profissionais divulgarem" icon={<Megaphone size={18}/>} action={<button type="button" className="ob-btn ob-btn-outline" disabled={!!busy} onClick={() => void act('gen', () => api('/admin/social/posts/generate', { method: 'POST' }), 'Artes atualizadas.')}>{busy === 'gen' ? <Loader2 className="ob-spin" size={16}/> : <Sparkles size={16}/>} Gerar agora</button>}>
     {!data ? <Spinner/> : <div className="adm-content-fields">
-      <p className="adm-muted">A cada 6 horas o site monta posts de <strong>boas-vindas</strong> aos profissionais novos e de <strong>depoimentos</strong> (nota 4+; só o primeiro nome de quem avaliou), com foto do profissional e link rastreado. Revise e publique com um clique, ou ligue a publicação automática (no máximo 2 por dia).</p>
-      <div className="adm-row-tags adm-status-tags"><Status ok={data.facebook} label="Facebook"/><Status ok={data.instagram} label="Instagram"/></div>
-      <label className="adm-check"><input type="checkbox" checked={data.autoPublish} onChange={e => void act('auto', () => api('/admin/social/posts-settings', { method: 'PUT', body: JSON.stringify({ autoPublish: e.target.checked }) }), e.target.checked ? 'Publicação automática ligada.' : 'Publicação automática desligada.')}/> Publicar automaticamente (até 2 por dia)</label>
-      {!data.posts.length ? <p className="adm-muted">Nenhum post ainda. Eles aparecem quando houver profissionais novos ou depoimentos.</p> : <div className="adm-auto-posts">{data.posts.map(p => <article key={p.id} className="adm-auto-post">
+      <p className="adm-muted">A plataforma monta artes de <strong>boas-vindas</strong> para profissionais novos e de <strong>depoimento</strong> quando um cliente avalia com nota 4 ou mais (só o primeiro nome de quem avaliou). Cada arte vai para o próprio profissional (painel + WhatsApp), que baixa em formato feed ou story e publica nas redes dele, com o link do perfil rastreado. Todo profissional também tem a aba <strong>Divulgar meu perfil</strong> com arte pronta a qualquer hora.</p>
+      <div className="adm-row-tags adm-status-tags"><span className="adm-tag">Enviadas: {sent}</span><span className="adm-tag adm-ok">Publicadas pelos profissionais: {shared}</span></div>
+      <label className="adm-check"><input type="checkbox" checked={data.autoSend} onChange={e => void act('auto', () => api('/admin/social/posts-settings', { method: 'PUT', body: JSON.stringify({ autoSend: e.target.checked }) }), e.target.checked ? 'Envio automático ligado.' : 'Envio automático desligado: você revisa e envia uma a uma.')}/> Enviar automaticamente para os profissionais (a cada 6 horas)</label>
+      <div className="adm-trial-row"><button type="button" className="ob-btn ob-btn-primary" disabled={!!busy} onClick={() => void act('kit', () => api<{ sent: number }>('/admin/social/kit', { method: 'POST' }), (r: { sent: number }) => r.sent ? `Kit enviado para ${r.sent} profissional(is).` : 'Todos já receberam o kit nos últimos 7 dias.')}>{busy === 'kit' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar kit de divulgação para todos os profissionais</button></div>
+      <p className="adm-hint">O kit avisa cada profissional ativo (no máximo 1 vez por semana) para baixar as artes do perfil dele e publicar.</p>
+      {!data.posts.length ? <p className="adm-muted">Nenhuma arte ainda. Elas aparecem quando entram profissionais novos ou chegam depoimentos.</p> : <div className="adm-auto-posts">{data.posts.map(p => <article key={p.id} className="adm-auto-post">
         {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy"/> : <div className="adm-auto-noimg">Sem foto</div>}
         <div>
-          <div className="adm-row-tags adm-status-tags"><span className="adm-tag">{p.kind === 'testimonial' ? 'Depoimento' : 'Boas-vindas'}</span><span className={`adm-tag ${p.status === 'published' ? 'adm-ok' : p.status === 'failed' ? 'adm-warn' : ''}`}>{POST_STATUS[p.status] ?? p.status}{p.publishedAt ? ` em ${when(p.publishedAt)}` : ''}</span></div>
+          <div className="adm-row-tags adm-status-tags"><span className="adm-tag">{p.kind === 'testimonial' ? 'Depoimento' : 'Boas-vindas'}{p.providerName ? ` · ${p.providerName}` : ''}</span><span className={`adm-tag ${p.status === 'sent' || p.status === 'published' ? 'adm-ok' : p.status === 'failed' ? 'adm-warn' : ''}`}>{POST_STATUS[p.status] ?? p.status}{p.sentAt ? ` em ${when(p.sentAt)}` : ''}</span>{p.sharedAt && <span className="adm-tag adm-ok">✓ Publicada pelo profissional</span>}</div>
           <textarea rows={6} value={edits[p.id] ?? p.caption} disabled={p.status === 'published'} onChange={e => setEdits(x => ({ ...x, [p.id]: e.target.value }))}/>
           {p.error && <small className="adm-muted">{p.error}</small>}
           {p.status !== 'published' && <div className="adm-row-actions">
             {edits[p.id] !== undefined && edits[p.id] !== p.caption && <button type="button" onClick={() => void act(`s-${p.id}`, () => api(`/admin/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ caption: edits[p.id] }) }), 'Legenda salva.')}><Check size={14}/> Salvar legenda</button>}
-            <button type="button" disabled={!!busy || !data.facebook} onClick={() => void act(`p-${p.id}`, () => api(`/admin/social/posts/${p.id}/publish`, { method: 'POST' }), 'Publicado!')}>{busy === `p-${p.id}` ? <Loader2 className="ob-spin" size={14}/> : <Send size={14}/>} Publicar agora</button>
-            {p.status !== 'discarded' ? <button type="button" className="danger" onClick={() => void act(`d-${p.id}`, () => api(`/admin/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'discarded' }) }), 'Descartado.')}><Trash2 size={14}/> Descartar</button>
-              : <button type="button" onClick={() => void act(`r-${p.id}`, () => api(`/admin/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'draft' }) }), 'Voltou para rascunho.')}><X size={14}/> Desfazer</button>}
+            {p.status !== 'discarded' && <button type="button" disabled={!!busy} onClick={() => void act(`p-${p.id}`, () => api(`/admin/social/posts/${p.id}/send`, { method: 'POST' }), p.sentAt ? 'Reenviada ao profissional.' : 'Enviada ao profissional!')}>{busy === `p-${p.id}` ? <Loader2 className="ob-spin" size={14}/> : <Send size={14}/>} {p.sentAt ? 'Reenviar' : 'Enviar ao profissional'}</button>}
+            {p.status !== 'discarded' ? <button type="button" className="danger" onClick={() => void act(`d-${p.id}`, () => api(`/admin/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'discarded' }) }), 'Descartada.')}><Trash2 size={14}/> Descartar</button>
+              : <button type="button" onClick={() => void act(`r-${p.id}`, () => api(`/admin/social/posts/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'draft' }) }), 'Voltou para a fila.')}><X size={14}/> Desfazer</button>}
           </div>}
         </div>
       </article>)}</div>}
@@ -99,5 +103,7 @@ function PostsCard() {
 }
 
 export function AutomationSection() {
-  return <div className="adm-stack"><IndexingCard/><SocialCard/><PostsCard/></div>;
+  return <div className="adm-stack"><IndexingCard/><PostsCard/>
+    <details className="adm-card adm-optional"><summary>Robô do Instagram e Facebook (opcional — exige app e aprovação da Meta)</summary><SocialCard/></details>
+  </div>;
 }

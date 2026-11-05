@@ -7,12 +7,16 @@
 import { Router, type Express } from "express";
 import { z } from "zod";
 import { assertOrigin, body, errorHandler, parse, wrap } from "./http";
+import { HttpError } from "@shared/_core/errors";
 import { dbConfigured, execute, query } from "./db";
 import { requireStaff, audit } from "./staff";
 import { getInternalFlag, setInternalFlag } from "./content";
 import { dbState } from "./bootstrap";
 import { loadProfessionals, type Professional } from "./catalog";
 import { siteOrigin } from "./indexing";
+import { notifyUser } from "./notify";
+import { requireAuth } from "./auth";
+import { loadDetails } from "./profiles";
 import { slugify } from "@shared/services";
 
 const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v21.0"}`;
@@ -23,7 +27,8 @@ const MAX_AUTO_PER_DAY = 2;
 const HOUR = 60 * 60 * 1000;
 
 const hashtag = (text: string) => `#${slugify(text).replace(/-/g, "")}`;
-const utm = (path: string, campaign: string) => { const u = new URL(path, siteOrigin()); u.searchParams.set("utm_source", "instagram"); u.searchParams.set("utm_medium", "post"); u.searchParams.set("utm_campaign", campaign); return u.href; };
+// Quem publica é o próprio profissional, nas redes dele: o link leva ao perfil dele com rastreio.
+const utm = (path: string, campaign: string) => { const u = new URL(path, siteOrigin()); u.searchParams.set("utm_source", "profissional"); u.searchParams.set("utm_medium", "redes"); u.searchParams.set("utm_campaign", campaign); return u.href; };
 
 /** Legenda de boas-vindas a um profissional novo. */
 export function welcomeCaption(p: Pick<Professional, "id" | "name" | "city" | "category" | "services">): { caption: string; link: string } {
@@ -31,7 +36,7 @@ export function welcomeCaption(p: Pick<Professional, "id" | "name" | "city" | "c
   const link = utm(`/profissionais/${p.id}`, "boas-vindas");
   const services = (p.services ?? []).slice(0, 3).join(", ") || p.category;
   const tags = [...new Set(["#eventosconecta", city && hashtag(city), city && `${hashtag(`eventos ${city}`)}`, ...(p.services ?? []).slice(0, 3).map(hashtag)].filter(Boolean))].join(" ");
-  return { link, caption: `👋 Boas-vindas ao Eventos Conecta, ${p.name}!\n\n${services}${city ? ` em ${city} e região` : ""}.\n\nPrecisa para o seu evento? Peça orçamento grátis e receba propostas: ${link}\n\n${tags}` };
+  return { link, caption: `🎉 Agora estou no Eventos Conecta!\n\n${services}${city ? ` em ${city} e região` : ""}.\n\nVai fazer um evento? Veja meu perfil, fotos dos meus trabalhos e peça seu orçamento grátis, com contrato em PDF: ${link}\n\n${tags}` };
 }
 
 /** Legenda de depoimento (só o primeiro nome de quem avaliou). */
@@ -39,7 +44,7 @@ export function testimonialCaption(review: { rating: number; feedback: string; r
   const first = String(review.reviewerName ?? "").trim().split(/\s+/)[0] || "Cliente";
   const city = p.city.split(",")[0]?.trim() ?? "";
   const link = utm(`/profissionais/${p.id}`, "depoimento");
-  return { link, caption: `${"⭐".repeat(Math.max(1, Math.min(5, Math.round(review.rating))))}\n\n“${review.feedback.trim().slice(0, 400)}”\n— ${first}, sobre ${p.name}${city ? ` (${city})` : ""}\n\nContrate profissionais avaliados por clientes de verdade: ${link}\n\n#eventosconecta #depoimento${city ? ` ${hashtag(city)}` : ""}` };
+  return { link, caption: `${"⭐".repeat(Math.max(1, Math.min(5, Math.round(review.rating))))}\n\n“${review.feedback.trim().slice(0, 400)}”\n— ${first}, cliente${city ? ` em ${city}` : ""}\n\nObrigado pela confiança! 🙏 Quer o mesmo cuidado no seu evento? Peça seu orçamento grátis: ${link}\n\n#eventosconecta #depoimento${city ? ` ${hashtag(city)}` : ""}` };
 }
 
 const imageOf = (p: Professional) => p.gallery?.[0] || p.image || "";
@@ -56,7 +61,7 @@ export async function generateDrafts(): Promise<number> {
     if (!p) continue;
     const { caption, link } = welcomeCaption(p);
     const image = imageOf(p);
-    const result = await execute("INSERT IGNORE INTO gc_social_posts (kind, refId, caption, imageUrl, link, status) VALUES ('new_provider', ?, ?, ?, ?, 'draft')", [Number(row.id), caption, image ? new URL(image, siteOrigin()).href : null, link]);
+    const result = await execute("INSERT IGNORE INTO gc_social_posts (kind, refId, providerId, caption, imageUrl, link, status) VALUES ('new_provider', ?, ?, ?, ?, ?, 'draft')", [Number(row.id), Number(row.id), caption, image ? new URL(image, siteOrigin()).href : null, link]);
     created += result.affectedRows;
   }
   // Depoimentos de clientes: nota 4+ com comentário de verdade, sobre profissional visível.
@@ -68,7 +73,7 @@ export async function generateDrafts(): Promise<number> {
     if (!p) continue;
     const { caption, link } = testimonialCaption({ rating: Number(r.rating), feedback: String(r.feedback), reviewerName: String(r.reviewerName ?? "") }, p);
     const image = imageOf(p);
-    const result = await execute("INSERT IGNORE INTO gc_social_posts (kind, refId, caption, imageUrl, link, status) VALUES ('testimonial', ?, ?, ?, ?, 'draft')", [Number(r.id), caption, image ? new URL(image, siteOrigin()).href : null, link]);
+    const result = await execute("INSERT IGNORE INTO gc_social_posts (kind, refId, providerId, caption, imageUrl, link, status) VALUES ('testimonial', ?, ?, ?, ?, ?, 'draft')", [Number(r.id), Number(r.targetId), caption, image ? new URL(image, siteOrigin()).href : null, link]);
     created += result.affectedRows;
   }
   return created;
@@ -112,10 +117,34 @@ export async function publishPost(id: number): Promise<{ ok: boolean; error?: st
 
 export async function autoPublishEnabled() { return (await getInternalFlag("social.autoPublish").catch(() => null)) === "true"; }
 
-/** Rotina: gera rascunhos e, se ligado, publica até 2 por dia (o mais antigo primeiro). */
+/** Envio automático das artes aos profissionais (ligado por padrão). */
+export async function autoSendEnabled() { return (await getInternalFlag("social.autoSend").catch(() => null)) !== "false"; }
+
+/** Envia a arte ao profissional: aviso no painel + WhatsApp com o link para baixar e publicar. */
+export async function sendToProvider(id: number): Promise<{ ok: boolean; error?: string }> {
+  const post = (await query<any[]>("SELECT id, kind, providerId, status FROM gc_social_posts WHERE id = ? LIMIT 1", [id]))[0];
+  if (!post) return { ok: false, error: "Arte não encontrada" };
+  if (!post.providerId) return { ok: false, error: "Arte sem profissional vinculado" };
+  if (post.status === "discarded") return { ok: false, error: "Arte descartada" };
+  const testimonial = post.kind === "testimonial";
+  await notifyUser(Number(post.providerId), {
+    type: "promo.art",
+    title: testimonial ? "Você recebeu um depoimento: tem arte pronta para postar!" : "Sua arte de divulgação está pronta!",
+    body: testimonial ? "Transformamos a avaliação do seu cliente em uma arte para o seu Instagram, Facebook e status do WhatsApp. É só baixar e publicar — o link leva direto para o seu perfil." : "Preparamos uma arte com a sua foto para você anunciar nas suas redes que está no Eventos Conecta. É só baixar e publicar — o link leva direto para o seu perfil.",
+    path: "/painel?aba=divulgar",
+  });
+  await execute("UPDATE gc_social_posts SET status = 'sent', sentAt = CURRENT_TIMESTAMP WHERE id = ?", [id]);
+  return { ok: true };
+}
+
+/** Rotina: gera as artes e, se ligado, envia aos profissionais (até 20 por rodada). Publicação pela Meta só se ligada. */
 export async function runSocialPosts() {
   if (!dbConfigured() || !dbState.ready) return;
   await generateDrafts();
+  if (await autoSendEnabled()) {
+    const pending = await query<any[]>("SELECT id FROM gc_social_posts WHERE status IN ('draft', 'approved') AND providerId IS NOT NULL ORDER BY id ASC LIMIT 20");
+    for (const row of pending) await sendToProvider(Number(row.id)).catch(() => undefined);
+  }
   if (!(await autoPublishEnabled())) return;
   const today = await query<any[]>("SELECT COUNT(*) total FROM gc_social_posts WHERE status = 'published' AND publishedAt >= CURRENT_DATE");
   let room = MAX_AUTO_PER_DAY - Number(today[0]?.total ?? 0);
@@ -139,8 +168,9 @@ const idSchema = z.coerce.number().int().positive();
 
 router.get("/admin/social/posts", wrap(async (req, res) => {
   await requireStaff(req);
-  const rows = await query<any[]>("SELECT * FROM gc_social_posts ORDER BY FIELD(status, 'draft', 'approved', 'failed', 'published', 'discarded'), id DESC LIMIT 60");
-  res.json({ autoPublish: await autoPublishEnabled(), instagram: Boolean(igUserId()), facebook: Boolean(pageToken() && pageId()), posts: rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString(), publishedAt: r.publishedAt ? new Date(r.publishedAt).toISOString() : null })) });
+  const rows = await query<any[]>("SELECT sp.*, u.name providerName FROM gc_social_posts sp LEFT JOIN users u ON u.id = sp.providerId ORDER BY FIELD(sp.status, 'draft', 'approved', 'sent', 'failed', 'published', 'discarded'), sp.id DESC LIMIT 60");
+  const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+  res.json({ autoSend: await autoSendEnabled(), autoPublish: await autoPublishEnabled(), instagram: Boolean(igUserId()), facebook: Boolean(pageToken() && pageId()), posts: rows.map(r => ({ ...r, createdAt: iso(r.createdAt), publishedAt: iso(r.publishedAt), sentAt: iso(r.sentAt), sharedAt: iso(r.sharedAt) })) });
 }));
 
 router.post("/admin/social/posts/generate", wrap(async (req, res) => {
@@ -171,13 +201,78 @@ router.patch("/admin/social/posts/:id", wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+router.post("/admin/social/posts/:id/send", wrap(async (req, res) => {
+  assertOrigin(req);
+  const ctx = await requireStaff(req);
+  const id = parse(idSchema, req.params.id);
+  const result = await sendToProvider(id);
+  await audit(ctx.user.id, "social.post_send", { id, ok: result.ok, error: result.error });
+  res.status(result.ok ? 200 : 400).json(result.ok ? result : { error: result.error });
+}));
+
+/** Kit de divulgação para todos os profissionais ativos (no máximo 1 vez a cada 7 dias por pessoa). */
+router.post("/admin/social/kit", wrap(async (req, res) => {
+  assertOrigin(req);
+  const ctx = await requireStaff(req);
+  const rows = await query<any[]>(`SELECT u.id FROM users u JOIN account_profiles p ON p.userId = u.id JOIN gc_profile_details d ON d.userId = u.id AND d.completedAt IS NOT NULL
+    WHERE u.role <> 'admin' AND p.accountType = 'provider' AND p.status = 'active'
+      AND NOT EXISTS (SELECT 1 FROM gc_notifications n WHERE n.userId = u.id AND n.type = 'promo.kit' AND n.createdAt > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 7 DAY)) LIMIT 500`);
+  for (const row of rows) await notifyUser(Number(row.id), { type: "promo.kit", title: "Seu kit de divulgação chegou", body: "Artes prontas com a sua foto para o feed e para o status/stories, com legenda e o link do seu perfil. Baixe e publique nas suas redes para receber mais pedidos.", path: "/painel?aba=divulgar" });
+  await audit(ctx.user.id, "social.kit_send", { sent: rows.length });
+  res.json({ sent: rows.length });
+}));
+
 router.put("/admin/social/posts-settings", wrap(async (req, res) => {
   assertOrigin(req);
   const ctx = await requireStaff(req);
-  const input = body(req, z.object({ autoPublish: z.boolean() }));
-  await setInternalFlag("social.autoPublish", String(input.autoPublish));
+  const input = body(req, z.object({ autoPublish: z.boolean().optional(), autoSend: z.boolean().optional() }));
+  if (input.autoPublish !== undefined) await setInternalFlag("social.autoPublish", String(input.autoPublish));
+  if (input.autoSend !== undefined) await setInternalFlag("social.autoSend", String(input.autoSend));
   await audit(ctx.user.id, "social.post_settings", input);
   res.json(input);
+}));
+
+// ------------------------------------------------------------------ profissional: kit de divulgação
+
+const media = (id: unknown) => (Number(id) > 0 ? `/api/gastro/media/${Number(id)}` : "");
+
+/** Dados para o profissional montar as artes no próprio painel (foto, nome, serviços, nota) + artes enviadas. */
+router.get("/promo/kit", wrap(async (req, res) => {
+  const ctx = await requireAuth(req);
+  if (ctx.profile.accountType !== "provider") throw new HttpError(403, "Disponível só para profissionais");
+  const me = ctx.user.id;
+  const pro = (await loadProfessionals()).find(p => p.id === `user-${me}`);
+  const { details } = await loadDetails(me);
+  const city = (pro?.city || ctx.profile.city || "").trim();
+  const profile = {
+    name: pro?.name || String(details?.tradeName || ctx.user.name || ""),
+    profession: (pro?.services?.length ? pro.services.slice(0, 2).join(" · ") : ctx.profile.specialty) || pro?.category || "Profissional para eventos",
+    city: city.split(",")[0]?.trim() ?? "",
+    image: pro ? imageOf(pro) : media(details?.serviceMediaIds?.[0]) || media(details?.avatarMediaId),
+    photos: [...new Set([...(pro?.gallery ?? []), pro?.image ?? "", ...(Array.isArray(details?.serviceMediaIds) ? details.serviceMediaIds.map(media) : []), media(details?.avatarMediaId)].filter(Boolean))].slice(0, 8),
+    rating: pro?.rating ?? null,
+    listed: Boolean(pro),
+  };
+  const welcome = welcomeCaption({ id: `user-${me}`, name: profile.name, city, category: profile.profession, services: pro?.services ?? [] });
+  const posts = await query<any[]>(`SELECT sp.id, sp.kind, sp.caption, sp.link, sp.sentAt, sp.sharedAt, r.rating, r.feedback, ru.name reviewerName
+    FROM gc_social_posts sp LEFT JOIN gastro_reviews r ON sp.kind = 'testimonial' AND r.id = sp.refId LEFT JOIN users ru ON ru.id = r.reviewerId
+    WHERE sp.providerId = ? AND sp.status IN ('sent', 'published') ORDER BY sp.id DESC LIMIT 20`, [me]);
+  res.json({
+    profile,
+    link: welcome.link,
+    caption: welcome.caption,
+    posts: posts.map(r => ({ id: Number(r.id), kind: r.kind, caption: r.caption, link: r.link, sentAt: r.sentAt ? new Date(r.sentAt).toISOString() : null, sharedAt: r.sharedAt ? new Date(r.sharedAt).toISOString() : null,
+      ...(r.kind === "testimonial" ? { quote: String(r.feedback ?? "").slice(0, 220), rating: Number(r.rating ?? 5), author: String(r.reviewerName ?? "").trim().split(/\s+/)[0] || "Cliente" } : {}) })),
+  });
+}));
+
+/** O profissional marcou que publicou (para o painel do dono acompanhar). */
+router.post("/promo/posts/:id/shared", wrap(async (req, res) => {
+  assertOrigin(req);
+  const ctx = await requireAuth(req);
+  const id = parse(idSchema, req.params.id);
+  await execute("UPDATE gc_social_posts SET sharedAt = COALESCE(sharedAt, CURRENT_TIMESTAMP) WHERE id = ? AND providerId = ?", [id, ctx.user.id]);
+  res.json({ ok: true });
 }));
 
 router.use(errorHandler);

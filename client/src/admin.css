@@ -427,3 +427,7 @@ div.adm-ok svg, div.adm-warn svg { flex-shrink:0; margin-top:2px; }
 .oc-composer { display:flex; gap:8px; }
 .oc-composer input { flex:1; min-width:0; border:1px solid var(--ob-line); border-radius:10px; padding:10px 12px; font:14px 'Inter',sans-serif; }
 @media (max-width: 720px) { .oc-stats { grid-template-columns:1fr; } }
+.adm-optional { padding:0; }
+.adm-optional > summary { cursor:pointer; padding:16px 20px; font-weight:600; color:var(--ob-muted); list-style-position:inside; }
+.adm-optional[open] > summary { border-bottom:1px solid var(--ob-line); }
+.adm-optional > .adm-card { border:0; box-shadow:none; margin:0; }

@@ -709,3 +709,35 @@
 .copilot-next:hover { background: #ffeee5; }
 .copilot-message-assistant a { color: var(--gc-paprica-deep); font-weight: 700; }
 @keyframes copilot-pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Divulgar meu perfil (artes para o profissional publicar) */
+.pr-wrap { display: flex; flex-direction: column; gap: 15px; }
+.pr-title { margin: 6px 0 8px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.pr-wrap .dash-muted { font-size: 13px; line-height: 1.55; }
+.pr-warn { margin: 12px 0 0; border-radius: 10px; background: #fff6e5; color: #8a5a00; font-size: 12.5px; line-height: 1.5; padding: 10px 12px; }
+.pr-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 15px; align-items: start; }
+.pr-preview { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.pr-tabs { display: inline-flex; border: 1px solid var(--gc-line); border-radius: 10px; padding: 3px; background: #fbf7f0; }
+.pr-tabs button { border: 0; border-radius: 8px; background: transparent; color: var(--gc-muted); cursor: pointer; font-size: 12px; font-weight: 600; padding: 8px 12px; }
+.pr-tabs button.is-active { background: white; color: var(--gc-charcoal); box-shadow: 0 1px 4px rgba(38,40,35,.12); }
+.pr-canvas { width: 100%; height: auto; border-radius: 14px; box-shadow: 0 10px 30px rgba(38,40,35,.14); background: #fbf7f0; }
+.pr-feed { max-width: 380px; }
+.pr-story { max-width: 300px; }
+.pr-actions { justify-content: center; flex-wrap: wrap; }
+.pr-primary { background: var(--gc-paprica); border-color: var(--gc-paprica); color: white; }
+.pr-primary:hover { background: #c94a25; color: white; }
+.pr-side { display: flex; flex-direction: column; gap: 10px; }
+.pr-side h4 { margin: 6px 0 0; font-size: 13px; font-weight: 700; }
+.pr-choices { display: flex; flex-direction: column; gap: 7px; }
+.pr-choices button { display: flex; align-items: center; gap: 8px; border: 1px solid var(--gc-line); border-radius: 10px; background: white; color: var(--gc-charcoal); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 10px 12px; text-align: left; }
+.pr-choices button.is-active { border-color: var(--gc-paprica); background: #fff6f1; }
+.pr-choices svg { color: var(--gc-paprica); flex-shrink: 0; }
+.pr-new, .pr-done { margin-left: auto; border-radius: 99px; font-size: 10px; font-weight: 700; padding: 3px 8px; }
+.pr-new { background: var(--gc-paprica); color: white; }
+.pr-done { display: inline-flex; align-items: center; gap: 3px; background: #e7f4ea; color: #256b3a; }
+.pr-photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pr-photos button { aspect-ratio: 1; border: 2px solid transparent; border-radius: 9px; overflow: hidden; padding: 0; cursor: pointer; background: #f0ebe4; }
+.pr-photos button.is-active { border-color: var(--gc-paprica); }
+.pr-photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pr-caption { width: 100%; box-sizing: border-box; border: 1px solid var(--gc-line); border-radius: 10px; background: #fffdfa; color: var(--gc-charcoal); font: 12.5px/1.5 inherit; padding: 10px; resize: vertical; }
+@media (max-width: 860px) { .pr-grid { grid-template-columns: 1fr; } }
