@@ -13,7 +13,7 @@ function Card({ title, icon, action, children }: { title: string; icon: ReactNod
 const Spinner = () => <div className="adm-center"><Loader2 className="ob-spin" size={18}/></div>;
 const Status = ({ ok, label }: { ok: boolean; label: string }) => <span className={`adm-tag ${ok ? 'adm-ok' : 'adm-warn'}`}>{ok ? '✓' : '•'} {label}{ok ? '' : ': não configurado'}</span>;
 
-type IndexInfo = { google: boolean; indexNow: boolean; googleDailyQuota: number; googleSentToday: number; queued: number; log: Array<{ url: string; engine: string; type: string; status: string; detail?: string; createdAt: string }> };
+type IndexInfo = { google: boolean; indexNow: boolean; googleDailyQuota: number; googleSentToday: number; googleToday?: { ok: number; error: number; skipped: number; lastError: string }; queued: number; log: Array<{ url: string; engine: string; type: string; status: string; detail?: string; createdAt: string }> };
 function IndexingCard() {
   const [data, setData] = useState<IndexInfo | null>(null);
   const [busy, setBusy] = useState('');
@@ -27,7 +27,8 @@ function IndexingCard() {
   return <Card title="Indexação rápida (Google e Bing)" icon={<Globe size={18}/>}>
     {!data ? <Spinner/> : <div className="adm-content-fields">
       <p className="adm-muted">Quando um profissional é aprovado, paga, ganha teste ou um serviço novo é criado, o site avisa os buscadores na hora. O <strong>sitemap.xml</strong> continua sendo enviado normalmente pelo Search Console.</p>
-      <div className="adm-row-tags adm-status-tags"><Status ok={data.google} label="Google Indexing API"/><Status ok={data.indexNow} label="IndexNow (Bing, Yandex)"/>{data.google && <span className="adm-tag">Google hoje: {data.googleSentToday}/{data.googleDailyQuota}</span>}{data.queued > 0 && <span className="adm-tag">{data.queued} na fila</span>}</div>
+      <div className="adm-row-tags adm-status-tags"><Status ok={data.google} label="Google Indexing API"/><Status ok={data.indexNow} label="IndexNow (Bing, Yandex)"/>{data.google && <span className="adm-tag">Google hoje: {data.googleSentToday}/{data.googleDailyQuota}</span>}{data.googleToday && data.googleToday.ok > 0 && <span className="adm-tag adm-ok">✓ Google aceitou {data.googleToday.ok}</span>}{data.googleToday && data.googleToday.error > 0 && <span className="adm-tag adm-warn">Google recusou {data.googleToday.error}</span>}{data.queued > 0 && <span className="adm-tag">{data.queued} na fila</span>}</div>
+      {data.googleToday?.error ? <p className="adm-alert">Motivo informado pelo Google: {data.googleToday.lastError || 'sem detalhe'}{/permission|owner|forbidden|403/i.test(data.googleToday.lastError) ? ' — adicione o e-mail da conta de serviço como Proprietário no Search Console.' : ''}</p> : null}
       <div className="adm-trial-row">
         <button type="button" className="ob-btn ob-btn-primary" disabled={!!busy || (!data.google && !data.indexNow)} onClick={() => void submit('main')}>{busy === 'main' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar páginas principais</button>
         <button type="button" className="ob-btn ob-btn-outline" disabled={!!busy || !data.indexNow} onClick={() => void submit('all')}>{busy === 'all' ? <Loader2 className="ob-spin" size={16}/> : <Send size={16}/>} Enviar o site inteiro (IndexNow)</button>
