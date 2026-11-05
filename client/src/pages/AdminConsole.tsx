@@ -17,9 +17,10 @@ import { SERVICE_ICON_LABELS, serviceIcon } from '@/lib/serviceIcons';
 import { canManageRole, isFullAccess, PERMISSIONS, ROLE_DEFAULTS, STAFF_ROLE_LABELS, type Permission, type StaffRole } from '@shared/staff';
 import { draftServiceFromName, draftToCategory, findServiceArea, type ServiceDraft } from '@shared/serviceAreas';
 import { AutomationSection } from './admin/AutomationSection';
+import { OwnerCopilotSection } from './admin/OwnerCopilotSection';
 import '../admin.css';
 
-type Section = 'overview' | 'notifications' | 'marketing' | 'automation' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'staff' | 'account';
+type Section = 'overview' | 'copilot' | 'notifications' | 'marketing' | 'automation' | 'clients' | 'providers' | 'subscriptions' | 'payments' | 'contracts' | 'content' | 'media' | 'promotions' | 'benefits' | 'coupons' | 'audit' | 'staff' | 'account';
 type StaffMe = { name: string; email: string; role: StaffRole; permissions: Permission[]; mustChangePassword: boolean };
 type AdminUser = { id: number; name: string; email: string; accountType: 'client' | 'provider'; role: string; status: string; city?: string; vip: boolean; discountPercent: number; featured: boolean; profileComplete?: boolean; createdAt?: string; code?: string; specialty?: string; whatsapp?: string; source?: string; subscriptionFree?: boolean; requestCount?: number };
 type Promo = { id: number; badge: string; title: string; text: string; cta: string; whatsappMessage: string; eventType?: string; imageUrl?: string; start: string; end: string; active: boolean; sortOrder: number; providerFeeCents?: number; runningNow?: boolean };
@@ -28,6 +29,7 @@ type Media = { id: number; kind: string; filename: string; size: number; url: st
 
 const NAV: Array<{ id: Section; label: string; icon: typeof Users; perm?: Permission }> = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard, perm: 'overview.view' },
+  { id: 'copilot', label: 'Copilot do dono', icon: Sparkles, perm: 'overview.view' },
   { id: 'notifications', label: 'Notificações', icon: Bell },
   { id: 'marketing', label: 'Marketing e crescimento', icon: TrendingUp, perm: 'marketing.view' },
   { id: 'automation', label: 'Automação e Google', icon: Bot, perm: 'marketing.view' },
@@ -88,6 +90,7 @@ export default function AdminConsole() {
           {current.id === 'notifications' && <NotificationsSection/>}
           {current.id === 'marketing' && <MarketingSection/>}
           {current.id === 'automation' && <AutomationSection/>}
+          {current.id === 'copilot' && <OwnerCopilotSection onNavigate={s => { if (NAV.some(n => n.id === s)) go(s as Section); }}/>}
           {current.id === 'subscriptions' && <SubscriptionsSection/>}
           {current.id === 'payments' && <PaymentsSection/>}
           {current.id === 'contracts' && <ContractsSection/>}

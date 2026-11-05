@@ -163,3 +163,22 @@ O Copilot trabalha para fechar negócios. Em cada conversa ele tem um objetivo, 
 - **Funciona sem IA:** sem chave configurada (ou se a IA falhar), ele responde por regras e continua levando ao próximo passo. Com IA (ex.: Groq grátis), as respostas ficam mais naturais e usam a mesma meta.
 - **Visitantes:** conversam sem conta; o histórico fica só no navegador (nada é gravado), com limite de 60 mensagens por dia por IP.
 - Quem vê o Copilot continua sendo escolhido em *"Quem vê o Copilot"*.
+
+## Copilot do dono (Painel → Copilot do dono)
+
+Olha a plataforma inteira (`server/gastro/ownerCopilot.ts` + regras em `shared/ownerBrief.ts`) e mostra o que precisa de você, do mais urgente para o informativo:
+
+| Alerta | Ação |
+|---|---|
+| Pedido aberto há mais de 24 h sem proposta | **Avisar os profissionais de novo** (refaz o matching e os avisos) |
+| Profissional com cadastro completo esperando aprovação | Leva a *Fornecedores* (a aprovação é sua) |
+| Cliente com propostas paradas há mais de 48 h | **Lembrar os clientes** |
+| Teste grátis acabando em até 3 dias | **Convidar para assinar** |
+| Cadastro de profissional incompleto há 2 dias ou mais | **Mandar lembrete** |
+| Assinatura vencida | Leva a *Assinaturas* |
+| Falhas do robô das redes ou do Google | Leva a *Automação e Google* |
+
+- **Lembretes:** vão pelo painel e pelo WhatsApp de cada pessoa. Nunca se repetem em menos de 24 h e ficam no histórico (`brief.*`). Aprovar, excluir e mudar preços nunca é automático.
+- **Resumo diário às 8h (Brasília):** chega no painel e, se estiverem ligados em *Notificações*, também por e-mail e WhatsApp. Pode ser desligado na própria tela ou enviado na hora. O horário muda com `OWNER_BRIEF_HOUR`.
+- **Chat:** responde perguntas com os números reais ("quanto entrou este mês?", "tem pedido sem proposta?"). Sem IA, responde pelas regras; com a Groq, conversa de forma natural usando só esses números.
+- **Permissões:** ver a tela exige *Ver a visão geral*; os lembretes exigem *Aprovar, editar…* contas; o resumo diário exige *Configurar avisos*.

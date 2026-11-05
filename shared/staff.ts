@@ -90,6 +90,9 @@ export function permissionForRequest(method: string, path: string): Permission |
     [/^\/admin\/promotions(\/.*)?$/, 'promotions.manage'],
     [/^\/admin\/(benefits|benefit-products|coupons)(\/.*)?$/, 'benefits.manage'],
     [/^\/admin\/marketing(\/.*)?$/, 'marketing.view'],
+    [/^\/admin\/brief(\/chat)?$/, 'overview.view'],
+    [/^\/admin\/brief\/action$/, 'users.edit'],
+    [/^\/admin\/brief\/(settings|send)$/, 'notifications.manage'],
     [/^\/admin\/(indexing|social)(\/.*)?$/, r => (r ? 'marketing.view' : 'content.edit')],
   ];
   for (const [re, perm] of rules) if (re.test(p)) return typeof perm === 'function' ? perm(read) : perm;
