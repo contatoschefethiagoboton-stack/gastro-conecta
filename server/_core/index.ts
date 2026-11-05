@@ -19,6 +19,7 @@ import { registerAuditTrail } from "../gastro/auditTrail";
 import { registerIndexingRoutes } from "../gastro/indexing";
 import { registerSocialRoutes } from "../gastro/social";
 import { registerSocialPostRoutes, startSocialScheduler } from "../gastro/socialPosts";
+import { registerOwnerCopilotRoutes, startOwnerBriefScheduler } from "../gastro/ownerCopilot";
 import { robotsTxt, sitemapXml } from "../publicSeo";
 
 async function startServer() {
@@ -63,6 +64,7 @@ async function startServer() {
   registerStaffRoutes(app);
   registerIndexingRoutes(app);
   registerSocialPostRoutes(app);
+  registerOwnerCopilotRoutes(app);
   registerExtraRoutes(app);
   registerGrowthRoutes(app);
   registerEngageRoutes(app);
@@ -88,6 +90,7 @@ async function startServer() {
   server.listen(port, "0.0.0.0", () => console.log(`Server listening on port ${port}`));
   startBillingScheduler();
   startSocialScheduler();
+  startOwnerBriefScheduler();
 }
 
 startServer().catch(error => { console.error(error); process.exit(1); });

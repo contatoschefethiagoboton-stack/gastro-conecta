@@ -320,7 +320,7 @@ router.post("/events", wrap(async (req, res) => {
  * Matching: ranqueia os profissionais compatíveis (serviço, cidade/região, agenda livre, reputação e
  * agilidade) e avisa em ordem. Os primeiros recebem também WhatsApp; os demais, aviso no painel e e-mail.
  */
-async function notifyMatchingProviders(event: any, catalog: Awaited<ReturnType<typeof getServiceCatalog>>, preferredProviderId: number | null) {
+export async function notifyMatchingProviders(event: any, catalog: Awaited<ReturnType<typeof getServiceCatalog>>, preferredProviderId: number | null) {
   const eventDate = isoDate(event.eventDate);
   const providers = await query<any[]>(`SELECT u.id, p.city profileCity, p.featured, d.details,
       (SELECT AVG(r.rating) FROM gastro_reviews r WHERE r.targetId = u.id) ratingAverage,

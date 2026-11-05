@@ -405,3 +405,25 @@ div.adm-ok svg, div.adm-warn svg { flex-shrink:0; margin-top:2px; }
 
 /* Selos de status dentro de cartões: alinhados à esquerda, ocupando a largura toda. */
 .adm-row-tags.adm-status-tags { justify-content:flex-start; max-width:none; flex-basis:100%; order:0; }
+
+/* Copilot do dono */
+.oc-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.oc-item { border:1px solid var(--ob-line); border-left:4px solid #c9c4b8; border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:5px; background:#fff; }
+.oc-item p { margin:0; color:var(--ob-muted); font-size:13.5px; line-height:1.5; }
+.oc-item strong { font-size:14.5px; }
+.oc-urgent { border-left-color:#d9472b; background:#fff7f3; }
+.oc-attention { border-left-color:#e3a33a; }
+.oc-level { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ob-muted); }
+.oc-urgent .oc-level { color:#c23d22; }
+.oc-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.oc-summary { white-space:pre-wrap; margin:0; padding:12px 14px; border-radius:10px; background:var(--ob-soft); font:13.5px/1.6 'Inter',sans-serif; color:var(--ob-ink); }
+.oc-chat { display:flex; flex-direction:column; gap:8px; max-height:360px; overflow:auto; }
+.oc-msg { max-width:88%; padding:9px 12px; border-radius:12px; font-size:13.5px; line-height:1.5; white-space:pre-wrap; }
+.oc-msg-user { align-self:flex-end; background:var(--ob-orange); color:#fff; border-bottom-right-radius:4px; }
+.oc-msg-assistant { align-self:flex-start; background:var(--ob-soft); border-bottom-left-radius:4px; display:flex; gap:6px; align-items:flex-start; }
+.oc-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.oc-chips button { border:1px solid var(--ob-line); border-radius:99px; background:#fff; padding:6px 11px; font:12.5px 'Inter',sans-serif; cursor:pointer; color:var(--ob-ink); }
+.oc-chips button:hover { border-color:var(--ob-orange); color:var(--ob-orange); }
+.oc-composer { display:flex; gap:8px; }
+.oc-composer input { flex:1; min-width:0; border:1px solid var(--ob-line); border-radius:10px; padding:10px 12px; font:14px 'Inter',sans-serif; }
+@media (max-width: 720px) { .oc-stats { grid-template-columns:1fr; } }
